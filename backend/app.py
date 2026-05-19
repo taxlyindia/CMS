@@ -299,68 +299,98 @@ def dashboard():
     run_compliance_checks()
     uid  = g.user_id
     role = g.role
+    tid  = g.tenant_id          # ← tenant scope
     conn = get_db(); c = conn.cursor()
     today = date.today()
 
+    # ── Tenant scope ──────────────────────────────────────────────────────────
+    # All queries scoped to current tenant
+    if tid:
+        t_scope   = "AND COALESCE(t.tenant_id,%s)=%s"
+        t_params  = [tid, tid]
+        co_scope  = "AND COALESCE(co.tenant_id,%s)=%s"
+        co_params = [tid, tid]
+        a_scope   = "AND COALESCE(a.tenant_id,%s)=%s"
+        a_params  = [tid, tid]
+        d_scope   = "AND COALESCE(d.tenant_id,%s)=%s"
+        d_params  = [tid, tid]
+        dsc_scope = "AND COALESCE(dr.tenant_id,%s)=%s"
+        dsc_params= [tid, tid]
+        m_scope   = "AND COALESCE(m.tenant_id,%s)=%s"
+        m_params  = [tid, tid]
+    else:
+        t_scope = co_scope = a_scope = d_scope = dsc_scope = m_scope = ""
+        t_params = co_params = a_params = d_params = dsc_params = m_params = []
+
     # ── Role-scoped task filter ───────────────────────────────────────────────
     if role == "superadmin":
-        task_scope = "1=1"
+        task_scope  = "1=1"
         task_params = []
         alert_scope = "1=1"
-        alert_params = []
+        alert_params= []
     elif role == "manager":
-        task_scope = "t.task_manager = %s"
+        task_scope  = "t.task_manager = %s"
         task_params = [uid]
         alert_scope = "a.company_id IN (SELECT DISTINCT company_id FROM tasks WHERE task_manager=%s AND status NOT IN ('completed','cancelled'))"
-        alert_params = [uid]
+        alert_params= [uid]
     else:
-        task_scope = "t.assigned_to = %s"
+        task_scope  = "t.assigned_to = %s"
         task_params = [uid]
         alert_scope = "a.company_id IN (SELECT DISTINCT company_id FROM tasks WHERE assigned_to=%s AND status NOT IN ('completed','cancelled'))"
-        alert_params = [uid]
+        alert_params= [uid]
 
-    # ── Stats ────────────────────────────────────────────────────────────────
-    c.execute("SELECT COUNT(*) FROM companies WHERE status='active'"); total_co  = _count(c)
-    c.execute("SELECT COUNT(*) FROM directors WHERE is_active=1");     total_dir = _count(c)
-    c.execute(f"SELECT COUNT(*) FROM alerts a WHERE a.status='active' AND {alert_scope}", alert_params)
+    # ── Stats (tenant-scoped) ─────────────────────────────────────────────────
+    c.execute(f"SELECT COUNT(*) FROM companies co WHERE co.status='active' {co_scope}", co_params)
+    total_co  = _count(c)
+    c.execute(f"SELECT COUNT(*) FROM directors d WHERE d.is_active=1 {d_scope}", d_params)
+    total_dir = _count(c)
+    c.execute(f"SELECT COUNT(*) FROM alerts a WHERE a.status='active' AND {alert_scope} {a_scope}",
+              alert_params + a_params)
     active_alerts = _count(c)
-    c.execute(f"SELECT COUNT(*) FROM alerts a WHERE a.status='active' AND a.severity='critical' AND {alert_scope}", alert_params)
+    c.execute(f"SELECT COUNT(*) FROM alerts a WHERE a.status='active' AND a.severity='critical' AND {alert_scope} {a_scope}",
+              alert_params + a_params)
     crit = _count(c)
-    c.execute(f"SELECT COUNT(*) FROM tasks t WHERE t.status NOT IN ('completed','cancelled') AND {task_scope}", task_params)
+    c.execute(f"SELECT COUNT(*) FROM tasks t WHERE t.status NOT IN ('completed','cancelled') AND {task_scope} {t_scope}",
+              task_params + t_params)
     open_tasks = _count(c)
-    c.execute(f"SELECT COUNT(*) FROM tasks t WHERE t.status NOT IN ('completed','cancelled') AND t.due_date<=%s AND {task_scope}",
-              [(today+timedelta(days=7)).isoformat()] + task_params)
+    c.execute(f"SELECT COUNT(*) FROM tasks t WHERE t.status NOT IN ('completed','cancelled') AND t.due_date<=%s AND {task_scope} {t_scope}",
+              [(today+timedelta(days=7)).isoformat()] + task_params + t_params)
     due_soon = _count(c)
-    c.execute("SELECT COUNT(*) FROM dsc_records WHERE is_active=1"); total_dsc = _count(c)
-    c.execute("SELECT COUNT(*) FROM dsc_records WHERE is_active=1 AND valid_to<%s", (today.isoformat(),)); dsc_exp  = _count(c)
-    c.execute("SELECT COUNT(*) FROM dsc_records WHERE is_active=1 AND valid_to BETWEEN %s AND %s",
-              (today.isoformat(), (today+timedelta(days=30)).isoformat())); dsc_soon = _count(c)
+    c.execute(f"SELECT COUNT(*) FROM dsc_records dr WHERE dr.is_active=1 {dsc_scope}", dsc_params)
+    total_dsc = _count(c)
+    c.execute(f"SELECT COUNT(*) FROM dsc_records dr WHERE dr.is_active=1 AND dr.valid_to<%s {dsc_scope}",
+              [today.isoformat()] + dsc_params)
+    dsc_exp = _count(c)
+    c.execute(f"SELECT COUNT(*) FROM dsc_records dr WHERE dr.is_active=1 AND dr.valid_to BETWEEN %s AND %s {dsc_scope}",
+              [today.isoformat(), (today+timedelta(days=30)).isoformat()] + dsc_params)
+    dsc_soon = _count(c)
 
-    # ── Alert panels ─────────────────────────────────────────────────────────
+    # ── Alert panels ──────────────────────────────────────────────────────────
     def role_alerts(entity_type, limit=5):
         c.execute(f"""SELECT a.*, co.name AS company_name FROM alerts a
                      LEFT JOIN companies co ON a.company_id=co.id
-                     WHERE a.entity_type=%s AND a.status='active' AND {alert_scope}
+                     WHERE a.entity_type=%s AND a.status='active' AND {alert_scope} {a_scope}
                      ORDER BY a.due_date LIMIT {limit}""",
-                  [entity_type] + alert_params)
+                  [entity_type] + alert_params + a_params)
         return rows(c.fetchall())
 
     aud_alerts = role_alerts("auditor")
     din_alerts = role_alerts("director")
     dsc_alerts = role_alerts("dsc")
 
-    c.execute("""SELECT m.*,co.name as company_name FROM meetings m
+    c.execute(f"""SELECT m.*,co.name as company_name FROM meetings m
                  JOIN companies co ON m.company_id=co.id
-                 WHERE m.meeting_date>=%s AND m.status='scheduled'
-                 ORDER BY m.meeting_date LIMIT 5""", (today.isoformat(),))
+                 WHERE m.meeting_date>=%s AND m.status='scheduled' {m_scope}
+                 ORDER BY m.meeting_date LIMIT 5""",
+              [today.isoformat()] + m_params)
     meetings = rows(c.fetchall())
 
     c.execute(f"""SELECT t.*, co.name AS company_name FROM tasks t
                  LEFT JOIN companies co ON t.company_id=co.id
-                 WHERE t.status NOT IN ('completed','cancelled') AND {task_scope}
+                 WHERE t.status NOT IN ('completed','cancelled') AND {task_scope} {t_scope}
                  ORDER BY CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2
                           WHEN 'medium' THEN 3 ELSE 4 END, t.due_date LIMIT 8""",
-              task_params)
+              task_params + t_params)
     tasks = rows(c.fetchall())
 
     conn.close()
@@ -371,12 +401,12 @@ def dashboard():
             "open_tasks": open_tasks, "due_soon_tasks": due_soon,
             "total_dsc": total_dsc, "dsc_expired": dsc_exp, "dsc_expiring_soon": dsc_soon,
         },
-        "auditor_alerts":   aud_alerts,
-        "din_alerts":       din_alerts,
-        "director_alerts":  din_alerts,
-        "dsc_alerts":       dsc_alerts,
+        "auditor_alerts":    aud_alerts,
+        "din_alerts":        din_alerts,
+        "director_alerts":   din_alerts,
+        "dsc_alerts":        dsc_alerts,
         "upcoming_meetings": meetings,
-        "pending_tasks":    tasks,
+        "pending_tasks":     tasks,
     })
 
 # ══ COMPANIES ════════════════════════════════════════════════════════════════
@@ -542,11 +572,33 @@ def delete_director(did):
 @app.route("/api/auditors")
 @login_required
 def all_auditors():
-    conn=get_db(); c=conn.cursor()
-    c.execute("""SELECT a.*,co.name as company_name,co.cin as company_cin
-                 FROM auditors a JOIN companies co ON a.company_id=co.id
-                 WHERE a.is_active=1 ORDER BY a.end_date""")
-    return jsonify([_enrich_auditor(a) for a in rows(c.fetchall())])
+    tid  = g.tenant_id
+    conn = get_db(); c = conn.cursor()
+    # Filters from frontend
+    fco    = request.args.get("co", "")
+    fnature= request.args.get("nature", "")
+    ffrom  = request.args.get("from", "")
+    fto    = request.args.get("to", "")
+
+    sql    = """SELECT a.*,co.name as company_name,co.cin as company_cin
+                FROM auditors a JOIN companies co ON a.company_id=co.id
+                WHERE a.is_active=1"""
+    params = []
+
+    # Tenant isolation
+    if tid:
+        sql += " AND (a.tenant_id=%s OR a.tenant_id IS NULL)"; params.append(tid)
+
+    if fco:     sql += " AND a.company_id=%s";             params.append(fco)
+    if fnature: sql += " AND a.nature_of_appointment=%s";  params.append(fnature)
+    if ffrom:   sql += " AND a.end_date>=%s";              params.append(ffrom)
+    if fto:     sql += " AND a.end_date<=%s";              params.append(fto)
+
+    sql += " ORDER BY a.end_date"
+    c.execute(sql, params)
+    result = rows(c.fetchall())
+    conn.close()
+    return jsonify([_enrich_auditor(a) for a in result])
 
 @app.route("/api/companies/<cid>/auditors")
 @login_required
@@ -567,14 +619,15 @@ def create_auditor():
         sd=date.fromisoformat(d["start_date"][:10]); end=sd.replace(year=sd.year+1).isoformat()
     conn=get_db(); c=conn.cursor()
     c.execute("UPDATE auditors SET is_active=0 WHERE company_id=%s AND is_active=1",(d["company_id"],))
+    tid = g.tenant_id
     c.execute("""INSERT INTO auditors
         (id,company_id,name,firm_name,membership_no,frn,pan,address,email,phone,
-         appointment_date,nature_of_appointment,appointment_type,start_date,end_date,srn_adt1,notes)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+         appointment_date,nature_of_appointment,appointment_type,start_date,end_date,srn_adt1,notes,tenant_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (aid,d["company_id"],d["name"],d.get("firm_name"),d.get("membership_no"),d.get("frn"),
          (d.get("pan") or "").upper() or None,d.get("address"),d.get("email"),d.get("phone"),
          d.get("appointment_date"),d.get("nature_of_appointment","Regular Auditor"),
-         d.get("appointment_type","AGM Appointment"),d.get("start_date"),end,d.get("srn_adt1"),d.get("notes")))
+         d.get("appointment_type","AGM Appointment"),d.get("start_date"),end,d.get("srn_adt1"),d.get("notes"),tid))
     conn.commit()
     c.execute("SELECT * FROM auditors WHERE id=%s",(aid,)); result=row(c.fetchone()); conn.close()
     return jsonify(_enrich_auditor(result)),201
@@ -663,38 +716,59 @@ def delete_shareholder(sid):
 @app.route("/api/dsc")
 @login_required
 def all_dsc():
-    cid=request.args.get("company_id",""); conn=get_db(); c=conn.cursor()
-    if cid:
-        c.execute("""SELECT d.*,co.name as company_name FROM dsc_records d
-                     LEFT JOIN companies co ON d.company_id=co.id
-                     WHERE d.company_id=%s AND d.is_active=1 ORDER BY d.valid_to""",(cid,))
-    else:
-        c.execute("""SELECT d.*,co.name as company_name FROM dsc_records d
-                     LEFT JOIN companies co ON d.company_id=co.id
-                     WHERE d.is_active=1 ORDER BY d.valid_to""")
-    result=rows(c.fetchall())
-    today=date.today()
+    tid     = g.tenant_id
+    cid     = request.args.get("company_id", "") or request.args.get("co", "")
+    custody = request.args.get("custody", "")
+    ffrom   = request.args.get("from", "")
+    fto     = request.args.get("to", "")
+
+    conn = get_db(); c = conn.cursor()
+    sql    = """SELECT d.*,co.name as company_name FROM dsc_records d
+                LEFT JOIN companies co ON d.company_id=co.id
+                WHERE d.is_active=1"""
+    params = []
+
+    # Tenant isolation
+    if tid:
+        sql += " AND (d.tenant_id=%s OR d.tenant_id IS NULL)"; params.append(tid)
+
+    if cid:     sql += " AND d.company_id=%s";      params.append(cid)
+    if custody: sql += " AND d.custody_status=%s";  params.append(custody)
+    if ffrom:   sql += " AND d.valid_to>=%s";        params.append(ffrom)
+    if fto:     sql += " AND d.valid_to<=%s";        params.append(fto)
+
+    sql += " ORDER BY d.valid_to"
+    c.execute(sql, params)
+    result = rows(c.fetchall())
+    conn.close()
+
+    today = date.today()
     for r in result:
         if r.get("valid_to"):
-            days=(date.fromisoformat(r["valid_to"][:10])-today).days
-            r["days_to_expiry"]=days
-            r["expiry_status"]="expired" if days<0 else ("expiring_soon" if days<=30 else "valid")
-    conn.close(); return jsonify(result)
+            try:
+                days = (date.fromisoformat(str(r["valid_to"])[:10]) - today).days
+                r["days_to_expiry"] = days
+                r["expiry_status"]  = "expired" if days < 0 else ("expiring_soon" if days <= 30 else "valid")
+            except (ValueError, TypeError):
+                r["days_to_expiry"] = None
+                r["expiry_status"]  = "unknown"
+    return jsonify(result)
 
 @app.route("/api/dsc", methods=["POST"])
 @login_required
 def create_dsc():
     if not can("dsc","create"): return jsonify({"error":"Insufficient permissions"}),403
     d=request.get_json(silent=True, force=True) or {}; dsc_id=str(uuid.uuid4()); conn=get_db(); c=conn.cursor()
+    tid = g.tenant_id
     c.execute("""INSERT INTO dsc_records
         (id,company_id,director_id,holder_name,holder_type,dsc_class,issued_by,
-         valid_from,valid_to,token_type,custody_status,custody_date,custody_notes,notes)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+         valid_from,valid_to,token_type,custody_status,custody_date,custody_notes,notes,tenant_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (dsc_id,d.get("company_id"),d.get("director_id"),d["holder_name"],
          d.get("holder_type","Director"),d.get("dsc_class","Class 3"),d.get("issued_by"),
          d.get("valid_from"),d.get("valid_to"),d.get("token_type"),
          d.get("custody_status","With Client"),d.get("custody_date"),
-         d.get("custody_notes"),d.get("notes")))
+         d.get("custody_notes"),d.get("notes"),tid))
     conn.commit()
     c.execute("SELECT * FROM dsc_records WHERE id=%s",(dsc_id,)); result=row(c.fetchone()); conn.close()
     return jsonify(result),201
@@ -2567,11 +2641,11 @@ def my_dashboard():
         my_col = "assigned_to"
 
     # Task summary counts (only my tasks per role)
-    c.execute(f"""SELECT status, COUNT(*) FROM tasks WHERE {my_col}=%s GROUP BY status""", (uid,))
+    c.execute(f"""SELECT status, COUNT(*) as cnt FROM tasks WHERE {my_col}=%s GROUP BY status""", (uid,))
     task_counts = {}
     for _r in c.fetchall():
         if isinstance(_r, dict):
-            _vals = list(_r.values()); task_counts[_vals[0]] = _vals[1]
+            task_counts[_r.get('status', list(_r.values())[0])] = _r.get('cnt', list(_r.values())[1])
         else:
             task_counts[_r[0]] = _r[1]
 
@@ -2727,8 +2801,18 @@ def tasks_rolewise_summary():
             ORDER BY total DESC
         """, (uid, uid, uid))
 
-    modules = [{"module":_rv(r,0),"leader":_rv(r,1),"manager":_rv(r,2),"assignee":_rv(r,3),"total":_rv(r,4)}
-               for r in c.fetchall()]
+    modules = []
+    for _r in c.fetchall():
+        if isinstance(_r, dict):
+            modules.append({
+                "module":   _r.get('module', 'general'),
+                "leader":   _r.get('leader_cnt',   0),
+                "manager":  _r.get('manager_cnt',  0),
+                "assignee": _r.get('assignee_cnt', 0),
+                "total":    _r.get('total',        0),
+            })
+        else:
+            modules.append({"module":_r[0],"leader":_r[1],"manager":_r[2],"assignee":_r[3],"total":_r[4]})
 
     totals = {
         "leader":   sum(m["leader"]   for m in modules),
@@ -2789,8 +2873,7 @@ def tasks_rolewise_summary():
             GROUP BY u.id
         """, (uid, uid))
 
-    person_cols = [d[0] for d in c.description]
-    persons = [dict(zip(person_cols, r)) if not isinstance(r,dict) else dict(r) for r in c.fetchall()]
+    persons = rows(c.fetchall())
 
     conn.close()
     return jsonify({
@@ -2834,8 +2917,7 @@ def tasks_by_role_module():
     sql += " ORDER BY CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, t.due_date"
 
     c.execute(sql, params)
-    cols  = [d[0] for d in c.description]
-    tasks = [dict(r) if isinstance(r,dict) else dict(zip(cols,r)) for r in c.fetchall()]
+    tasks = rows(c.fetchall())
     conn.close()
     return jsonify(tasks)
 
@@ -2891,8 +2973,7 @@ def tasks_subordinate_view():
         conn.close()
         return jsonify({"tasks": [], "subordinates": [], "my_role": role})
 
-    cols  = [d[0] for d in c.description]
-    tasks = [dict(r) if isinstance(r,dict) else dict(zip(cols,r)) for r in c.fetchall()]
+    tasks = rows(c.fetchall())
 
     # Subordinate summary — people below me and their pending counts
     if role == "superadmin":
@@ -2924,8 +3005,7 @@ def tasks_subordinate_view():
             ORDER BY pending DESC
         """, (uid, uid))
 
-    sub_cols = [d[0] for d in c.description]
-    subordinates = [dict(zip(sub_cols, r)) if not isinstance(r,dict) else dict(r) for r in c.fetchall()]
+    subordinates = rows(c.fetchall())
 
     conn.close()
     return jsonify({
@@ -2937,7 +3017,7 @@ def tasks_subordinate_view():
             "pending":   sum(1 for t in tasks if t["status"] == "pending"),
             "in_progress": sum(1 for t in tasks if t["status"] == "in_progress"),
             "completed": sum(1 for t in tasks if t["status"] == "completed"),
-            "overdue":   sum(1 for t in tasks if t.get("due_date","") < str(__import__("datetime").date.today()) and t["status"] not in ("completed","cancelled")),
+            "overdue":   sum(1 for t in tasks if t.get("due_date","") and t.get("due_date","") < str(date.today()) and t["status"] not in ("completed","cancelled")),
         }
     })
 
