@@ -2690,24 +2690,45 @@ def my_dashboard():
     my_tasks = rows(c.fetchall())
 
     # ── Role-wise team summary (superadmin + manager see this) ──────────────
+    tid = g.tenant_id
     role_summary = []
     if role in ("superadmin", "manager"):
-        c.execute("""
-            SELECT u.id, u.name, u.role,
-                   COUNT(CASE WHEN t.status='pending'     THEN 1 END) AS pending,
-                   COUNT(CASE WHEN t.status='in_progress' THEN 1 END) AS in_progress,
-                   COUNT(CASE WHEN t.status='completed'   THEN 1 END) AS completed,
-                   COUNT(CASE WHEN t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
-            FROM users u
-            LEFT JOIN tasks t ON (
-                (u.role='superadmin' AND t.task_leader=u.id) OR
-                (u.role='manager'    AND t.task_manager=u.id) OR
-                (u.role='staff'      AND t.assigned_to=u.id)
-            )
-            WHERE u.is_active=1
-            GROUP BY u.id
-            ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, u.name
-        """)
+        if tid:
+            c.execute("""
+                SELECT u.id, u.name, u.role,
+                       COUNT(CASE WHEN t.status='pending'     THEN 1 END) AS pending,
+                       COUNT(CASE WHEN t.status='in_progress' THEN 1 END) AS in_progress,
+                       COUNT(CASE WHEN t.status='completed'   THEN 1 END) AS completed,
+                       COUNT(CASE WHEN t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
+                FROM users u
+                LEFT JOIN tasks t ON (
+                    (u.role='superadmin' AND t.task_leader=u.id) OR
+                    (u.role='manager'    AND t.task_manager=u.id) OR
+                    (u.role='staff'      AND t.assigned_to=u.id)
+                )
+                WHERE u.is_active=1
+                  AND u.is_platform_admin=0
+                  AND (u.tenant_id=%s OR u.tenant_id IS NULL)
+                GROUP BY u.id
+                ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, u.name
+            """, (tid,))
+        else:
+            c.execute("""
+                SELECT u.id, u.name, u.role,
+                       COUNT(CASE WHEN t.status='pending'     THEN 1 END) AS pending,
+                       COUNT(CASE WHEN t.status='in_progress' THEN 1 END) AS in_progress,
+                       COUNT(CASE WHEN t.status='completed'   THEN 1 END) AS completed,
+                       COUNT(CASE WHEN t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
+                FROM users u
+                LEFT JOIN tasks t ON (
+                    (u.role='superadmin' AND t.task_leader=u.id) OR
+                    (u.role='manager'    AND t.task_manager=u.id) OR
+                    (u.role='staff'      AND t.assigned_to=u.id)
+                )
+                WHERE u.is_active=1 AND u.is_platform_admin=0
+                GROUP BY u.id
+                ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, u.name
+            """)
         role_summary = rows(c.fetchall())
 
     conn.close()
@@ -2822,46 +2843,91 @@ def tasks_rolewise_summary():
     }
 
     # ── Per-person breakdown for the hierarchy strip ──────────────────────
+    _tid = g.tenant_id
+    _tid_clause = " AND (u.tenant_id=%s OR u.tenant_id IS NULL) AND u.is_platform_admin=0"
+
     if role == "superadmin":
-        # All people on tasks where I am leader
-        c.execute("""
-            SELECT u.id, u.name, u.role,
-                COUNT(CASE WHEN (
-                    (u.role='superadmin' AND t.task_leader=u.id) OR
-                    (u.role='manager'    AND t.task_manager=u.id) OR
-                    (u.role='staff'      AND t.assigned_to=u.id)
-                ) AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
-                COUNT(CASE WHEN (
-                    (u.role='superadmin' AND t.task_leader=u.id) OR
-                    (u.role='manager'    AND t.task_manager=u.id) OR
-                    (u.role='staff'      AND t.assigned_to=u.id)
-                ) AND t.status='completed' THEN 1 END) AS completed,
-                COUNT(CASE WHEN (
-                    (u.role='superadmin' AND t.task_leader=u.id) OR
-                    (u.role='manager'    AND t.task_manager=u.id) OR
-                    (u.role='staff'      AND t.assigned_to=u.id)
-                ) AND t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
-            FROM users u
-            JOIN tasks t ON t.task_leader=%s
-            WHERE u.is_active=1
-            GROUP BY u.id
-            HAVING pending > 0 OR completed > 0
-            ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC
-        """, (uid,))
+        if _tid:
+            c.execute("""
+                SELECT u.id, u.name, u.role,
+                    COUNT(CASE WHEN (
+                        (u.role='superadmin' AND t.task_leader=u.id) OR
+                        (u.role='manager'    AND t.task_manager=u.id) OR
+                        (u.role='staff'      AND t.assigned_to=u.id)
+                    ) AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
+                    COUNT(CASE WHEN (
+                        (u.role='superadmin' AND t.task_leader=u.id) OR
+                        (u.role='manager'    AND t.task_manager=u.id) OR
+                        (u.role='staff'      AND t.assigned_to=u.id)
+                    ) AND t.status='completed' THEN 1 END) AS completed,
+                    COUNT(CASE WHEN (
+                        (u.role='superadmin' AND t.task_leader=u.id) OR
+                        (u.role='manager'    AND t.task_manager=u.id) OR
+                        (u.role='staff'      AND t.assigned_to=u.id)
+                    ) AND t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
+                FROM users u
+                JOIN tasks t ON t.task_leader=%s
+                WHERE u.is_active=1 AND u.is_platform_admin=0
+                  AND (u.tenant_id=%s OR u.tenant_id IS NULL)
+                GROUP BY u.id
+                HAVING pending > 0 OR completed > 0
+                ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC
+            """, (uid, _tid))
+        else:
+            c.execute("""
+                SELECT u.id, u.name, u.role,
+                    COUNT(CASE WHEN (
+                        (u.role='superadmin' AND t.task_leader=u.id) OR
+                        (u.role='manager'    AND t.task_manager=u.id) OR
+                        (u.role='staff'      AND t.assigned_to=u.id)
+                    ) AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
+                    COUNT(CASE WHEN (
+                        (u.role='superadmin' AND t.task_leader=u.id) OR
+                        (u.role='manager'    AND t.task_manager=u.id) OR
+                        (u.role='staff'      AND t.assigned_to=u.id)
+                    ) AND t.status='completed' THEN 1 END) AS completed,
+                    COUNT(CASE WHEN (
+                        (u.role='superadmin' AND t.task_leader=u.id) OR
+                        (u.role='manager'    AND t.task_manager=u.id) OR
+                        (u.role='staff'      AND t.assigned_to=u.id)
+                    ) AND t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
+                FROM users u
+                JOIN tasks t ON t.task_leader=%s
+                WHERE u.is_active=1 AND u.is_platform_admin=0
+                GROUP BY u.id
+                HAVING pending > 0 OR completed > 0
+                ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC
+            """, (uid,))
     elif role == "manager":
-        c.execute("""
-            SELECT u.id, u.name, u.role,
-                COUNT(CASE WHEN t.assigned_to=u.id AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
-                COUNT(CASE WHEN t.assigned_to=u.id AND t.status='completed' THEN 1 END) AS completed,
-                COUNT(CASE WHEN t.assigned_to=u.id AND t.due_date < CURRENT_DATE
-                           AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
-            FROM users u
-            JOIN tasks t ON t.task_manager=%s
-            WHERE u.is_active=1
-            GROUP BY u.id
-            HAVING pending > 0 OR completed > 0
-            ORDER BY pending DESC
-        """, (uid,))
+        if _tid:
+            c.execute("""
+                SELECT u.id, u.name, u.role,
+                    COUNT(CASE WHEN t.assigned_to=u.id AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
+                    COUNT(CASE WHEN t.assigned_to=u.id AND t.status='completed' THEN 1 END) AS completed,
+                    COUNT(CASE WHEN t.assigned_to=u.id AND t.due_date < CURRENT_DATE
+                               AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
+                FROM users u
+                JOIN tasks t ON t.task_manager=%s
+                WHERE u.is_active=1 AND u.is_platform_admin=0
+                  AND (u.tenant_id=%s OR u.tenant_id IS NULL)
+                GROUP BY u.id
+                HAVING pending > 0 OR completed > 0
+                ORDER BY pending DESC
+            """, (uid, _tid))
+        else:
+            c.execute("""
+                SELECT u.id, u.name, u.role,
+                    COUNT(CASE WHEN t.assigned_to=u.id AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
+                    COUNT(CASE WHEN t.assigned_to=u.id AND t.status='completed' THEN 1 END) AS completed,
+                    COUNT(CASE WHEN t.assigned_to=u.id AND t.due_date < CURRENT_DATE
+                               AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
+                FROM users u
+                JOIN tasks t ON t.task_manager=%s
+                WHERE u.is_active=1 AND u.is_platform_admin=0
+                GROUP BY u.id
+                HAVING pending > 0 OR completed > 0
+                ORDER BY pending DESC
+            """, (uid,))
     else:
         c.execute("""
             SELECT %s as id, u.name, u.role, 
