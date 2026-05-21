@@ -2436,7 +2436,7 @@ async function doLogin() {
 function logout() {
   TOKEN = null; ME = null;
   localStorage.removeItem('_tok');
-  showLanding();
+  _showLogin();
 }
 
 function _showLogin() {
@@ -2532,14 +2532,14 @@ async function tryAutoLogin() {
 
   const t = localStorage.getItem('_tok');
   if (!t) {
-    // No saved session — show landing/login
-    showLanding();
+    // No saved session — go straight to login screen
+    _showLogin();
     return;
   }
 
   TOKEN = t;
   try {
-    // Validate the saved token without triggering logout on failure
+    // Validate the saved token
     const r = await fetch('/api/auth/me', {
       headers: { 'Authorization': `Bearer ${t}`, 'Content-Type': 'application/json' }
     });
@@ -2548,14 +2548,16 @@ async function tryAutoLogin() {
       ME = { ...me, is_platform_admin: me.is_platform_admin||false, tenant_id: me.tenant_id||null };
       await startApp();
     } else {
-      // Token invalid/expired — clear it, stay on login screen
+      // Token invalid/expired — clear and show login
       TOKEN = null; ME = null;
       localStorage.removeItem('_tok');
+      _showLogin();
     }
   } catch {
-    // Network error — clear token, show login
+    // Network error — clear token and show login
     TOKEN = null; ME = null;
     localStorage.removeItem('_tok');
+    _showLogin();
   }
 }
 
@@ -3909,21 +3911,21 @@ function openKYCModal(did, name, lastFiled, currentDue) {
     const days = Math.ceil((new Date(dueVal) - new Date()) / 86400000);
     let html = '';
     if (days < 0)
-      html = \`<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:7px;padding:9px 13px;font-size:12px;color:#dc2626">
-                ⛔ <strong>Overdue</strong> by \${Math.abs(days)} day(s) — DIN may be deactivated. File immediately.
-              </div>\`;
+      html = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:7px;padding:9px 13px;font-size:12px;color:#dc2626">
+                ⛔ <strong>Overdue</strong> by ${Math.abs(days)} day(s) — DIN may be deactivated. File immediately.
+              </div>`;
     else if (days === 0)
-      html = \`<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:7px;padding:9px 13px;font-size:12px;color:#ea580c">
+      html = `<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:7px;padding:9px 13px;font-size:12px;color:#ea580c">
                 🔴 <strong>Due today!</strong> File DIR-3 KYC immediately.
-              </div>\`;
+              </div>`;
     else if (days <= 30)
-      html = \`<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:7px;padding:9px 13px;font-size:12px;color:#ea580c">
-                ⚠️ <strong>Due in \${days} day(s)</strong> — \${new Date(dueVal).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}. File soon.
-              </div>\`;
+      html = `<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:7px;padding:9px 13px;font-size:12px;color:#ea580c">
+                ⚠️ <strong>Due in ${days} day(s)</strong> — ${new Date(dueVal).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}. File soon.
+              </div>`;
     else
-      html = \`<div style="background:var(--gbg);border:1px solid var(--green);border-radius:7px;padding:9px 13px;font-size:12px;color:var(--green)">
-                ✅ <strong>Compliant</strong> — \${days} day(s) until due date (\${new Date(dueVal).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}).
-              </div>\`;
+      html = `<div style="background:var(--gbg);border:1px solid var(--green);border-radius:7px;padding:9px 13px;font-size:12px;color:var(--green)">
+                ✅ <strong>Compliant</strong> — ${days} day(s) until due date (${new Date(dueVal).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}).
+              </div>`;
     document.getElementById('kyc-status-preview').innerHTML = html;
   }
   dueEl.addEventListener('input', updatePreview);
@@ -4767,12 +4769,12 @@ async function openPermModal(uid, uname, urole, reloadName = false) {
                 else if (def)       { bg='#eff6ff'; color='#1d4ed8'; border='#bfdbfe'; label='● Yes'; }
                 else                { bg='#f8fafc'; color='#94a3b8'; border='#e2e8f0'; label='○ No'; }
                 return `<td style="padding:5px;text-align:center">
-                  <button data-mod="\${mod}" data-act="\${act}" data-uid="${uid}"
+                  <button data-mod="${mod}" data-act="${act}" data-uid="${uid}"
                     onclick="togglePermCell(this,'${uid}','${urole}')"
-                    style="background:\${bg};color:\${color};border:1px solid \${border};
+                    style="background:${bg};color:${color};border:1px solid ${border};
                            border-radius:6px;padding:4px 8px;font-size:10.5px;font-weight:600;
                            cursor:pointer;white-space:nowrap;min-width:80px;transition:all .12s">
-                    \${label}
+                    ${label}
                   </button>
                 </td>`;
               }).join('')}
