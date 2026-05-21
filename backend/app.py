@@ -2106,7 +2106,14 @@ def resolve_alert(aid):
 @app.route("/api/tasks")
 @login_required
 def list_tasks():
-    cid=request.args.get("company_id",""); status=request.args.get("status","")
+    uid  = g.user_id
+    role = g.role
+    cid    = request.args.get("company_id","")
+    status = request.args.get("status","")
+    # hierarchy_view: only honoured for superadmin (Task Leader)
+    # Values: 'mine'(default) | 'manager' | 'staff' | 'all'
+    hierarchy_view = request.args.get("hierarchy_view", "")
+
     conn=get_db(); c=conn.cursor()
     q="""SELECT t.*,
                co.name  AS company_name,
@@ -2120,10 +2127,33 @@ def list_tasks():
                LEFT JOIN users ua ON t.assigned_to=ua.id
                WHERE 1=1"""
     params=[]
+
+    # Role-based visibility:
+    # superadmin (Task Leader): by default sees only tasks where task_leader=me
+    #   hierarchy_view='manager' → tasks assigned to any manager
+    #   hierarchy_view='staff'   → tasks assigned to any staff (assigned_to)
+    #   hierarchy_view='all'     → all tasks in the tenant
+    # manager: sees tasks where task_manager=me
+    # staff:   sees tasks where assigned_to=me
+    if role == "superadmin":
+        if hierarchy_view == "manager":
+            q += " AND t.task_manager IS NOT NULL"
+        elif hierarchy_view == "staff":
+            q += " AND t.assigned_to IS NOT NULL"
+        elif hierarchy_view == "all":
+            pass  # no role filter — see everything
+        else:
+            # Default: my tasks as Task Leader
+            q += " AND t.task_leader=%s"; params.append(uid)
+    elif role == "manager":
+        q += " AND t.task_manager=%s"; params.append(uid)
+    else:
+        q += " AND t.assigned_to=%s"; params.append(uid)
+
     if cid: q+=" AND t.company_id=%s"; params.append(cid)
     if status: q+=" AND t.status=%s"; params.append(status)
-    q+=" ORDER BY CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,t.due_date"
-    c.execute(q,params); return jsonify(rows(c.fetchall()))
+    q+=" ORDER BY CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, t.due_date NULLS LAST"
+    c.execute(q, params if params else []); return jsonify(rows(c.fetchall()))
 
 @app.route("/api/tasks", methods=["POST"])
 @login_required
