@@ -596,10 +596,18 @@ def delete_company(cid):
 @login_required
 def all_directors():
     conn=get_db(); c=conn.cursor()
-    c.execute("""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status,
+    ia = request.args.get("is_active", "")
+    # is_active="" → all, "1" → active only, "0" → resigned/ceased
+    if ia == "1":
+        where = "WHERE d.is_active=1"
+    elif ia == "0":
+        where = "WHERE d.is_active=0"
+    else:
+        where = "WHERE 1=1"   # return all (active + resigned)
+    c.execute(f"""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status,
                         co.name as company_name,co.cin as company_cin
                  FROM directors d LEFT JOIN director_kyc k ON d.id=k.director_id
-                 LEFT JOIN companies co ON d.company_id=co.id WHERE d.is_active=1 ORDER BY d.name""")
+                 LEFT JOIN companies co ON d.company_id=co.id {where} ORDER BY d.name""")
     return jsonify(rows(c.fetchall()))
 
 @app.route("/api/companies/<cid>/directors")
