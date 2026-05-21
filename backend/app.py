@@ -24,7 +24,7 @@ except ImportError:
 from flask import Flask, request, jsonify, send_file, g, send_from_directory
 from werkzeug.utils import secure_filename
 
-from database import get_db, row, rows, hash_pw, init_db, ensure_custom_placeholders_table, ensure_permission_tables
+from database import get_db, row, rows, hash_pw, init_db, ensure_custom_placeholders_table, ensure_permission_tables, ensure_custom_placeholders_table
 from auth import login_required, require_role, platform_admin_required, make_token, hash_pw as auth_hash, can, get_token, DEFAULT_PERMISSIONS, ALL_MODULES, tenant_scope
 from compliance import (run_compliance_checks, generate_document, build_context,
                         extract_placeholders, get_active_entities, AUTO_FILLED,
@@ -45,38 +45,6 @@ CORS(app, resources={r'/api/*': {'origins': _ALLOWED_ORIGINS}})
 app.config["MAX_CONTENT_LENGTH"] = 10*1024*1024
 
 # ══ INPUT SANITIZERS (PostgreSQL strict typing safety) ════════════════════════
-def _get_or_create_person(c, name, pan, din, email, mobile, aadhaar, address, tenant_id):
-    """Find existing person by PAN or DIN, or create new one. Returns person_id."""
-    person_id = None
-    # Try to find by DIN first (more specific), then PAN
-    if din:
-        c.execute("SELECT id FROM person_directory WHERE din=%s AND (tenant_id=%s OR tenant_id IS NULL)",
-                  (_str(din), tenant_id))
-        r = c.fetchone()
-        if r: person_id = r['id'] if isinstance(r,dict) else r[0]
-    if not person_id and pan:
-        c.execute("SELECT id FROM person_directory WHERE pan=%s AND (tenant_id=%s OR tenant_id IS NULL)",
-                  (_str(pan), tenant_id))
-        r = c.fetchone()
-        if r: person_id = r['id'] if isinstance(r,dict) else r[0]
-    if person_id:
-        # Update with latest info
-        c.execute("""UPDATE person_directory SET name=%s,email=%s,mobile=%s,
-                     aadhaar=%s,address=%s,updated_at=NOW() WHERE id=%s""",
-                  (name, email, mobile, aadhaar, address, person_id))
-        return person_id
-    # Create new person
-    pid = str(uuid.uuid4())
-    c.execute("""INSERT INTO person_directory
-                 (id,tenant_id,name,pan,din,aadhaar,email,mobile,address)
-                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-              (pid, tenant_id, name,
-               _str(pan.upper()) if pan else None,
-               _str(din) if din else None,
-               aadhaar, email, mobile, address))
-    return pid
-
-
 def _dt(v):
     """Return None for empty/None date strings; PostgreSQL DATE columns reject ''."""
     if v is None: return None
@@ -624,114 +592,50 @@ def delete_company(cid):
     return jsonify({"success":True})
 
 # ══ DIRECTORS ════════════════════════════════════════════════════════════════
-
 @app.route("/api/directors")
 @login_required
 def all_directors():
-    """
-    Directors module: returns all active director records grouped by person (DIN/person_id).
-    This is the company-level view — used to show who is director in which company.
-    Global view groups by DIN for the cards; company-specific view shows all rows for that company.
-    """
-    conn=get_db(); c=conn.cursor()
-    tid = g.tenant_id
-    _tf = "AND d.tenant_id=%s" if tid else ""
-    _tp = (tid,) if tid else ()
-    # Step 1: get all active directors with company info
-    c.execute(f"""
-        SELECT d.id, d.name, d.din, d.pan, d.mobile, d.email, d.address,
-               d.aadhaar, d.mca_user_id, d.mca_password, d.mca_notes,
-               d.designation, d.company_id, d.person_id,
-               d.date_of_appointment, d.date_of_cessation,
-               k.kyc_status, k.next_due_date, k.last_kyc_date,
-               co.name AS company_name, co.cin AS company_cin
-        FROM directors d
-        LEFT JOIN director_kyc k ON d.id=k.director_id
-        LEFT JOIN companies co ON d.company_id=co.id
-        WHERE d.is_active=1 {_tf}
-        ORDER BY d.name
-    """, _tp)
-    raw = rows(c.fetchall())
-    conn.close()
-
-    # Step 2: group client-side by (person_id OR din OR id)
-    from collections import OrderedDict
-    seen = OrderedDict()
-    for d in raw:
-        key = d.get('person_id') or d.get('din') or d['id']
-        if key not in seen:
-            seen[key] = dict(d)
-            seen[key]['company_count'] = 1
-            seen[key]['companies']     = d.get('company_name') or ''
-            seen[key]['company_ids']   = d.get('company_id') or ''
-        else:
-            # Merge: accumulate companies, keep best KYC, fill missing contact fields
-            existing = seen[key]
-            existing['company_count'] = existing.get('company_count', 1) + 1
-            cn = d.get('company_name') or ''
-            if cn and cn not in existing.get('companies',''):
-                existing['companies'] = (existing.get('companies','') + ' | ' + cn).strip(' | ')
-                existing['company_ids'] = (existing.get('company_ids','') + ',' + (d.get('company_id') or '')).strip(',')
-            # Keep non-null contact info
-            for f in ('mobile','email','pan','aadhaar','address','mca_user_id','mca_password','mca_notes'):
-                if not existing.get(f) and d.get(f):
-                    existing[f] = d[f]
-            # KYC: prefer worst status (overdue > pending > compliant)
-            kprio = {'overdue':3,'pending':2,'compliant':1,'filed':1}
-            if kprio.get(str(d.get('kyc_status','') or '').lower(),0) > kprio.get(str(existing.get('kyc_status','') or '').lower(),0):
-                existing['kyc_status']   = d['kyc_status']
-                existing['next_due_date']= d['next_due_date']
-                existing['last_kyc_date']= d['last_kyc_date']
-
-    result = list(seen.values())
-    return jsonify(result)
-
-@app.route("/api/directors/<did>/detail")
-@login_required
-def get_director(did):
-    """Fetch a single director record by ID."""
     conn=get_db(); c=conn.cursor()
     c.execute("""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status,
                         co.name as company_name,co.cin as company_cin
                  FROM directors d LEFT JOIN director_kyc k ON d.id=k.director_id
-                 LEFT JOIN companies co ON d.company_id=co.id
-                 WHERE d.id=%s""", (did,))
-    r = row(c.fetchone()); conn.close()
-    if not r: return jsonify({"error":"Director not found"}), 404
-    return jsonify(r)
-
-@app.route("/api/directors/search")
-@login_required
-def search_directors():
-    """Search directors by name/DIN/PAN — returns all matching rows with company info."""
-    q   = (request.args.get('q') or '').strip().lower()
-    tid = g.tenant_id
-    conn=get_db(); c=conn.cursor()
-    tf  = "AND d.tenant_id=%s" if tid else ""
-    tp  = (f'%{q}%', f'%{q}%', f'%{q}%') + ((tid,) if tid else ())
-    c.execute(f"""
-        SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status,
-               co.name as company_name,co.cin as company_cin,
-               CASE d.is_active WHEN 1 THEN 'Active' ELSE 'Resigned' END as status_label
-        FROM directors d LEFT JOIN director_kyc k ON d.id=k.director_id
-        LEFT JOIN companies co ON d.company_id=co.id
-        WHERE (LOWER(d.name) LIKE %s OR LOWER(d.din) LIKE %s OR LOWER(d.pan) LIKE %s)
-        {tf} ORDER BY d.is_active DESC, d.name
-    """, tp)
+                 LEFT JOIN companies co ON d.company_id=co.id WHERE d.is_active=1 ORDER BY d.name""")
     return jsonify(rows(c.fetchall()))
 
 @app.route("/api/companies/<cid>/directors")
 @login_required
 def list_directors(cid):
     conn=get_db(); c=conn.cursor()
-    c.execute("""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status,
-                        co.name as company_name, co.cin as company_cin
-                 FROM directors d
-                 LEFT JOIN director_kyc k ON d.id=k.director_id
-                 LEFT JOIN companies co ON d.company_id=co.id
-                 WHERE d.company_id=%s AND d.is_active=1
-                 ORDER BY d.name""",(cid,))
+    c.execute("""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status FROM directors d
+                 LEFT JOIN director_kyc k ON d.id=k.director_id WHERE d.company_id=%s ORDER BY d.name""",(cid,))
     return jsonify(rows(c.fetchall()))
+
+
+@app.route("/api/dir-kyc")
+@login_required
+def dir_kyc_list():
+    """Return one KYC record per DIN — deduped across companies."""
+    conn=get_db(); c=conn.cursor()
+    c.execute("""
+        SELECT d.id, d.name, d.din, d.mobile, d.email,
+               k.last_kyc_date, k.next_due_date, k.kyc_status,
+               GROUP_CONCAT(co.name ORDER BY co.name SEPARATOR '|||') AS company_names
+        FROM directors d
+        LEFT JOIN director_kyc k ON d.id=k.director_id
+        LEFT JOIN companies co ON d.company_id=co.id
+        WHERE d.is_active=1
+        GROUP BY d.din, d.name, d.mobile, d.email
+        ORDER BY d.name
+    """)
+    results = []
+    for r in c.fetchall():
+        rec = dict(r)
+        cos = rec.pop('company_names','') or ''
+        rec['companies'] = [c.strip() for c in cos.split('|||') if c.strip()]
+        results.append(rec)
+    conn.close()
+    return jsonify(results)
+
 
 @app.route("/api/directors", methods=["POST"])
 @login_required
@@ -741,17 +645,14 @@ def create_director():
     if not d.get("company_id") or not d.get("name"): return jsonify({"error":"company_id and name required"}),400
     did=str(uuid.uuid4()); conn=get_db(); c=conn.cursor()
     tid_dir = g.tenant_id
-    person_id = _get_or_create_person(
-        c, d["name"], (d.get("pan") or "").upper(), d.get("din"),
-        d.get("email"), d.get("mobile"), d.get("aadhaar"), d.get("address"), tid_dir)
     c.execute("""INSERT INTO directors
         (id,company_id,name,din,pan,aadhaar,email,mobile,address,designation,
-         date_of_appointment,mca_user_id,mca_password,tenant_id,person_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+         date_of_appointment,mca_user_id,mca_password,tenant_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (did,d["company_id"],d["name"],_str(d.get("din")),_str((d.get("pan") or "").upper()),
          d.get("aadhaar"),d.get("email"),d.get("mobile"),d.get("address"),
          d.get("designation","Director"),_dt(d.get("date_of_appointment")),
-         d.get("mca_user_id"),d.get("mca_password"),tid_dir,person_id))
+         d.get("mca_user_id"),d.get("mca_password"),tid_dir))
     # mca_notes stored via SAVEPOINT — safe even if column doesn't exist yet
     if d.get("mca_notes"):
         try:
@@ -780,26 +681,14 @@ def update_director(did):
     fields = {}
     for _k,_v in _rdir.items():
         if _k in ("date_of_appointment","date_of_cessation"): fields[_k] = _dt(_v)
-        elif _k == "din": fields[_k] = _str(_v)
-        elif _k == "pan": fields[_k] = _str((_v or '').upper()) or None
+        elif _k in ("din","pan"): fields[_k] = _str(_v)
         else: fields[_k] = _v
     if fields:
         c.execute(f"UPDATE directors SET {','.join(k+'=%s' for k in fields)} WHERE id=%s",list(fields.values())+[did])
     if "last_kyc_date" in d:
         due=_kyc_due(); st=_kyc_status(due)
-        # Sync KYC across all records with same DIN
-        c.execute("SELECT din FROM directors WHERE id=%s", (did,))
-        _drec = c.fetchone()
-        _din = (_drec.get('din') if isinstance(_drec,dict) else (_drec[0] if _drec else None))
-        if _din:
-            c.execute("SELECT id FROM directors WHERE din=%s AND is_active=1", (_din,))
-            _dids = [r['id'] if isinstance(r,dict) else r[0] for r in c.fetchall()]
-            for _xid in _dids:
-                c.execute("UPDATE director_kyc SET last_kyc_date=%s,next_due_date=%s,kyc_status=%s,updated_at=NOW() WHERE director_id=%s",
-                          (_dt(d["last_kyc_date"]),due,st,_xid))
-        else:
-            c.execute("UPDATE director_kyc SET last_kyc_date=%s,next_due_date=%s,kyc_status=%s,updated_at=NOW() WHERE director_id=%s",
-                      (_dt(d["last_kyc_date"]),due,st,did))
+        c.execute("UPDATE director_kyc SET last_kyc_date=%s,next_due_date=%s,kyc_status=%s,updated_at=NOW() WHERE director_id=%s",
+                  (d["last_kyc_date"],due,st,did))
     conn.commit()
     c.execute("""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status FROM directors d
                  LEFT JOIN director_kyc k ON d.id=k.director_id WHERE d.id=%s""",(did,))
@@ -824,172 +713,6 @@ def hard_delete_director(did):
     c.execute("DELETE FROM directors WHERE id=%s",(did,))
     conn.commit(); conn.close()
     return jsonify({"success":True})
-
-# ══ DIR-KYC (DIN-BASED — ONE ENTRY PER PERSON) ═══════════════════════════════
-
-@app.route("/api/dir-kyc")
-@login_required
-def list_dir_kyc():
-    """
-    DIR-KYC module: returns one entry per unique DIN (person).
-    If a person is director in multiple companies, only ONE row appears here,
-    showing their consolidated KYC status and all associated companies.
-    Groups by: person_id → DIN → id (fallback).
-    """
-    conn = get_db(); c = conn.cursor()
-    tid = g.tenant_id
-    _tf = "AND d.tenant_id=%s" if tid else ""
-    _tp = (tid,) if tid else ()
-    c.execute(f"""
-        SELECT d.id, d.name, d.din, d.pan, d.mobile, d.email, d.address,
-               d.aadhaar, d.mca_user_id, d.mca_password, d.mca_notes,
-               d.designation, d.company_id, d.person_id,
-               d.date_of_appointment, d.date_of_cessation,
-               k.kyc_status, k.next_due_date, k.last_kyc_date, k.id AS kyc_id,
-               co.name AS company_name, co.cin AS company_cin
-        FROM directors d
-        LEFT JOIN director_kyc k ON d.id = k.director_id
-        LEFT JOIN companies co ON d.company_id = co.id
-        WHERE d.is_active = 1 {_tf}
-        ORDER BY d.name
-    """, _tp)
-    raw = rows(c.fetchall())
-    conn.close()
-
-    from collections import OrderedDict
-    seen = OrderedDict()
-    for d in raw:
-        # Group by DIN primarily (unique per person per MCA), fallback to person_id or id
-        key = d.get('din') or d.get('person_id') or d['id']
-        if key not in seen:
-            entry = dict(d)
-            entry['company_count'] = 1
-            entry['companies'] = d.get('company_name') or ''
-            entry['company_ids'] = d.get('company_id') or ''
-            entry['company_details'] = [{
-                'company_id': d.get('company_id'),
-                'company_name': d.get('company_name'),
-                'company_cin': d.get('company_cin'),
-                'designation': d.get('designation'),
-                'date_of_appointment': d.get('date_of_appointment'),
-                'date_of_cessation': d.get('date_of_cessation'),
-                'director_id': d['id'],
-            }]
-            seen[key] = entry
-        else:
-            existing = seen[key]
-            existing['company_count'] = existing.get('company_count', 1) + 1
-            cn = d.get('company_name') or ''
-            if cn and cn not in existing.get('companies', ''):
-                existing['companies'] = (existing.get('companies', '') + ' | ' + cn).strip(' | ')
-                existing['company_ids'] = (existing.get('company_ids', '') + ',' + (d.get('company_id') or '')).strip(',')
-            existing['company_details'].append({
-                'company_id': d.get('company_id'),
-                'company_name': d.get('company_name'),
-                'company_cin': d.get('company_cin'),
-                'designation': d.get('designation'),
-                'date_of_appointment': d.get('date_of_appointment'),
-                'date_of_cessation': d.get('date_of_cessation'),
-                'director_id': d['id'],
-            })
-            # Merge contact fields — keep non-null
-            for f in ('mobile', 'email', 'pan', 'aadhaar', 'address', 'mca_user_id', 'mca_password', 'mca_notes'):
-                if not existing.get(f) and d.get(f):
-                    existing[f] = d[f]
-            # KYC: keep worst status
-            kprio = {'overdue': 3, 'pending': 2, 'compliant': 1, 'filed': 1}
-            if kprio.get(str(d.get('kyc_status') or '').lower(), 0) > kprio.get(str(existing.get('kyc_status') or '').lower(), 0):
-                existing['kyc_status'] = d['kyc_status']
-                existing['next_due_date'] = d['next_due_date']
-                existing['last_kyc_date'] = d['last_kyc_date']
-                existing['kyc_id'] = d.get('kyc_id')
-
-    return jsonify(list(seen.values()))
-
-
-@app.route("/api/dir-kyc/<din_or_id>/companies")
-@login_required
-def dir_kyc_companies(din_or_id):
-    """
-    All companies for a given DIN (or director id).
-    Returns full list of director records for this person.
-    """
-    conn = get_db(); c = conn.cursor()
-    tid = g.tenant_id
-    _tf = "AND d.tenant_id=%s" if tid else ""
-    _tp = (din_or_id, din_or_id) + ((tid,) if tid else ())
-    c.execute(f"""
-        SELECT d.*, k.last_kyc_date, k.next_due_date, k.kyc_status,
-               co.name AS company_name, co.cin AS company_cin
-        FROM directors d
-        LEFT JOIN director_kyc k ON d.id = k.director_id
-        LEFT JOIN companies co ON d.company_id = co.id
-        WHERE (d.din = %s OR d.id = %s) {_tf}
-        ORDER BY d.is_active DESC, co.name
-    """, _tp)
-    return jsonify(rows(c.fetchall()))
-
-
-@app.route("/api/dir-kyc/<director_id>/kyc", methods=["PUT"])
-@login_required
-def update_dir_kyc(director_id):
-    """
-    Update KYC filing date for a director by their director record id.
-    Syncs KYC across ALL director records sharing the same DIN.
-    """
-    if not can("director", "update"):
-        return jsonify({"error": "Insufficient permissions"}), 403
-    d = request.get_json(silent=True, force=True) or {}
-    conn = get_db(); c = conn.cursor()
-    # Find the director to get their DIN
-    c.execute("SELECT din FROM directors WHERE id=%s", (director_id,))
-    rec = c.fetchone()
-    if not rec:
-        conn.close(); return jsonify({"error": "Director not found"}), 404
-    din = rec.get('din') if rec else None
-    due = _kyc_due()
-    st = _kyc_status(due)
-    last_kyc = _dt(d.get("last_kyc_date"))
-    if din:
-        # Sync KYC status to ALL director records with same DIN
-        c.execute("""SELECT id FROM directors WHERE din=%s AND is_active=1""", (din,))
-        dir_ids = [r['id'] if isinstance(r, dict) else r[0] for r in c.fetchall()]
-        for did in dir_ids:
-            c.execute("""UPDATE director_kyc
-                         SET last_kyc_date=%s, next_due_date=%s, kyc_status=%s, updated_at=NOW()
-                         WHERE director_id=%s""", (last_kyc, due, st, did))
-    else:
-        c.execute("""UPDATE director_kyc
-                     SET last_kyc_date=%s, next_due_date=%s, kyc_status=%s, updated_at=NOW()
-                     WHERE director_id=%s""", (last_kyc, due, st, director_id))
-    conn.commit()
-    c.execute("""SELECT d.*, k.last_kyc_date, k.next_due_date, k.kyc_status
-                 FROM directors d LEFT JOIN director_kyc k ON d.id = k.director_id
-                 WHERE d.id=%s""", (director_id,))
-    result = row(c.fetchone()); conn.close()
-    return jsonify(result)
-
-
-@app.route("/api/dir-kyc/search")
-@login_required
-def search_dir_kyc():
-    """Search DIR-KYC records by name, DIN, or PAN — returns unique DIN entries."""
-    q = (request.args.get('q') or '').strip().lower()
-    tid = g.tenant_id
-    conn = get_db(); c = conn.cursor()
-    tf = "AND d.tenant_id=%s" if tid else ""
-    tp = (f'%{q}%', f'%{q}%', f'%{q}%') + ((tid,) if tid else ())
-    c.execute(f"""
-        SELECT d.*, k.last_kyc_date, k.next_due_date, k.kyc_status,
-               co.name AS company_name, co.cin AS company_cin
-        FROM directors d
-        LEFT JOIN director_kyc k ON d.id = k.director_id
-        LEFT JOIN companies co ON d.company_id = co.id
-        WHERE (LOWER(d.name) LIKE %s OR LOWER(d.din) LIKE %s OR LOWER(d.pan) LIKE %s)
-        {tf} ORDER BY d.name
-    """, tp)
-    return jsonify(rows(c.fetchall()))
-
 
 # ══ AUDITORS ═════════════════════════════════════════════════════════════════
 @app.route("/api/auditors")
@@ -1073,7 +796,7 @@ def update_auditor(aid):
     fields = {}
     for _k,_v in _raud.items():
         if _k in ("appointment_date","start_date","end_date"): fields[_k] = _dt(_v)
-        elif _k == "pan": fields[_k] = _str((_v or '').upper()) or None
+        elif _k == "pan": fields[_k] = _str(_v)
         else: fields[_k] = _v
     if not fields: return jsonify({"error":"Nothing to update"}),400
     conn=get_db(); c=conn.cursor()
@@ -1126,17 +849,14 @@ def list_shareholders(cid):
 def create_shareholder():
     if not can("shareholder","create"): return jsonify({"error":"Insufficient permissions"}),403
     d=request.get_json(silent=True, force=True) or {}; sid=str(uuid.uuid4()); conn=get_db(); c=conn.cursor()
-    _sh_person_id = _get_or_create_person(
-        c, d["name"], (d.get("pan") or "").upper(), None,
-        d.get("email"), d.get("mobile"), None, d.get("address"), g.tenant_id)
     c.execute("""INSERT INTO shareholders
         (id,company_id,name,folio_no,pan,email,mobile,address,share_class,shares_held,face_value,
-         date_of_entry,mca_user_id,mca_password,tenant_id,person_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+         date_of_entry,mca_user_id,mca_password,tenant_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (sid,d["company_id"],d["name"],d.get("folio_no"),_str((d.get("pan") or "").upper()),
          d.get("email"),d.get("mobile"),d.get("address"),d.get("share_class","Equity"),
          _num(d.get("shares_held",0),cast=int),_num(d.get("face_value",10),default=10),_dt(d.get("date_of_entry")),
-         d.get("mca_user_id"),d.get("mca_password"),g.tenant_id,_sh_person_id))
+         d.get("mca_user_id"),d.get("mca_password"),g.tenant_id))
     conn.commit()
     c.execute("SELECT * FROM shareholders WHERE id=%s",(sid,)); result=row(c.fetchone()); conn.close()
     return jsonify(result),201
@@ -4130,25 +3850,6 @@ def run_scheduler():
 def ensure_columns():
     """Add any columns that may be missing from older databases."""
     conn = get_db(); c = conn.cursor()
-    # Ensure person_directory table exists (may not exist on older DBs)
-    try:
-        c.execute("""CREATE TABLE IF NOT EXISTS person_directory (
-            id TEXT PRIMARY KEY, tenant_id TEXT,
-            name TEXT NOT NULL, pan TEXT, din TEXT, aadhaar TEXT,
-            email TEXT, mobile TEXT, address TEXT,
-            created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
-        )""")
-        conn.commit()
-    except Exception: pass
-    try:
-        c.execute("ALTER TABLE directors ADD COLUMN IF NOT EXISTS person_id TEXT REFERENCES person_directory(id) ON DELETE SET NULL")
-        conn.commit()
-    except Exception: pass
-    try:
-        c.execute("ALTER TABLE shareholders ADD COLUMN IF NOT EXISTS person_id TEXT REFERENCES person_directory(id) ON DELETE SET NULL")
-        conn.commit()
-    except Exception: pass
-
     migrations = [
         ("companies",    "gstin",       "TEXT"),
         ("companies",    "tan",         "TEXT"),
