@@ -3728,6 +3728,9 @@ async function loadDirKYC() {
     // Keep most recent last_kyc_date
     if (d.last_kyc_date && (!byDin[key].last_kyc_date || d.last_kyc_date > byDin[key].last_kyc_date)) {
       byDin[key].last_kyc_date = d.last_kyc_date;
+    }
+    // Keep EARLIEST next_due_date (soonest deadline) and its status
+    if (d.next_due_date && (!byDin[key].next_due_date || d.next_due_date < byDin[key].next_due_date)) {
       byDin[key].next_due_date = d.next_due_date;
       byDin[key].kyc_status    = d.kyc_status;
       byDin[key].id            = d.id;
@@ -3799,7 +3802,7 @@ async function loadDirKYC() {
           </td>
           <td>${badge(d.kyc_status || 'pending')}</td>
           <td><div class="td-actions">
-            <button class="btn btn-xs btn-success" onclick="openKYCModal('${d.id}','${esc(d.name)}')">📋 KYC</button>
+            <button class="btn btn-xs btn-success" onclick="openKYCModal('${d.id}','${esc(d.name)}','${d.last_kyc_date||''}','${d.next_due_date||''}')">📋 KYC</button>
           </div></td>
         </tr>`;
       }).join('')}
@@ -3869,22 +3872,76 @@ async function saveDir(id) {
   closeModal(); loadDirectors();
 }
 
-function openKYCModal(did, name) {
-  openModal(`📋 Update KYC — ${name}`, `
-    <div style="background:var(--gbg);border:1px solid var(--green);border-radius:8px;padding:11px 13px;font-size:12px;color:var(--green);margin-bottom:14px">
-      📌 DIN KYC (DIR-3 KYC) must be filed by <strong>30 September</strong> each year under Rule 12A to prevent DIN deactivation.
+function openKYCModal(did, name, lastFiled, currentDue) {
+  // Default due date: Sept 30 of next financial year
+  const today     = new Date();
+  const fyYear    = today.getMonth() >= 3 ? today.getFullYear() + 1 : today.getFullYear();
+  const defaultDue = `${fyYear}-09-30`;
+  const duePrefill = currentDue || defaultDue;
+  const filedPrefill = lastFiled || '';
+
+  openModal(`📋 DIR-3 KYC — ${name}`, `
+    <div style="background:var(--gbg);border:1px solid var(--green);border-radius:8px;padding:11px 13px;font-size:12px;color:var(--green);margin-bottom:16px;line-height:1.6">
+      📌 <strong>DIR-3 KYC</strong> must be filed every year under Rule 12A of Companies (Appointment and Qualification of Directors) Rules.<br>
+      Deadline: <strong>30 September</strong> each year. Missed filing deactivates the DIN.
     </div>
-    <div class="fg"><label class="fl">Last KYC Filing Date <span class="req">*</span></label>
-      <input class="fc" id="kyc-date" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="fg2">
+      <div class="fg">
+        <label class="fl">Last KYC Filing Date</label>
+        <input class="fc" id="kyc-last-filed" type="date" value="${filedPrefill}" placeholder="Leave blank if not yet filed">
+        <div style="font-size:10.5px;color:var(--text3);margin-top:4px">Date on which DIR-3 KYC was last submitted on MCA portal</div>
+      </div>
+      <div class="fg">
+        <label class="fl">KYC Due Date <span class="req">*</span></label>
+        <input class="fc" id="kyc-due-date" type="date" value="${duePrefill}">
+        <div style="font-size:10.5px;color:var(--text3);margin-top:4px">Next deadline — change only if different from standard 30 Sep</div>
+      </div>
+    </div>
+    <div id="kyc-status-preview" style="margin-top:12px"></div>
   `, `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-success" onclick="saveKYC('${did}')">✓ Mark KYC Filed</button>`);
+      <button class="btn btn-success" onclick="saveKYC('${did}')">✓ Save KYC</button>`, 'md');
+
+  // Live status preview
+  const dueEl = document.getElementById('kyc-due-date');
+  function updatePreview() {
+    const dueVal = dueEl.value;
+    if (!dueVal) { document.getElementById('kyc-status-preview').innerHTML = ''; return; }
+    const days = Math.ceil((new Date(dueVal) - new Date()) / 86400000);
+    let html = '';
+    if (days < 0)
+      html = \`<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:7px;padding:9px 13px;font-size:12px;color:#dc2626">
+                ⛔ <strong>Overdue</strong> by \${Math.abs(days)} day(s) — DIN may be deactivated. File immediately.
+              </div>\`;
+    else if (days === 0)
+      html = \`<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:7px;padding:9px 13px;font-size:12px;color:#ea580c">
+                🔴 <strong>Due today!</strong> File DIR-3 KYC immediately.
+              </div>\`;
+    else if (days <= 30)
+      html = \`<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:7px;padding:9px 13px;font-size:12px;color:#ea580c">
+                ⚠️ <strong>Due in \${days} day(s)</strong> — \${new Date(dueVal).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}. File soon.
+              </div>\`;
+    else
+      html = \`<div style="background:var(--gbg);border:1px solid var(--green);border-radius:7px;padding:9px 13px;font-size:12px;color:var(--green)">
+                ✅ <strong>Compliant</strong> — \${days} day(s) until due date (\${new Date(dueVal).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}).
+              </div>\`;
+    document.getElementById('kyc-status-preview').innerHTML = html;
+  }
+  dueEl.addEventListener('input', updatePreview);
+  updatePreview();
 }
 
 async function saveKYC(did) {
-  const d = document.getElementById('kyc-date').value;
-  if (!d) { toast('Date required', 'err'); return; }
-  await api(`/api/directors/${did}`, { method: 'PUT', body: { last_kyc_date: d } });
-  toast('KYC updated ✓', 'ok'); closeModal(); loadDirectors();
+  const lastFiled = document.getElementById('kyc-last-filed').value;
+  const dueDate   = document.getElementById('kyc-due-date').value;
+  if (!dueDate) { toast('KYC Due Date is required', 'err'); return; }
+  const body = { next_due_date: dueDate };
+  if (lastFiled) body.last_kyc_date = lastFiled;
+  const r = await api(`/api/directors/${did}`, { method: 'PUT', body });
+  if (!r) return;
+  toast('KYC updated ✓', 'ok');
+  closeModal();
+  if (typeof loadDirKYC === 'function') loadDirKYC();
+  if (typeof loadDirectors === 'function' && document.getElementById('page-directors')?.classList.contains('active')) loadDirectors();
 }
 
 async function deactivateDir(id) {
