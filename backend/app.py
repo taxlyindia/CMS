@@ -3457,24 +3457,25 @@ def tasks_rolewise_summary():
                         (u.role='staff'      AND t.assigned_to=u.id)
                     ) AND t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
                 FROM users u
-                JOIN tasks t ON t.task_leader=%s
+                LEFT JOIN tasks t ON t.task_leader=%s
                 WHERE u.is_active=1 AND u.is_platform_admin=0"""
+            # Show ALL active team members even with 0 tasks (use LEFT JOIN)
             if _tid:
-                c.execute(q + " AND (u.tenant_id=%s OR u.tenant_id IS NULL) GROUP BY u.id,u.name,u.role HAVING pending>0 OR completed>0 ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC", (uid, _tid))
+                c.execute(q + " AND (u.tenant_id=%s OR u.tenant_id IS NULL) GROUP BY u.id,u.name,u.role ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC", (uid, _tid))
             else:
-                c.execute(q + " GROUP BY u.id,u.name,u.role HAVING pending>0 OR completed>0 ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC", (uid,))
+                c.execute(q + " GROUP BY u.id,u.name,u.role ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC", (uid,))
         elif role == "manager":
             q = """
                 SELECT u.id, u.name, u.role,
                     COUNT(CASE WHEN t.assigned_to=u.id AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
                     COUNT(CASE WHEN t.assigned_to=u.id AND t.status='completed' THEN 1 END) AS completed,
                     COUNT(CASE WHEN t.assigned_to=u.id AND t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
-                FROM users u JOIN tasks t ON t.task_manager=%s
+                FROM users u LEFT JOIN tasks t ON t.task_manager=%s
                 WHERE u.is_active=1 AND u.is_platform_admin=0"""
             if _tid:
-                c.execute(q + " AND (u.tenant_id=%s OR u.tenant_id IS NULL) GROUP BY u.id,u.name,u.role HAVING pending>0 OR completed>0 ORDER BY pending DESC", (uid, _tid))
+                c.execute(q + " AND (u.tenant_id=%s OR u.tenant_id IS NULL) GROUP BY u.id,u.name,u.role ORDER BY pending DESC", (uid, _tid))
             else:
-                c.execute(q + " GROUP BY u.id,u.name,u.role HAVING pending>0 OR completed>0 ORDER BY pending DESC", (uid,))
+                c.execute(q + " GROUP BY u.id,u.name,u.role ORDER BY pending DESC", (uid,))
         else:
             c.execute("""
                 SELECT u.id, u.name, u.role,
