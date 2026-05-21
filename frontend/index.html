@@ -578,52 +578,55 @@ body {
 ══════════════════════════════════════════════════════════════════ */
 .sidebar {
   --sb-w: 220px; --sb-c: 56px;
-  width: var(--sb-w); background:var(--bg2);
-  border-right:1px solid var(--border);
+  width: var(--sb-w);
+  background: #0f1829 !important;
+  background: linear-gradient(160deg, #0a1628 0%, #122040 45%, #1a3a7a 100%) !important;
+  border-right: none;
   min-height:100vh; display:flex; flex-direction:column;
   flex-shrink:0; position:fixed; top:0; left:0; bottom:0;
   z-index:100; overflow:hidden;
   transition: width .22s cubic-bezier(.4,0,.2,1);
+  box-shadow: 4px 0 24px rgba(15,24,41,.28);
 }
-.sidebar.collapsed { width: var(--sb-c); }
-.sidebar:hover:not(.pinned) { /* no auto-expand on hover for clean UI */ }
+/* Sidebar group-wise collapse */
 .brand {
-  padding:11px 12px 10px; border-bottom:1px solid var(--border);
-  display:flex; align-items:center; gap:9px; min-height:54px;
+  padding:8px 12px; border-bottom:1px solid rgba(255,255,255,.1);
+  display:flex; align-items:center; gap:9px; min-height:78px;
   overflow:hidden; white-space:nowrap; position:relative;
 }
-.brand-img { width:32px; height:32px; border-radius:8px; object-fit:contain; flex-shrink:0; background:#0f1829; padding:2px; }
+.brand-img { width:auto; height:64px; max-width:160px; border-radius:6px; object-fit:contain; flex-shrink:0; background:#0f1829; padding:3px 8px; }
 .brand-text-wrap { overflow:hidden; transition:opacity .18s, width .18s; }
 .sidebar.collapsed .brand-text-wrap { opacity:0; width:0; pointer-events:none; }
-.brand-name { font-size:14.5px; font-weight:700; color:var(--text); letter-spacing:-.3px; white-space:nowrap; }
-.brand-tag { font-size:8.5px; color:var(--text3); letter-spacing:.8px; text-transform:uppercase; white-space:nowrap; }
+.sidebar.collapsed .brand-img { max-width:40px; height:40px; border-radius:6px; }
+.brand-name { font-size:14.5px; font-weight:700; color:#fff; letter-spacing:-.3px; white-space:nowrap; }
+.brand-tag { font-size:8.5px; color:rgba(255,255,255,.45); letter-spacing:.8px; text-transform:uppercase; white-space:nowrap; }
 .sb-toggle {
   position:absolute; right:8px; top:50%; transform:translateY(-50%);
-  width:20px; height:20px; border-radius:50%; border:1px solid var(--border2);
-  background:var(--bg3); cursor:pointer; display:flex; align-items:center; justify-content:center;
-  font-size:10px; color:var(--text2); transition:all .15s; flex-shrink:0;
+  width:22px; height:22px; border-radius:50%; border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.1); cursor:pointer; display:flex; align-items:center; justify-content:center;
+  font-size:10px; color:rgba(255,255,255,.7); transition:all .15s; flex-shrink:0;
 }
-.sb-toggle:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
+.sb-toggle:hover { background:rgba(255,255,255,.25); color:#fff; border-color:rgba(255,255,255,.4); }
 .sidebar.collapsed .sb-toggle { right:50%; transform:translate(50%,-50%) rotate(180deg); }
 .nav-group { padding:12px 6px 2px; overflow:hidden; }
 .nav-group-label {
   font-size:8px; font-weight:700; color:var(--text3); letter-spacing:1px;
   text-transform:uppercase; padding:0 8px; margin-bottom:3px;
-  white-space:nowrap; overflow:hidden;
+  white-space:nowrap; overflow:hidden; color:rgba(255,255,255,.35);
   transition:opacity .15s;
 }
 .sidebar.collapsed .nav-group-label { opacity:0; }
 .nav-item {
   display:flex; align-items:center; gap:9px;
   padding:8px 10px; border-radius:var(--r); cursor:pointer;
-  font-size:13px; font-weight:500; color:var(--text2);
+  font-size:13px; font-weight:500; color:rgba(255,255,255,.65);
   transition:all .15s; margin-bottom:1px; position:relative;
   white-space:nowrap; overflow:hidden;
 }
 .sidebar.collapsed .nav-item { justify-content:center; padding:10px 0; }
-.nav-item:hover { background:var(--bg3); color:var(--text) }
-.nav-item.active { background:var(--glow2); color:var(--accent); font-weight:600 }
-.nav-item.active::before { content:''; position:absolute; left:0; top:4px; bottom:4px; width:3px; background:var(--accent); border-radius:0 3px 3px 0 }
+.nav-item:hover { background:rgba(255,255,255,.1); color:#fff }
+.nav-item.active { background:rgba(255,255,255,.15); color:#fff; font-weight:600 }
+.nav-item.active::before { content:''; position:absolute; left:0; top:4px; bottom:4px; width:3px; background:#60a5fa; border-radius:0 3px 3px 0 }
 .nav-icon { font-size:16px; flex-shrink:0; }
 .nav-label { transition:opacity .15s, width .15s; overflow:hidden; }
 .sidebar.collapsed .nav-label { opacity:0; width:0; }
@@ -641,27 +644,25 @@ body {
 }
 .sidebar.collapsed .nav-item:hover::after { opacity:1; }
 .sidebar-footer {
-  margin-top:auto; padding:10px 8px; border-top:1px solid var(--border);
+  margin-top:auto; padding:10px 8px; border-top:1px solid rgba(255,255,255,.12);
   overflow:hidden;
 }
 .user-chip {
   display:flex; align-items:center; gap:9px;
-  padding:8px 9px; background:var(--bg3);
+  padding:8px 9px; background:rgba(255,255,255,.1);
   border-radius:var(--r); cursor:pointer;
   transition:background .15s; margin-bottom:7px;
   overflow:hidden; white-space:nowrap;
 }
-.sidebar.collapsed .user-chip { justify-content:center; padding:8px 0; }
-.sidebar.collapsed .user-chip-info { display:none; }
-.user-chip:hover { background:var(--bg4) }
-.user-chip-name { font-size:12px; font-weight:600; color:var(--text) }
-.user-chip-role { font-size:10px; color:var(--text3) }
+
+.user-chip:hover { background:rgba(255,255,255,.18) }
+.user-chip-name { font-size:12px; font-weight:600; color:#fff }
+.user-chip-role { font-size:10px; color:rgba(255,255,255,.5) }
 
 /* ══════════════════════════════════════════════════════════════════
    APP MAIN
 ══════════════════════════════════════════════════════════════════ */
-.main { margin-left:220px; flex:1; height:100vh; overflow:hidden; display:flex; flex-direction:column; transition:margin-left .22s cubic-bezier(.4,0,.2,1); }
-.sidebar.collapsed ~ .main, body.sb-collapsed .main { margin-left:56px; }
+.main { margin-left:220px; flex:1; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
 .topbar {
   background:rgba(244,246,251,.95); backdrop-filter:blur(12px);
   border-bottom:1px solid var(--border);
@@ -1463,41 +1464,70 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="brand-name" style="font-family:var(--font-display)">Taxly<span style="color:var(--gold)">-CMS</span></div>
       <div class="brand-tag">Compliance Management</div>
     </div>
-    <div class="sb-toggle" id="sb-toggle" onclick="toggleSidebar()" title="Toggle sidebar">◀</div>
   </div>
 
-  <div class="nav-group">
-    <div class="nav-group-label">Overview</div>
-    <div class="nav-item active" data-page="dashboard" data-tip="Dashboard"><span class="nav-icon">📊</span><span class="nav-label">Dashboard</span><span class="nav-count" id="alert-count" style="display:none">0</span></div>
+  <!-- Group: Overview -->
+  <div class="nav-group" id="grp-overview">
+    <div class="nav-group-header" onclick="toggleNavGroup('grp-overview')">
+      <span class="nav-group-label">Overview</span>
+      <span class="nav-group-chevron">▾</span>
+    </div>
+    <div class="nav-group-items" style="padding:0 6px 4px">
+      <div class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span class="nav-label">Dashboard</span><span class="nav-count" id="alert-count" style="display:none">0</span></div>
+    </div>
   </div>
 
-  <div class="nav-group">
-    <div class="nav-group-label">Company Data</div>
-    <div class="nav-item" data-page="companies"    data-tip="Companies">   <span class="nav-icon">🏢</span><span class="nav-label">Companies</span></div>
-    <div class="nav-item" data-page="directors"    data-tip="Directors">   <span class="nav-icon">👤</span><span class="nav-label">Directors</span></div>
-    <div class="nav-item" data-page="dir-kyc"      data-tip="DIR-KYC">     <span class="nav-icon">🪪</span><span class="nav-label">DIR-KYC</span></div>
-    <div class="nav-item" data-page="auditors"     data-tip="Auditors">    <span class="nav-icon">🔍</span><span class="nav-label">Auditors</span></div>
-    <div class="nav-item" data-page="shareholders" data-tip="Shareholders"><span class="nav-icon">📈</span><span class="nav-label">Shareholders</span></div>
+  <!-- Group: Company Data -->
+  <div class="nav-group" id="grp-company">
+    <div class="nav-group-header" onclick="toggleNavGroup('grp-company')">
+      <span class="nav-group-label">Company Data</span>
+      <span class="nav-group-chevron">▾</span>
+    </div>
+    <div class="nav-group-items" style="padding:0 6px 4px">
+      <div class="nav-item" data-page="companies">   <span class="nav-icon">🏢</span><span class="nav-label">Companies</span></div>
+      <div class="nav-item" data-page="directors">   <span class="nav-icon">👤</span><span class="nav-label">Directors</span></div>
+      <div class="nav-item" data-page="dir-kyc">     <span class="nav-icon">🪪</span><span class="nav-label">DIR-KYC</span></div>
+      <div class="nav-item" data-page="auditors">    <span class="nav-icon">🔍</span><span class="nav-label">Auditors</span></div>
+      <div class="nav-item" data-page="shareholders"><span class="nav-icon">📈</span><span class="nav-label">Shareholders</span></div>
+    </div>
   </div>
 
-  <div class="nav-group">
-    <div class="nav-group-label">Compliance</div>
-    <div class="nav-item" data-page="dsc"      data-tip="DSC Records"><span class="nav-icon">🔏</span><span class="nav-label">DSC Records</span></div>
-    <div class="nav-item" data-page="meetings" data-tip="Meetings">   <span class="nav-icon">🗓️</span><span class="nav-label">Meetings</span></div>
-    <div class="nav-item" data-page="alerts"   data-tip="Alerts">     <span class="nav-icon">🔔</span><span class="nav-label">Alerts</span></div>
-    <div class="nav-item" data-page="tasks"    data-tip="Tasks">      <span class="nav-icon">✅</span><span class="nav-label">Tasks</span></div>
+  <!-- Group: Compliance -->
+  <div class="nav-group" id="grp-compliance">
+    <div class="nav-group-header" onclick="toggleNavGroup('grp-compliance')">
+      <span class="nav-group-label">Compliance</span>
+      <span class="nav-group-chevron">▾</span>
+    </div>
+    <div class="nav-group-items" style="padding:0 6px 4px">
+      <div class="nav-item" data-page="dsc">     <span class="nav-icon">🔏</span><span class="nav-label">DSC Records</span></div>
+      <div class="nav-item" data-page="meetings"><span class="nav-icon">🗓️</span><span class="nav-label">Meetings</span></div>
+      <div class="nav-item" data-page="alerts">  <span class="nav-icon">🔔</span><span class="nav-label">Alerts</span></div>
+      <div class="nav-item" data-page="tasks">   <span class="nav-icon">✅</span><span class="nav-label">Tasks</span></div>
+    </div>
   </div>
 
-  <div class="nav-group">
-    <div class="nav-group-label">Legal Records</div>
-    <div class="nav-item" data-page="registers"  data-tip="Registers">     <span class="nav-icon">📚</span><span class="nav-label">Registers</span></div>
-    <div class="nav-item" data-page="documents"  data-tip="Documents">     <span class="nav-icon">📄</span><span class="nav-label">Documents</span></div>
-    <div class="nav-item" data-page="templates"  data-tip="Doc Templates"> <span class="nav-icon">🗂️</span><span class="nav-label">Doc Templates</span></div>
+  <!-- Group: Legal Records -->
+  <div class="nav-group" id="grp-legal">
+    <div class="nav-group-header" onclick="toggleNavGroup('grp-legal')">
+      <span class="nav-group-label">Legal Records</span>
+      <span class="nav-group-chevron">▾</span>
+    </div>
+    <div class="nav-group-items" style="padding:0 6px 4px">
+      <div class="nav-item" data-page="registers"><span class="nav-icon">📚</span><span class="nav-label">Registers</span></div>
+      <div class="nav-item" data-page="documents"><span class="nav-icon">📄</span><span class="nav-label">Documents</span></div>
+      <div class="nav-item" data-page="templates"><span class="nav-icon">🗂️</span><span class="nav-label">Doc Templates</span></div>
+    </div>
   </div>
 
+  <!-- Group: Admin -->
   <div class="nav-group" id="admin-nav" style="display:none">
-    <div class="nav-group-label">Admin</div>
-    <div class="nav-item" data-page="users" data-tip="Users"><span class="nav-icon">👥</span><span class="nav-label">Users</span></div>
+    <div class="nav-group-header" onclick="toggleNavGroup('admin-nav')">
+      <span class="nav-group-label">Admin</span>
+      <span class="nav-group-chevron">▾</span>
+    </div>
+    <div class="nav-group-items" style="padding:0 6px 4px">
+      <div class="nav-item" data-page="users"><span class="nav-icon">👥</span><span class="nav-label">Users</span></div>
+    </div>
   </div>
 
   <div class="sidebar-footer">
@@ -1508,7 +1538,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
         <div class="user-chip-role" id="u-role">—</div>
       </div>
     </div>
-    <button onclick="logout()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:transparent;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;color:var(--red);transition:all .12s" onmouseover="this.style.background='var(--rbg)'" onmouseout="this.style.background='transparent'">
+    <button onclick="logout()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:8px 10px;border-radius:7px;border:1px solid rgba(255,100,100,.35);background:rgba(255,80,80,.08);cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;color:#f87171;transition:all .12s" onmouseover="this.style.background='rgba(255,80,80,.18)'" onmouseout="this.style.background='rgba(255,80,80,.08)'">
       <span>⏻</span><span class="nav-label" style="opacity:1;width:auto"> Sign Out</span>
     </button>
   </div>
@@ -1677,6 +1707,15 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
               <!-- Module breakdown table -->
               <div class="rw-table-wrap" style="max-height:none">
                 <table class="rw-table">
+                  <thead>
+                    <tr style="background:linear-gradient(90deg,#0f1829,#1a2744)">
+                      <th style="padding:10px 18px;text-align:left;font-size:11px;font-weight:700;color:rgba(255,255,255,.55);letter-spacing:.6px;text-transform:uppercase">Module / Type</th>
+                      <th style="width:100px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:11px;font-weight:700;color:#fcd34d">👑 Leader</th>
+                      <th style="width:100px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:11px;font-weight:700;color:#a5b4fc">🔧 Manager</th>
+                      <th style="width:100px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:11px;font-weight:700;color:#6ee7b7">📋 Assignee</th>
+                      <th style="width:80px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:11px;font-weight:700;color:rgba(255,255,255,.55)">Total</th>
+                    </tr>
+                  </thead>
                   <tbody id="rw-table-body">
                     <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)"><div class="spin" style="margin:0 auto"></div></td></tr>
                   </tbody>
@@ -2994,24 +3033,15 @@ function renderMyTaskList(tasks, myRole) {
     const isOverdue = t.due_date && t.due_date < today && t.status !== 'completed';
     const isDueToday= t.due_date === today;
 
-    // Build "other people on this task" based on MY role
-    // If I am leader   → show manager + assignee
-    // If I am manager  → show leader + assignee
-    // If I am assignee → show leader + manager
-    let peopleHtml = '';
-    if (myRole === 'superadmin') {
-      // I am leader — show manager and assignee
-      if (t.task_manager_name) peopleHtml += `<span class="role-badge-manager" style="font-size:9.5px">🔧 ${t.task_manager_name}</span>`;
-      if (t.assigned_to_name)  peopleHtml += `<span class="role-badge-assigned" style="font-size:9.5px;margin-left:4px">📋 ${t.assigned_to_name}</span>`;
-    } else if (myRole === 'manager') {
-      // I am manager — show leader and assignee
-      if (t.task_leader_name)  peopleHtml += `<span class="role-badge-leader" style="font-size:9.5px">👑 ${t.task_leader_name}</span>`;
-      if (t.assigned_to_name)  peopleHtml += `<span class="role-badge-assigned" style="font-size:9.5px;margin-left:4px">📋 ${t.assigned_to_name}</span>`;
-    } else {
-      // I am assignee — show leader and manager
-      if (t.task_leader_name)  peopleHtml += `<span class="role-badge-leader" style="font-size:9.5px">👑 ${t.task_leader_name}</span>`;
-      if (t.task_manager_name) peopleHtml += `<span class="role-badge-manager" style="font-size:9.5px;margin-left:4px">🔧 ${t.task_manager_name}</span>`;
-    }
+    // Show FULL hierarchy chain: Leader → Manager → Assignee (always all three)
+    const mkBadge = (icon, name, cls) => name
+      ? `<span class="${cls}" style="font-size:9.5px">${icon} ${name}</span>` : '';
+    let lB = mkBadge('👑', t.task_leader_name,  'role-badge-leader');
+    let mB = mkBadge('🔧', t.task_manager_name, 'role-badge-manager');
+    let aB = mkBadge('📋', t.assigned_to_name,  'role-badge-assigned');
+    const arrSpan = '<span style="color:var(--border2);font-size:9px;margin:0 2px">→</span>';
+    let parts = [lB, mB, aB].filter(Boolean);
+    let peopleHtml = parts.join(arrSpan);
 
     const dueBadge = isOverdue
       ? `<span style="color:var(--red);font-weight:700;font-size:10.5px">⚠️ Overdue · ${fd(t.due_date)}</span>`
@@ -3093,8 +3123,19 @@ async function loadRWWidget() {
   set('rw-assignee-count', d.totals.assignee);
   set('rw-total-count', (d.totals.leader||0)+(d.totals.manager||0)+(d.totals.assignee||0));
 
-  // Hierarchy person cards
-  renderRWPersonStrip(d.persons || [], d.my_role);
+  // Hierarchy person cards — if backend returned no persons (0 tasks), load from /api/users
+  let persons = d.persons || [];
+  if (!persons.length) {
+    const allUsers = await api('/api/users') || [];
+    persons = allUsers
+      .filter(u => u.is_active && !u.is_platform_admin)
+      .map(u => ({ id: u.id, name: u.name, role: u.role, pending: 0, completed: 0, overdue: 0 }));
+    persons.sort((a,b) => {
+      const r = {superadmin:1, manager:2, staff:3};
+      return (r[a.role]||9) - (r[b.role]||9);
+    });
+  }
+  renderRWPersonStrip(persons, d.my_role);
 
   // Module table
   renderRWTable();
@@ -3109,7 +3150,7 @@ function renderRWPersonStrip(persons, myRole) {
   }
   const roleIcon  = r => r==='superadmin'?'👑':r==='manager'?'🔧':'📋';
   const roleCls   = r => r==='superadmin'?'role-badge-leader':r==='manager'?'role-badge-manager':'role-badge-assigned';
-  const roleLabel = r => r==='superadmin'?'Task Leader':r==='manager'?'Task Manager':'Assignee';
+  const roleLabel = r => r==='superadmin'?'Task Leader':r==='manager'?'Task Manager':'Assigned User';
 
   strip.innerHTML = persons.map(p => {
     const isMe    = p.id === ME?.id;
@@ -3367,17 +3408,28 @@ async function loadRWDrilldown() {
 
     // Show subordinate badges: if I am leader → show manager + assignee
     //                           if I am manager → show assignee
-    let peopleBadges = '';
-    if (myRole === 'superadmin' || RW_ACTIVE_ROLE === 'leader') {
-      if (t.task_manager_name) peopleBadges += `<span style="display:inline-flex;align-items:center;gap:4px;background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer" onclick="event.stopPropagation();filterDrilldownByPerson('${t.task_manager||''}','${esc(t.task_manager_name||'')}')">✏️ ${t.task_manager_name}</span>`;
-      if (t.assigned_to_name)  peopleBadges += `<span style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer" onclick="event.stopPropagation();filterDrilldownByPerson('${t.assigned_to||''}','${esc(t.assigned_to_name||'')}')">📋 ${t.assigned_to_name}</span>`;
-    } else if (myRole === 'manager' || RW_ACTIVE_ROLE === 'manager') {
-      if (t.task_leader_name)  peopleBadges += `<span style="display:inline-flex;align-items:center;gap:4px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600">👑 ${t.task_leader_name}</span>`;
-      if (t.assigned_to_name)  peopleBadges += `<span style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer" onclick="event.stopPropagation();filterDrilldownByPerson('${t.assigned_to||''}','${esc(t.assigned_to_name||'')}')">📋 ${t.assigned_to_name}</span>`;
-    } else {
-      if (t.task_leader_name)  peopleBadges += `<span style="display:inline-flex;align-items:center;gap:4px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600">👑 ${t.task_leader_name}</span>`;
-      if (t.task_manager_name) peopleBadges += `<span style="display:inline-flex;align-items:center;gap:4px;background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600">✏️ ${t.task_manager_name}</span>`;
-    }
+    // COMPLETE HIERARCHY: always show all three roles so the full
+    // assignment chain is visible regardless of who is viewing.
+    const badge = (icon, name, bg, fg, bc, pid) => {
+      if (!name) return '';
+      const clk = pid
+        ? `onclick="event.stopPropagation();filterDrilldownByPerson('${pid}','${esc(name||'')}')" style="cursor:pointer"`
+        : '';
+      return `<span ${clk} style="display:inline-flex;align-items:center;gap:4px;background:${bg};color:${fg};border:1px solid ${bc};border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600">${icon} ${name}</span>`;
+    };
+    // Arrow connector between badges
+    const arr = (a, b) => (a && b) ? '<span style="color:var(--border2);font-size:11px;line-height:1">→</span>' : '';
+    const lBadge = badge('👑', t.task_leader_name,  '#fef3c7','#92400e','#fcd34d', null);
+    const mBadge = badge('🔧', t.task_manager_name, '#e0e7ff','#3730a3','#a5b4fc', t.task_manager||'');
+    const aBadge = badge('📋', t.assigned_to_name,  '#d1fae5','#065f46','#6ee7b7', t.assigned_to||'');
+    // Build the chain: only show roles that are actually filled
+    let peopleBadges = [
+      lBadge,
+      (lBadge && mBadge) ? arr(lBadge, mBadge) : '',
+      mBadge,
+      (mBadge && aBadge) ? arr(mBadge, aBadge) : ((lBadge && aBadge && !mBadge) ? arr(lBadge, aBadge) : ''),
+      aBadge,
+    ].filter(Boolean).join('');
 
     return `<div style="display:flex;align-items:flex-start;gap:0;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
                onmouseover="this.style.background='rgba(29,80,224,.025)'"
@@ -8266,23 +8318,25 @@ function scheduleAutoPreview() { _schedulePreview(); }
 
 
 // Wrap all DOM-dependent init code in DOMContentLoaded to prevent null-reference crashes
-// ── Sidebar collapse/expand ──────────────────────────────────────────────
-function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  const mn = document.getElementById('main');
-  const collapsed = sb.classList.toggle('collapsed');
-  if (mn) mn.style.marginLeft = collapsed ? '56px' : '220px';
-  localStorage.setItem('_sb_collapsed', collapsed ? '1' : '0');
+// ── Sidebar group-wise collapse/expand ───────────────────────────────────
+function toggleNavGroup(groupId) {
+  const grp = document.getElementById(groupId);
+  if (!grp) return;
+  grp.classList.toggle('collapsed');
+  // Persist collapsed groups
+  const collapsed = [];
+  document.querySelectorAll('.nav-group.collapsed').forEach(g => { if(g.id) collapsed.push(g.id); });
+  localStorage.setItem('_sb_groups', JSON.stringify(collapsed));
 }
 
 function restoreSidebarState() {
-  const sb = document.getElementById('sidebar');
-  const mn = document.getElementById('main');
-  if (!sb) return;
-  if (localStorage.getItem('_sb_collapsed') === '1') {
-    sb.classList.add('collapsed');
-    if (mn) mn.style.marginLeft = '56px';
-  }
+  try {
+    const collapsed = JSON.parse(localStorage.getItem('_sb_groups') || '[]');
+    collapsed.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('collapsed');
+    });
+  } catch(e) {}
 }
 
 document.addEventListener('DOMContentLoaded', function() {
