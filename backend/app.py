@@ -626,8 +626,10 @@ def dir_kyc_list():
     conn=get_db(); c=conn.cursor()
     c.execute("""
         SELECT d.id, d.name, d.din, d.mobile, d.email,
-               k.last_kyc_date, k.next_due_date, k.kyc_status,
-               GROUP_CONCAT(co.name ORDER BY co.name SEPARATOR '|||') AS company_names
+               MAX(k.last_kyc_date) AS last_kyc_date,
+               MIN(k.next_due_date) AS next_due_date,
+               k.kyc_status,
+               GROUP_CONCAT(DISTINCT co.name ORDER BY co.name SEPARATOR '|||') AS company_names
         FROM directors d
         LEFT JOIN director_kyc k ON d.id=k.director_id
         LEFT JOIN companies co ON d.company_id=co.id
@@ -693,10 +695,19 @@ def update_director(did):
         else: fields[_k] = _v
     if fields:
         c.execute(f"UPDATE directors SET {','.join(k+'=%s' for k in fields)} WHERE id=%s",list(fields.values())+[did])
-    if "last_kyc_date" in d:
-        due=_kyc_due(); st=_kyc_status(due)
-        c.execute("UPDATE director_kyc SET last_kyc_date=%s,next_due_date=%s,kyc_status=%s,updated_at=NOW() WHERE director_id=%s",
-                  (d["last_kyc_date"],due,st,did))
+    # Update KYC record if any KYC field was sent
+    if "last_kyc_date" in d or "next_due_date" in d:
+        # Use manually provided due date if given, else auto-calculate
+        due = _dt(d["next_due_date"]) if d.get("next_due_date") else _kyc_due()
+        st  = _kyc_status(due)
+        last_kyc = _dt(d["last_kyc_date"]) if d.get("last_kyc_date") else None
+        if last_kyc:
+            c.execute("UPDATE director_kyc SET last_kyc_date=%s,next_due_date=%s,kyc_status=%s,updated_at=NOW() WHERE director_id=%s",
+                      (last_kyc, due, st, did))
+        else:
+            # Only due date changed, preserve existing last_kyc_date
+            c.execute("UPDATE director_kyc SET next_due_date=%s,kyc_status=%s,updated_at=NOW() WHERE director_id=%s",
+                      (due, st, did))
     conn.commit()
     c.execute("""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status FROM directors d
                  LEFT JOIN director_kyc k ON d.id=k.director_id WHERE d.id=%s""",(did,))
