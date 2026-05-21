@@ -1429,7 +1429,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
     <div class="nav-group-label">Company Data</div>
     <div class="nav-item" data-page="companies"><span class="nav-icon">🏢</span>Companies</div>
     <div class="nav-item" data-page="directors"><span class="nav-icon">👤</span>Directors</div>
-    <div class="nav-item" data-page="dirkyc"><span class="nav-icon">🪪</span>DIR-KYC</div>
+    <div class="nav-item" data-page="dir-kyc"><span class="nav-icon">📋</span>DIR-KYC</div>
     <div class="nav-item" data-page="auditors"><span class="nav-icon">📋</span>Auditors</div>
     <div class="nav-item" data-page="shareholders"><span class="nav-icon">📈</span>Shareholders</div>
   </div>
@@ -1687,7 +1687,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
             <div class="card-body" id="da-aud" style="padding:0;max-height:220px;overflow-y:auto"></div>
           </div>
           <div class="card">
-            <div class="card-header"><div class="card-title">🟡 DIN KYC Due</div><button class="btn btn-xs btn-outline" onclick="navigateTo('dirkyc')">View All</button></div>
+            <div class="card-header"><div class="card-title">🟡 DIN KYC Due</div><button class="btn btn-xs btn-outline" onclick="navigateTo('directors')">View All</button></div>
             <div class="card-body" id="da-kyc" style="padding:0;max-height:220px;overflow-y:auto"></div>
           </div>
           <div class="card">
@@ -1718,31 +1718,31 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
 
     <!-- ── DIRECTORS ── -->
     <div class="page" id="page-directors">
-      <!-- Filter bar -->
-      <div class="filter-bar" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
-        <input class="fc" id="dir-search" placeholder="🔍 Search name, DIN, PAN…"
-               oninput="filterDirectorsList()" style="max-width:260px">
-        <select class="fc" style="width:200px" id="dir-co-f" onchange="loadDirectors()">
-          <option value="">All Companies</option>
+      <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <input class="fc" style="width:220px;min-width:160px" id="dir-search" placeholder="Search by name, DIN or company..." oninput="loadDirectors()">
+        <select class="fc" style="width:220px" id="dir-co-f" onchange="loadDirectors()"><option value="">All Companies</option></select>
+        <select class="fc" style="width:180px" id="dir-status-f" onchange="loadDirectors()">
+          <option value="">All Directors</option>
+          <option value="active">Active</option>
+          <option value="resigned">Resigned / Ceased</option>
         </select>
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <span id="dir-count" style="font-size:12px;color:var(--text3);align-self:center"></span>
-        </div>
       </div>
+      <div class="card"><div id="dir-tbl"><div class="loading"><div class="spin"></div></div></div></div>
+    </div>
 
-      <!-- Director cards grid (no company filter) / table (with company filter) -->
-      <div id="dir-tbl"></div>
-
-      <!-- Director company detail panel -->
-      <div id="dir-company-panel" style="display:none;margin-top:14px">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title" id="dir-panel-title">Company Memberships</div>
-            <button class="btn btn-xs btn-ghost" onclick="closeDirPanel()">✕</button>
-          </div>
-          <div class="card-body" id="dir-panel-body"></div>
-        </div>
+    <!-- DIR-KYC MODULE -->
+    <div class="page" id="page-dir-kyc">
+      <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <input class="fc" style="width:260px;min-width:160px" id="kyc-search" placeholder="Search by name, DIN or email..." oninput="loadDirKYC()">
+        <select class="fc" style="width:180px" id="kyc-status-f" onchange="loadDirKYC()">
+          <option value="">All KYC Status</option>
+          <option value="filed">Filed</option>
+          <option value="due">Due Soon</option>
+          <option value="overdue">Overdue</option>
+          <option value="pending">Pending</option>
+        </select>
       </div>
+      <div class="card"><div id="kyc-tbl"><div class="loading"><div class="spin"></div></div></div></div>
     </div>
 
     <!-- ── AUDITORS ── -->
@@ -2250,8 +2250,8 @@ let COMPANIES = [], ALL_USERS = [];
 const PAGE_META = {
   dashboard:   { title:'Dashboard',           sub:'Compliance overview & alerts',                             cta:null },
   companies:   { title:'Companies',           sub:'Click company name to view full master data & PDF',        cta:'+ New Company' },
-  directors:   { title:'Directors (Company Records)', sub:'All director entries per company — one row per appointment', cta:'+ Add Director' },
-  dirkyc:      { title:'DIR-KYC (DIN Records)',   sub:'One entry per DIN — consolidated KYC status across all companies', cta:null },
+  directors:   { title:'Directors',           sub:'Director profiles, MCA credentials & company assignments',  cta:'+ Add Director' },
+  'dir-kyc':   { title:'DIR-KYC',              sub:'DIR-3 KYC filing status — one record per DIN',              cta:null },
   auditors:    { title:'Statutory Auditors',  sub:'Auditor appointments, nature & expiry tracking',          cta:'+ Appoint Auditor' },
   shareholders:{ title:'Shareholders',        sub:'Register of members with contact & MCA credentials',      cta:'+ Add Shareholder' },
   dsc:         { title:'DSC Records',         sub:'Digital Signature Certificates — custody & expiry alerts', cta:'+ Add DSC' },
@@ -2684,7 +2684,8 @@ function navigateTo(page) {
   if (m.cta) { cta.textContent = m.cta; cta.style.display = ''; } else { cta.style.display = 'none'; }
   showPeriodBar(page);
   ({ dashboard: loadDashboard, companies: loadCompanies, directors: loadDirectors,
-     dirkyc: loadDirKYC, auditors: loadAuditors, shareholders: loadShareholders, dsc: loadDSC,
+     'dir-kyc': loadDirKYC,
+     auditors: loadAuditors, shareholders: loadShareholders, dsc: loadDSC,
      meetings: loadMeetings, alerts: loadAlerts, tasks: loadTasks,
      registers: initRegisters, documents: initDocPage, templates: loadTemplates,
      users: loadUsers, settings: initSettingsPage, platform: loadPlatformPage }[page] || (() => {}))();
@@ -3638,171 +3639,167 @@ async function deleteCo(id, name) {
 // ═══════════════════════════════════════════════════════════════════════════
 // DIRECTORS — with MCA credentials, mobile, email columns
 // ═══════════════════════════════════════════════════════════════════════════
-let _ALL_DIRS = [];
-
 async function loadDirectors() {
-  const cid = PB.company_id || document.getElementById('dir-co-f')?.value || '';
+  const cid    = PB.company_id || document.getElementById('dir-co-f')?.value || '';
+  const status = document.getElementById('dir-status-f')?.value || '';
+  const search = (document.getElementById('dir-search')?.value || '').toLowerCase().trim();
   if (cid) { const el = document.getElementById('dir-co-f'); if(el) el.value = cid; }
-
-  let dirs;
-  if (cid) {
-    // Company-specific view: show all directors for this company with company fields
-    dirs = await api(`/api/companies/${cid}/directors`);
-    if (!dirs) return;
-    _ALL_DIRS = dirs;
-    _renderDirTable(dirs, cid);
-  } else {
-    // Global view: unique persons, one row per director (grouped by DIN)
-    dirs = await api('/api/directors');
-    if (!dirs) return;
-    _ALL_DIRS = dirs;
-    filterDirectorsList();
+  const params = new URLSearchParams();
+  if (PB.from) params.set('date_from', PB.from);
+  if (PB.to)   params.set('date_to',   PB.to);
+  if (status)      params.set('is_active', status === 'active' ? '1' : status === 'resigned' ? '0' : '');
+  const qs = params.toString() ? '?'+params.toString() : '';
+  const url = cid ? `/api/companies/${cid}/directors${qs}` : `/api/directors${qs}`;
+  let dirs = await api(url); if (!dirs) return;
+  // Client-side search filter: name, DIN, company name
+  if (search) {
+    dirs = dirs.filter(d =>
+      (d.name || '').toLowerCase().includes(search) ||
+      (d.din  || '').toLowerCase().includes(search) ||
+      (d.company_name || '').toLowerCase().includes(search)
+    );
   }
-}
-
-function filterDirectorsList() {
-  const q   = (document.getElementById('dir-search')?.value || '').toLowerCase();
-  const cid = document.getElementById('dir-co-f')?.value || '';
-  if (cid) return; // company-specific view handled by loadDirectors
-
-  let list = _ALL_DIRS;
-  if (q) list = list.filter(d =>
-    (d.name||'').toLowerCase().includes(q) ||
-    (d.din||'').toLowerCase().includes(q)  ||
-    (d.pan||'').toLowerCase().includes(q)  ||
-    (d.email||'').toLowerCase().includes(q)
-  );
-  _renderDirCards(list);
-}
-
-function _renderDirCards(dirs) {
-  const el = document.getElementById('dir-tbl');
-  if (!el) return;
-  const cnt = document.getElementById('dir-count');
-  if (cnt) cnt.textContent = `${dirs.length} director(s)`;
-
   if (!dirs.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">👤</div>
-      <div class="empty-title">No directors found</div>
-      <div class="empty-sub">Add directors via the + Add Director button or adjust filters</div></div>`;
+    document.getElementById('dir-tbl').innerHTML = `<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-title">No directors found</div></div>`;
+    return;
+  }
+  document.getElementById('dir-tbl').innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>Director Name</th><th>DIN</th><th>PAN</th>
+        ${!cid ? '<th>Company</th>' : ''}
+        <th>Designation</th><th>Mobile</th><th>Email</th>
+        <th>Appointed</th>
+        <th>MCA User ID</th><th>MCA Password</th>
+        <th>Actions</th>
+      </tr></thead>
+      <tbody>${dirs.map(d => `
+        <tr>
+          <td><div style="font-weight:600">${d.name}</div></td>
+          <td><code>${d.din || '—'}</code></td>
+          <td><code>${d.pan || '—'}</code></td>
+          ${!cid ? `<td style="font-size:11.5px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.company_name || '—'}</td>` : ''}
+          <td><span style="font-size:11.5px">${d.designation || '—'}</span></td>
+          <td style="font-size:12.5px;white-space:nowrap">${d.mobile || '—'}</td>
+          <td style="font-size:12px">${d.email || '—'}</td>
+          <td style="font-size:12px">${fd(d.date_of_appointment)}</td>
+          <td>${d.mca_user_id ? credSpan(d.mca_user_id, 'MCA User ID') : '—'}</td>
+          <td>${d.mca_password ? credSpan(d.mca_password, 'MCA Password') : '—'}</td>
+          <td><div class="td-actions">
+            <button class="btn btn-xs btn-ghost" onclick="openDirModal('${d.id}','${d.company_id}')">Edit</button>
+            <button class="btn btn-xs btn-warning" onclick="deactivateDir('${d.id}')" title="Deactivate">⏸ Off</button>
+            <button class="btn btn-xs btn-danger" onclick="hardDeleteDir('${d.id}')" title="Permanently delete">🗑 Del</button>
+          </div></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="tfoot">${dirs.length} director(s)</div></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DIR-KYC MODULE — one row per DIN, deduped across companies
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadDirKYC() {
+  const search    = (document.getElementById('kyc-search')?.value || '').toLowerCase().trim();
+  const statusF   = document.getElementById('kyc-status-f')?.value || '';
+  // Use deduped endpoint if available, fall back to client-side dedup
+  const allDirs   = await api('/api/dir-kyc').catch(()=>null) || await api('/api/directors'); if (!allDirs) return;
+
+  // Deduplicate by DIN — keep one record per DIN (latest KYC data)
+  const byDin = {};
+  for (const d of allDirs) {
+    const key = (d.din || ('__noDin_' + d.id)).trim();
+    if (!byDin[key]) {
+      byDin[key] = { ...d, _companies: [] };
+    }
+    // Accumulate companies for tooltip
+    if (d.company_name) byDin[key]._companies.push(d.company_name);
+    // Keep the most recent KYC filing date
+    if (d.last_kyc_date && (!byDin[key].last_kyc_date || d.last_kyc_date > byDin[key].last_kyc_date)) {
+      byDin[key].last_kyc_date = d.last_kyc_date;
+      byDin[key].next_due_date = d.next_due_date;
+      byDin[key].kyc_status    = d.kyc_status;
+      byDin[key].id            = d.id; // use id of most-recent record for KYC action
+    }
+  }
+  let rows = Object.values(byDin);
+
+  // Status filter
+  if (statusF) {
+    rows = rows.filter(d => {
+      const st = (d.kyc_status || 'pending').toLowerCase();
+      if (statusF === 'filed')   return st === 'filed';
+      if (statusF === 'pending') return st === 'pending';
+      if (statusF === 'overdue') return st === 'overdue' || (d.next_due_date && dl(d.next_due_date) < 0);
+      if (statusF === 'due')     return st !== 'filed' && d.next_due_date && dl(d.next_due_date) !== null && dl(d.next_due_date) >= 0 && dl(d.next_due_date) <= 30;
+      return true;
+    });
+  }
+
+  // Search filter
+  if (search) {
+    rows = rows.filter(d =>
+      (d.name  || '').toLowerCase().includes(search) ||
+      (d.din   || '').toLowerCase().includes(search) ||
+      (d.email || '').toLowerCase().includes(search)
+    );
+  }
+
+  if (!rows.length) {
+    document.getElementById('kyc-tbl').innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No KYC records found</div></div>`;
     return;
   }
 
-  el.innerHTML = `<div class="table-wrap"><table class="data-table">
-    <thead><tr>
-      <th>Director</th><th>DIN</th><th>PAN</th><th>Designation</th>
-      <th>Mobile</th><th>Email</th>
-      <th style="text-align:center">Companies</th>
-      <th>Actions</th>
-    </tr></thead>
-    <tbody>
-    ${dirs.map(d => {
-      const coCount = d.company_count || 1;
-      return `<tr>
-        <td>
-          <div style="font-weight:600;font-size:13px">${d.name}</div>
-          ${d.mca_user_id ? `<div style="font-size:10.5px;color:var(--text3)">MCA: ${credSpan(d.mca_user_id,'MCA User')} ${d.mca_password?credSpan(d.mca_password,'MCA Pwd'):''}</div>` : ''}
-        </td>
-        <td><code style="font-size:11.5px">${d.din||'—'}</code></td>
-        <td><code style="font-size:11.5px">${d.pan||'—'}</code></td>
-        <td><span class="badge b-gray" style="font-size:10.5px">${d.designation||'Director'}</span></td>
-        <td style="white-space:nowrap;font-size:12.5px">${d.mobile||'—'}</td>
-        <td style="font-size:12px">${d.email||'—'}</td>
-        <td style="text-align:center">
-          ${coCount > 1
-            ? `<button class="btn btn-xs btn-primary" onclick="showDirCompanies('${d.din||''}','${esc(d.name)}')"
-                title="View all companies">${coCount} companies</button>`
-            : `<span style="font-size:11.5px;color:var(--text3)">${d.companies||'—'}</span>`}
-        </td>
-        <td><div class="td-actions">
-          <button class="btn btn-xs btn-ghost" onclick="openDirModal('${d.id}','${d.company_id}')">✏️ Edit</button>
-          <button class="btn btn-xs btn-warning" onclick="deactivateDir('${d.id}')" title="Deactivate">⏸</button>
-          <button class="btn btn-xs btn-danger" onclick="hardDeleteDir('${d.id}')" title="Delete">🗑</button>
-        </div></td>
-      </tr>`;
-    }).join('')}
-    </tbody>
-  </table>
-  <div class="tfoot">${dirs.length} unique director(s)</div>
-  </div>`;
+  document.getElementById('kyc-tbl').innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>Director Name</th>
+        <th>DIN</th>
+        <th>Mobile</th>
+        <th>Email</th>
+        <th>KYC Due Date</th>
+        <th>KYC Status</th>
+        <th>Action</th>
+      </tr></thead>
+      <tbody>${rows.map(d => {
+        const days = d.next_due_date ? dl(d.next_due_date) : null;
+        const urgency = days !== null && days < 0
+          ? `<div style="font-size:10px;color:var(--red)">${Math.abs(days)}d overdue</div>`
+          : days !== null && days <= 30
+          ? `<div style="font-size:10px;color:var(--orange)">${days}d left</div>`
+          : '';
+        const cos = (d._companies || []).filter(Boolean);
+        const coTip = cos.length ? ` title="Director in: ${cos.join(', ')}"` : '';
+        return `
+        <tr>
+          <td>
+            <div style="font-weight:600">${d.name}</div>
+            ${cos.length ? `<div style="font-size:10.5px;color:var(--text3);margin-top:2px"${coTip}>🏢 ${cos.length} compan${cos.length>1?'ies':'y'}</div>` : ''}
+          </td>
+          <td><code>${d.din || '—'}</code></td>
+          <td style="font-size:12.5px;white-space:nowrap">${d.mobile || '—'}</td>
+          <td style="font-size:12px">${d.email || '—'}</td>
+          <td>
+            <div style="font-size:12px">${fd(d.next_due_date)}</div>
+            ${urgency}
+          </td>
+          <td>${badge(d.kyc_status || 'pending')}</td>
+          <td><div class="td-actions">
+            <button class="btn btn-xs btn-success" onclick="openKYCModal('${d.id}','${esc(d.name)}')">📋 KYC</button>
+          </div></td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+    <div class="tfoot">${rows.length} DIN record(s) — unique directors across all companies</div></div>`;
 }
 
-function _renderDirTable(dirs, cid) {
-  // Company-specific view: show all directors for this company
-  const el = document.getElementById('dir-tbl');
-  if (!el) return;
-  const cnt = document.getElementById('dir-count');
-  if (cnt) cnt.textContent = `${dirs.length} director(s)`;
-  if (!dirs.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">👤</div>
-      <div class="empty-title">No directors for this company</div></div>`;
-    return;
-  }
-  el.innerHTML = `<div class="table-wrap"><table class="data-table">
-    <thead><tr>
-      <th>Director</th><th>DIN</th><th>PAN</th><th>Designation</th>
-      <th>Mobile</th><th>Email</th><th>Appointed</th>
-      <th>MCA</th><th>Actions</th>
-    </tr></thead>
-    <tbody>
-    ${dirs.map(d => {
-      return `<tr>
-        <td><div style="font-weight:600">${d.name}</div></td>
-        <td><code style="font-size:11.5px">${d.din||'—'}</code></td>
-        <td><code style="font-size:11.5px">${d.pan||'—'}</code></td>
-        <td><span class="badge b-gray" style="font-size:10.5px">${d.designation||'—'}</span></td>
-        <td style="white-space:nowrap;font-size:12.5px">${d.mobile||'—'}</td>
-        <td style="font-size:12px">${d.email||'—'}</td>
-        <td style="font-size:12px">${fd(d.date_of_appointment)}</td>
-        <td>${d.mca_user_id?credSpan(d.mca_user_id,'MCA User'):'—'} ${d.mca_password?credSpan(d.mca_password,'MCA Pwd'):''}</td>
-        <td><div class="td-actions">
-          <button class="btn btn-xs btn-ghost" onclick="openDirModal('${d.id}','${cid}')">✏️ Edit</button>
-          <button class="btn btn-xs btn-warning" onclick="deactivateDir('${d.id}')" title="Deactivate">⏸</button>
-          <button class="btn btn-xs btn-danger" onclick="hardDeleteDir('${d.id}')" title="Delete">🗑</button>
-        </div></td>
-      </tr>`;
-    }).join('')}
-    </tbody>
-  </table>
-  <div class="tfoot">${dirs.length} director(s)</div></div>`;
-}
-
-async function showDirCompanies(din, name) {
-  const panel = document.getElementById('dir-company-panel');
-  const body  = document.getElementById('dir-panel-body');
-  const title = document.getElementById('dir-panel-title');
-  title.textContent = `${name} — Company Memberships`;
-  body.innerHTML = '<div class="loading"><div class="spin"></div></div>';
-  panel.style.display = '';
-  // Search all director rows for this DIN
-  const all = await api('/api/directors/search?q=' + encodeURIComponent(din));
-  if (!all || !all.length) {
-    body.innerHTML = '<div class="empty-state">No records found</div>'; return;
-  }
-  body.innerHTML = `<div class="table-wrap"><table class="data-table">
-    <thead><tr><th>Company</th><th>CIN</th><th>Designation</th><th>Appointed</th><th>Ceased</th><th>Status</th><th>Actions</th></tr></thead>
-    <tbody>${all.map(d => `<tr>
-      <td><strong>${d.company_name||'—'}</strong></td>
-      <td style="font-size:11px;font-family:monospace">${d.company_cin||'—'}</td>
-      <td>${d.designation||'—'}</td>
-      <td>${fd(d.date_of_appointment)}</td>
-      <td>${fd(d.date_of_cessation)||'—'}</td>
-      <td>${badge(d.is_active==1?'active':'resigned')}</td>
-      <td><button class="btn btn-xs btn-ghost" onclick="openDirModal('${d.id}','${d.company_id}')">✏️ Edit</button></td>
-    </tr>`).join('')}
-    </tbody></table></div>`;
-  setTimeout(() => panel.scrollIntoView({ behavior:'smooth', block:'start' }), 50);
-}
-
-function closeDirPanel() {
-  document.getElementById('dir-company-panel').style.display = 'none';
-}
 
 async function openDirModal(id = null, cid = null) {
   let ed = {};
   if (id) {
-    const single = await api(`/api/directors/${id}/detail`);
-    if (single) ed = single;
+    const allDirs = await api('/api/directors');
+    if (allDirs) ed = allDirs.find(d => d.id === id) || {};
     if (!cid && ed.company_id) cid = ed.company_id;
   }
   openModal(id ? '✏️ Edit Director' : '👤 New Director', `
@@ -3811,14 +3808,14 @@ async function openDirModal(id = null, cid = null) {
     <div class="fg2">
       <div class="fg"><label class="fl">Full Name <span class="req">*</span></label><input class="fc" id="dir-name" placeholder="Arjun Mehta" value="${ed.name||''}"></div>
       <div class="fg"><label class="fl">Designation</label>
-        <select class="fc" id="dir-desig">${['Director','Managing Director','Executive Director','Non-Executive Director','Independent Director','Additional Director','Alternate Director','Nominee Director','Chairman & MD','Whole-time Director','Chief Financial Officer','Company Secretary','Chief Executive Officer'].map(d => `<option ${(ed.designation||'Director')===d?'selected':''}>${d}</option>`).join('')}</select></div>
+        <select class="fc" id="dir-desig">${['Director','Managing Director','Executive Director','Non-Executive Director','Independent Director','Nominee Director','Chairman & MD','Whole-time Director'].map(d => `<option ${(ed.designation||'Director')===d?'selected':''}>${d}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">DIN</label><input class="fc" id="dir-din" placeholder="00123456" value="${ed.din||''}"></div>
       <div class="fg"><label class="fl">PAN</label><input class="fc" id="dir-pan" placeholder="ABCPM1234D" style="text-transform:uppercase" value="${ed.pan||''}"></div>
       <div class="fg"><label class="fl">Mobile <span class="req">*</span></label><input class="fc" id="dir-mob" placeholder="9876543210" type="tel" value="${ed.mobile||''}"></div>
       <div class="fg"><label class="fl">Email</label><input class="fc" id="dir-email" type="email" placeholder="director@company.in" value="${ed.email||''}"></div>
       <div class="fg"><label class="fl">Aadhaar (last 4 digits)</label><input class="fc" id="dir-aad" placeholder="XXXX XXXX 1234" value="${ed.aadhaar||''}"></div>
       <div class="fg"><label class="fl">Date of Appointment</label><input class="fc" id="dir-appt" type="date" value="${ed.date_of_appointment||''}"></div>
-      <div class="fg"><label class="fl">Last KYC Filing Date</label><input class="fc" id="dir-kyc" type="date" value="${ed.last_kyc_date||''}"></div>
+      <!-- KYC date managed in DIR-KYC module -->
     </div>
     <div class="fg"><label class="fl">Address</label><input class="fc" id="dir-addr" placeholder="123 MG Road, Mumbai – 400 001" value="${ed.address||''}"></div>
     <div class="fsec">🔐 MCA Portal Credentials</div>
@@ -3843,7 +3840,7 @@ async function saveDir(id) {
     email: document.getElementById('dir-email').value.trim(),
     aadhaar: document.getElementById('dir-aad').value.trim(),
     date_of_appointment: document.getElementById('dir-appt').value,
-    last_kyc_date: document.getElementById('dir-kyc').value,
+    // last_kyc_date: managed in DIR-KYC module
     address: document.getElementById('dir-addr').value.trim(),
     mca_user_id: document.getElementById('dir-mca-uid').value.trim(),
     mca_password: document.getElementById('dir-mca-pwd').value,
@@ -3858,7 +3855,23 @@ async function saveDir(id) {
   closeModal(); loadDirectors();
 }
 
+function openKYCModal(did, name) {
+  openModal(`📋 Update KYC — ${name}`, `
+    <div style="background:var(--gbg);border:1px solid var(--green);border-radius:8px;padding:11px 13px;font-size:12px;color:var(--green);margin-bottom:14px">
+      📌 DIN KYC (DIR-3 KYC) must be filed by <strong>30 September</strong> each year under Rule 12A to prevent DIN deactivation.
+    </div>
+    <div class="fg"><label class="fl">Last KYC Filing Date <span class="req">*</span></label>
+      <input class="fc" id="kyc-date" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+  `, `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-success" onclick="saveKYC('${did}')">✓ Mark KYC Filed</button>`);
+}
 
+async function saveKYC(did) {
+  const d = document.getElementById('kyc-date').value;
+  if (!d) { toast('Date required', 'err'); return; }
+  await api(`/api/directors/${did}`, { method: 'PUT', body: { last_kyc_date: d } });
+  toast('KYC updated ✓', 'ok'); closeModal(); loadDirectors();
+}
 
 async function deactivateDir(id) {
   if (!confirm('Deactivate this director? Record kept in history.')) return;
@@ -5492,6 +5505,7 @@ async function changePw() {
 // Pages that show the period bar and their export module names
 const PAGE_EXPORT = {
   companies:    { module:'companies',   label:'Companies Report',        dateCol:'created_at' },
+  directors:    { module:'directors',   label:'Directors Report',        dateCol:'date_of_appointment' },
   auditors:     { module:'auditors',    label:'Auditors Report',         dateCol:'start_date' },
   shareholders: { module:'shareholders',label:'Shareholders Report',     dateCol:'date_of_entry' },
   dsc:          { module:'dsc',         label:'DSC Records Report',      dateCol:'valid_from' },
@@ -5528,7 +5542,7 @@ function syncPBCompany() {
     COMPANIES.map(c => `<option value="${c.id}" ${c.id===current?'selected':''}>${c.name}</option>`).join('');
   // Also sync with page-specific company filters if present
   const pageCoFilter = {
-    directors:'dir-co-f', auditors:'aud-co-f', shareholders:'sh-co-f',
+    directors:'dir-co-f', 'dir-kyc':null, auditors:'aud-co-f', shareholders:'sh-co-f',
     dsc:'dsc-co-f', meetings:'mtg-co-f', tasks:'tsk-co-f'
   }[PAGE];
   if (pageCoFilter) {
@@ -5601,7 +5615,7 @@ function onPeriodChange() {
 
   // Sync back to page-specific company filter
   const pageCoFilter = {
-    directors:'dir-co-f', auditors:'aud-co-f', shareholders:'sh-co-f',
+    directors:'dir-co-f', 'dir-kyc':null, auditors:'aud-co-f', shareholders:'sh-co-f',
     dsc:'dsc-co-f', meetings:'mtg-co-f', tasks:'tsk-co-f'
   }[PAGE];
   if (pageCoFilter) {
@@ -8102,8 +8116,6 @@ document.getElementById('amend-doc-modal')?.addEventListener('click', function(e
   if (e.target === this) closeAmendModal();
 });
 
-
-
 </script>
 
   <div id="pa-shell" style="display:none;flex:1;flex-direction:column;height:100vh;overflow:hidden;background:var(--bg)">
@@ -8201,37 +8213,6 @@ document.getElementById('amend-doc-modal')?.addEventListener('click', function(e
   <!-- ══ END PLATFORM ADMIN SHELL ══ -->
 
 
-
-    <!-- ══ DIR-KYC PAGE ══════════════════════════════════════════════════ -->
-    <div class="page" id="page-dirkyc">
-      <div class="page-header">
-        <div>
-          <div class="page-title">🪪 DIR-KYC (DIN Records)</div>
-          <div class="page-sub">One entry per DIN — director KYC tracked centrally, not per company</div>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-ghost btn-sm" onclick="loadDirKYC()">↺ Refresh</button>
-        </div>
-      </div>
-
-      <!-- Filter bar -->
-      <div class="filter-bar" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
-        <input class="fc" id="dkyc-search" placeholder="🔍 Search name, DIN, PAN…"
-               oninput="filterDirKYC()" style="max-width:280px">
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <span id="dkyc-count" style="font-size:12px;color:var(--text3);align-self:center"></span>
-        </div>
-      </div>
-
-      <!-- Stats cards -->
-      <div id="dkyc-stats" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
-
-      <!-- Table -->
-      <div id="dkyc-tbl"></div>
-
-    </div>
-
-
 <!-- ══ AMEND DOCUMENT MODAL ══════════════════════════════════════════════ -->
 <div id="amend-doc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;width:min(900px,96vw);padding:0;box-shadow:0 24px 80px rgba(0,0,0,.28);margin-bottom:40px">
@@ -8272,146 +8253,5 @@ document.getElementById('amend-doc-modal')?.addEventListener('click', function(e
     </div>
   </div>
 </div>
-
-<script>
-// ══ DIR-KYC MODULE ═══════════════════════════════════════════════════════════
-// One entry per DIN — director KYC tracked centrally, independent of companies.
-// ═════════════════════════════════════════════════════════════════════════════
-let _ALL_DIRKYC = [];
-
-async function loadDirKYC() {
-  const el = document.getElementById('dkyc-tbl');
-  if (el) el.innerHTML = '<div class="loading"><div class="spin"></div></div>';
-  const data = await api('/api/dir-kyc');
-  if (!data) return;
-  _ALL_DIRKYC = data;
-  _renderDirKYCStats(data);
-  filterDirKYC();
-}
-
-function filterDirKYC() {
-  const q  = (document.getElementById('dkyc-search')?.value || '').toLowerCase();
-  let list = _ALL_DIRKYC;
-  if (q) list = list.filter(d =>
-    (d.name||'').toLowerCase().includes(q) ||
-    (d.din||'').toLowerCase().includes(q)  ||
-    (d.pan||'').toLowerCase().includes(q)  ||
-    (d.email||'').toLowerCase().includes(q)
-  );
-  _renderDirKYCTable(list);
-}
-
-function _renderDirKYCStats(data) {
-  const el = document.getElementById('dkyc-stats');
-  if (!el) return;
-  const total    = data.length;
-  const compliant = data.filter(d => ['compliant','filed'].includes((d.kyc_status||'').toLowerCase())).length;
-  const overdue   = data.filter(d => (d.kyc_status||'').toLowerCase() === 'overdue').length;
-  const dueSoon   = data.filter(d => (d.kyc_status||'').toLowerCase() === 'due_soon').length;
-  const pending   = data.filter(d => ['pending','due_soon'].includes((d.kyc_status||'pending').toLowerCase())).length;
-  const multi     = data.filter(d => (d.company_count||1) > 1).length;
-  el.innerHTML = [
-    { val: total,     label: 'Total DINs',          color: 'var(--accent)'  },
-    { val: compliant, label: 'KYC Compliant',        color: 'var(--green)'   },
-    { val: dueSoon,   label: 'Due Soon',             color: 'var(--orange)'  },
-    { val: overdue,   label: 'KYC Overdue',          color: 'var(--red)'     },
-    { val: multi,     label: 'In Multiple Companies', color: '#8b5cf6'       },
-  ].map(s => `
-    <div style="background:#fff;border:1px solid var(--border);border-radius:10px;
-                padding:10px 18px;min-width:120px;text-align:center">
-      <div style="font-size:22px;font-weight:700;color:${s.color}">${s.val}</div>
-      <div style="font-size:11px;color:var(--text3)">${s.label}</div>
-    </div>`).join('');
-}
-
-function _renderDirKYCTable(data) {
-  const el  = document.getElementById('dkyc-tbl');
-  const cnt = document.getElementById('dkyc-count');
-  if (!el) return;
-  if (cnt) cnt.textContent = `${data.length} DIN record(s)`;
-
-  if (!data.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🪪</div>
-      <div class="empty-title">No DIR-KYC records found</div>
-      <div class="empty-sub">Add directors via the Directors module — they appear here automatically grouped by DIN.</div></div>`;
-    return;
-  }
-
-  el.innerHTML = `<div class="table-wrap"><table class="data-table">
-    <thead><tr>
-      <th>Director (DIN)</th><th>PAN</th><th>Mobile / Email</th>
-      <th>Last KYC Filed</th><th>Next Due</th><th>KYC Status</th><th>Actions</th>
-    </tr></thead>
-    <tbody>
-    ${data.map(d => {
-      const daysLeft = dl(d.next_due_date);
-      const kycAlert = daysLeft !== null && daysLeft <= 60
-        ? `<div style="font-size:10px;color:${daysLeft < 0 ? 'var(--red)' : 'var(--orange)'}">
-            ${daysLeft < 0 ? Math.abs(daysLeft) + 'd overdue' : daysLeft + 'd left'}</div>` : '';
-      const dinDisplay = d.din
-        ? `<code style="font-size:11px;background:var(--bg3);padding:2px 6px;border-radius:4px">${d.din}</code>`
-        : '<span style="color:var(--text3);font-size:11px">No DIN</span>';
-      return `<tr>
-        <td>
-          <div style="font-weight:600;font-size:13px">${d.name}</div>
-          <div style="margin-top:3px">${dinDisplay}</div>
-        </td>
-        <td><code style="font-size:11.5px">${d.pan || '—'}</code></td>
-        <td>
-          <div style="font-size:12px">${d.mobile || '—'}</div>
-          <div style="font-size:11px;color:var(--text3)">${d.email || ''}</div>
-        </td>
-        <td style="font-size:12px">${fd(d.last_kyc_date) || '<span style="color:var(--text3)">Not filed</span>'}</td>
-        <td><div style="font-size:12px">${fd(d.next_due_date)}</div>${kycAlert}</td>
-        <td>${badge(d.kyc_status || 'pending')}</td>
-        <td><div class="td-actions">
-          <button class="btn btn-xs btn-success" onclick="openDirKYCModal('${d.id}','${esc(d.name)}','${d.din || ''}')">🗂 Update KYC</button>
-        </div></td>
-      </tr>`;
-    }).join('')}
-    </tbody>
-  </table>
-  <div class="tfoot">
-    ${data.length} unique DIN record(s) — each person appears once regardless of how many companies they are a director in
-  </div></div>`;
-}
-
-function closeDirKYCPanel() {
-  document.getElementById('dkyc-company-panel').style.display = 'none';
-}
-
-function openDirKYCModal(directorId, name, din) {
-  const dinInfo = din
-    ? `<div style="font-size:11.5px;color:var(--text3);margin-bottom:6px">DIN: <code>${din}</code></div>`
-    : '';
-  openModal(`🪪 Update KYC — ${name}`, `
-    ${dinInfo}
-    <div style="background:var(--gbg);border:1px solid var(--green);border-radius:8px;
-                padding:11px 13px;font-size:12px;color:var(--green);margin-bottom:14px">
-      📌 DIR-3 KYC must be filed by <strong>30 September</strong> each year (Rule 12A).
-      ${din ? `KYC will be synced across <strong>all companies</strong> sharing DIN <code>${din}</code>.` : ''}
-    </div>
-    <div class="fg">
-      <label class="fl">Last KYC Filing Date <span class="req">*</span></label>
-      <input class="fc" id="dkyc-date" type="date" value="${new Date().toISOString().split('T')[0]}">
-    </div>`,
-    `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-success" onclick="saveDirKYC('${directorId}')">✓ Mark KYC Filed</button>`
-  );
-}
-
-async function saveDirKYC(directorId) {
-  const d = document.getElementById('dkyc-date').value;
-  if (!d) { toast('Please select a filing date', 'err'); return; }
-  const r = await api(`/api/dir-kyc/${directorId}/kyc`, {
-    method: 'PUT', body: { last_kyc_date: d }
-  });
-  if (r) {
-    toast('KYC updated ✓ — synced across all companies for this DIN', 'ok');
-    closeModal(); loadDirKYC();
-  }
-}
-</script>
-
 </body>
 </html>
