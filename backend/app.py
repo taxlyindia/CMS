@@ -25,7 +25,7 @@ from flask import Flask, request, jsonify, send_file, g, send_from_directory
 from werkzeug.utils import secure_filename
 
 from database import get_db, row, rows, hash_pw, init_db, write_audit_log, ensure_custom_placeholders_table, ensure_permission_tables, ensure_custom_placeholders_table
-from auth import login_required, require_role, platform_admin_required, make_token, hash_pw as auth_hash, can, get_token, DEFAULT_PERMISSIONS, ALL_MODULES, tenant_scope, rate_limit_login
+from auth import login_required, require_role, platform_admin_required, make_token, hash_pw as auth_hash, verify_pw, can, get_token, DEFAULT_PERMISSIONS, ALL_MODULES, tenant_scope, rate_limit_login
 from compliance import (run_compliance_checks, generate_document, build_context,
                         extract_placeholders, get_active_entities, AUTO_FILLED,
                         generate_company_master_pdf, generate_register_pdf,
@@ -214,7 +214,15 @@ def login():
     conn=get_db(); c=conn.cursor()
     c.execute("SELECT * FROM users WHERE email=%s AND is_active=1",(email,))
     user=row(c.fetchone())
-    if not user or user["password"]!=hash_pw(pw): conn.close(); return jsonify({"error":"Invalid credentials"}),401
+    if not user or not verify_pw(pw, user["password"]): conn.close(); return jsonify({"error":"Invalid credentials"}),401
+    # ── Auto-upgrade legacy SHA-256 hash to bcrypt on first successful login ──
+    stored = user["password"]
+    if not (stored.startswith("$2b$") or stored.startswith("$2a$")):
+        try:
+            c.execute("UPDATE users SET password=%s WHERE id=%s", (hash_pw(pw), user["id"]))
+            conn.commit()
+        except Exception:
+            pass
     is_pa = bool(user.get("is_platform_admin", 0))
     if not is_pa and user.get("tenant_id"):
         c.execute("SELECT status FROM tenants WHERE id=%s", (user["tenant_id"],))
@@ -246,7 +254,7 @@ def change_password():
     c.execute("SELECT password FROM users WHERE id=%s",(g.user_id,))
     r=c.fetchone()
     _rpw = r['password'] if isinstance(r,dict) else r[0]
-    if not r or _rpw!=hash_pw(old): conn.close(); return jsonify({"error":"Current password incorrect"}),400
+    if not r or not verify_pw(old, _rpw): conn.close(); return jsonify({"error":"Current password incorrect"}),400
     c.execute("UPDATE users SET password=%s WHERE id=%s",(hash_pw(new),g.user_id))
     conn.commit(); conn.close(); return jsonify({"success":True})
 
@@ -2497,7 +2505,11 @@ def list_tasks():
     if cid: q+=" AND t.company_id=%s"; params.append(cid)
     if status: q+=" AND t.status=%s"; params.append(status)
     q+=" ORDER BY CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, t.due_date NULLS LAST"
-    c.execute(q, params if params else []); return jsonify(rows(c.fetchall()))
+    result = _paginate(c, q, params if params else [], request.args)
+    conn.close()
+    if not request.args.get("page") and not request.args.get("limit"):
+        return jsonify(result["data"])
+    return jsonify(result)
 
 @app.route("/api/tasks", methods=["POST"])
 @login_required
@@ -4267,6 +4279,9 @@ def ensure_columns():
         ("auditors",     "tenant_id",   "TEXT"),
         ("shareholders", "tenant_id",   "TEXT"),
         ("meetings",     "tenant_id",   "TEXT"),
+        ("users",        "totp_secret", "TEXT"),
+        ("users",        "totp_enabled","INTEGER DEFAULT 0"),
+        ("users",        "totp_verified","INTEGER DEFAULT 0"),
     ]
     for table, col, coltype in migrations:
         try:
@@ -4291,6 +4306,798 @@ def _startup():
         except Exception as _ex:
             print(f"[STARTUP] {_name} failed: {_ex}")
             _tb.print_exc()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P0 FIX #1 — ROC Compliance Calendar (MCA annual filing deadlines)
+# ══════════════════════════════════════════════════════════════════════════════
+_MCA_DEADLINES = [
+    # (form, description, month, day, note)
+    ("MGT-7",  "Annual Return",                                  9, 29, "Within 60 days of AGM (assumed AGM on 30 Sep)"),
+    ("AOC-4",  "Financial Statements",                           10, 29, "Within 30 days of AGM"),
+    ("ADT-1",  "Auditor Appointment",                            10, 14, "Within 15 days of AGM"),
+    ("DIR-3 KYC", "Director KYC",                               9, 30, "Annual KYC by 30 Sep"),
+    ("DPT-3",  "Deposits / Loans Return",                        6, 30, "Annual return of outstanding deposits by 30 Jun"),
+    ("MSME-1", "MSME Outstanding Payments",                      4, 30, "Half-yearly: Oct–Mar due by 30 Apr"),
+    ("MSME-1", "MSME Outstanding Payments (H2)",                10, 31, "Half-yearly: Apr–Sep due by 31 Oct"),
+    ("MGT-14", "Board Resolution Filing",                        None, None, "Within 30 days of board resolution (event-based)"),
+    ("INC-20A","Commencement of Business",                       None, None, "Within 180 days of incorporation (one-time)"),
+    ("DIR-12", "Change in Directors",                            None, None, "Within 30 days of appointment/cessation (event-based)"),
+    ("SH-7",   "Change in Authorised Capital",                   None, None, "Within 30 days of resolution (event-based)"),
+    ("PAS-3",  "Return of Allotment",                            None, None, "Within 30 days of allotment (event-based)"),
+    ("CHG-1",  "Charge Creation",                                None, None, "Within 30 days of creation (event-based)"),
+    ("CHG-4",  "Charge Satisfaction",                            None, None, "Within 30 days of satisfaction (event-based)"),
+    ("BEN-2",  "Significant Beneficial Owner",                   None, None, "Within 30 days of receipt of BEN-1 (event-based)"),
+    ("CRA-4",  "Cost Audit Report",                              9, 27, "Within 30 days of cost auditor's report (if applicable)"),
+    ("MGT-7A", "Abridged Annual Return (OPC/Small)",             9, 29, "For OPC/Small Companies — same window as MGT-7"),
+    ("AOC-4 CFS", "Consolidated Financial Statements",          10, 29, "If holding company — same window as AOC-4"),
+    ("FC-4",   "Annual Return (Foreign Company)",                12, 31, "Within 60 days of last day of financial year"),
+    ("LLP-11", "LLP Annual Return",                              5, 30, "Within 60 days of end of financial year"),
+    ("LLP-8",  "Statement of Accounts (LLP)",                    10, 30, "Within 30 days of end of 6 months from FY end"),
+]
+
+@app.route("/api/compliance-calendar")
+@login_required
+def compliance_calendar():
+    """
+    Returns MCA filing deadlines for the current & next financial year,
+    enriched with status flags (upcoming / overdue) relative to each
+    company's incorporation date and real task data.
+    """
+    company_id = request.args.get("company_id", "")
+    year_arg    = request.args.get("year", "")
+    today = date.today()
+    fy_start = today.year if today.month >= 4 else today.year - 1
+    target_year = int(year_arg) if year_arg.isdigit() else fy_start
+
+    conn = get_db(); c = conn.cursor()
+
+    # Fetch companies in scope
+    if company_id:
+        c.execute("SELECT id, name, cin, company_type, incorporation_date FROM companies WHERE id=%s AND tenant_id=%s",
+                  (company_id, g.tenant_id))
+    else:
+        c.execute("SELECT id, name, cin, company_type, incorporation_date FROM companies WHERE tenant_id=%s AND status='active'",
+                  (g.tenant_id,))
+    companies = rows(c.fetchall())
+
+    # Fetch open tasks to cross-reference
+    c.execute("SELECT module, company_id, title, status, due_date FROM tasks WHERE tenant_id=%s AND status NOT IN ('completed','cancelled')",
+              (g.tenant_id,))
+    open_tasks = rows(c.fetchall())
+    conn.close()
+
+    # Build calendar entries
+    calendar = []
+    for item in _MCA_DEADLINES:
+        form, desc, month, day, note = item
+        for co in companies:
+            if month is None:
+                # Event-based — show once per company as a reminder row
+                entry = {
+                    "form": form, "description": desc, "company_id": co["id"],
+                    "company_name": co["name"], "due_date": None,
+                    "status": "event_based", "note": note,
+                    "financial_year": f"{target_year}-{str(target_year+1)[-2:]}",
+                }
+            else:
+                # Build the actual deadline date for this FY
+                due = date(target_year + (1 if month < 4 else 0), month, day)
+                # Clamp to valid month-end if day exceeds month length
+                import calendar as _cal
+                max_day = _cal.monthrange(due.year, due.month)[1]
+                if day > max_day:
+                    due = due.replace(day=max_day)
+                days_left = (due - today).days
+                if days_left < 0:
+                    status = "overdue"
+                elif days_left <= 30:
+                    status = "due_soon"
+                elif days_left <= 90:
+                    status = "upcoming"
+                else:
+                    status = "future"
+
+                # Check if a task already exists for this filing
+                linked_task = next(
+                    (t for t in open_tasks
+                     if t.get("company_id") == co["id"]
+                     and form.lower().replace("-","") in (t.get("title","") or "").lower().replace("-","")),
+                    None
+                )
+                entry = {
+                    "form": form, "description": desc,
+                    "company_id": co["id"], "company_name": co["name"],
+                    "due_date": due.isoformat(), "days_left": days_left,
+                    "status": status, "note": note,
+                    "financial_year": f"{target_year}-{str(target_year+1)[-2:]}",
+                    "linked_task": linked_task,
+                }
+            calendar.append(entry)
+
+    # Sort: overdue first, then by due_date
+    def _sort_key(e):
+        if e["status"] == "overdue": return (0, e.get("due_date") or "")
+        if e["status"] == "due_soon": return (1, e.get("due_date") or "")
+        if e["status"] == "upcoming": return (2, e.get("due_date") or "")
+        return (3, e.get("due_date") or "")
+
+    calendar.sort(key=_sort_key)
+    return jsonify({
+        "financial_year": f"{target_year}-{str(target_year+1)[-2:]}",
+        "target_year": target_year,
+        "total": len(calendar),
+        "deadlines": calendar,
+    })
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P0 FIX #2 — Email notifications (Flask-Mail / AWS SES)
+# ══════════════════════════════════════════════════════════════════════════════
+import smtplib, ssl
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+_MAIL_SERVER   = os.environ.get("MAIL_SERVER",   "smtp.gmail.com")
+_MAIL_PORT     = int(os.environ.get("MAIL_PORT",  "587"))
+_MAIL_USE_TLS  = os.environ.get("MAIL_USE_TLS",  "1") == "1"
+_MAIL_USERNAME = os.environ.get("MAIL_USERNAME",  "")
+_MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD",  "")
+_MAIL_FROM     = os.environ.get("MAIL_FROM",      _MAIL_USERNAME or "noreply@taxlycms.in")
+_MAIL_ENABLED  = bool(_MAIL_USERNAME and _MAIL_PASSWORD)
+
+def _send_email(to: str, subject: str, body_html: str, body_text: str = "") -> bool:
+    """Send an email. Returns True on success. Silent on failure (never crashes the caller)."""
+    if not _MAIL_ENABLED:
+        app.logger.debug(f"[MAIL disabled] Would send to {to}: {subject}")
+        return False
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = _MAIL_FROM
+        msg["To"]      = to
+        if body_text:
+            msg.attach(MIMEText(body_text, "plain"))
+        msg.attach(MIMEText(body_html, "html"))
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP(_MAIL_SERVER, _MAIL_PORT) as srv:
+            if _MAIL_USE_TLS:
+                srv.starttls(context=ctx)
+            srv.login(_MAIL_USERNAME, _MAIL_PASSWORD)
+            srv.sendmail(_MAIL_FROM, to, msg.as_string())
+        return True
+    except Exception as e:
+        app.logger.error(f"[MAIL ERROR] to={to} subject={subject}: {e}")
+        return False
+
+def _html_alert_email(user_name: str, alerts: list) -> tuple:
+    """Return (html, plain) for an alert digest email."""
+    rows_html = "".join(
+        f"<tr><td style='padding:8px;border-bottom:1px solid #eee'><b>{a['title']}</b></td>"
+        f"<td style='padding:8px;border-bottom:1px solid #eee;color:#e53e3e'>{a.get('due_date','')}</td>"
+        f"<td style='padding:8px;border-bottom:1px solid #eee'>{a.get('severity','').upper()}</td></tr>"
+        for a in alerts
+    )
+    html = f"""
+    <div style='font-family:Arial,sans-serif;max-width:600px;margin:auto'>
+      <div style='background:#0f2d5c;padding:20px;text-align:center'>
+        <h2 style='color:white;margin:0'>Taxly CMS — Compliance Alert</h2>
+      </div>
+      <div style='padding:24px'>
+        <p>Hi {user_name},</p>
+        <p>You have <b>{len(alerts)}</b> compliance alert(s) requiring attention:</p>
+        <table width='100%' cellspacing='0' style='border-collapse:collapse;margin-top:12px'>
+          <thead><tr style='background:#f7fafc'>
+            <th style='padding:8px;text-align:left'>Alert</th>
+            <th style='padding:8px;text-align:left'>Due Date</th>
+            <th style='padding:8px;text-align:left'>Severity</th>
+          </tr></thead>
+          <tbody>{rows_html}</tbody>
+        </table>
+        <p style='margin-top:20px'><a href='#' style='background:#1a56db;color:white;padding:10px 20px;text-decoration:none;border-radius:4px'>View in Taxly CMS</a></p>
+      </div>
+      <div style='background:#f7fafc;padding:12px;text-align:center;font-size:12px;color:#718096'>
+        Taxly India Private Limited — You received this because you are a compliance team member.
+      </div>
+    </div>"""
+    plain = f"Hi {user_name},\n\nYou have {len(alerts)} compliance alert(s):\n\n"
+    plain += "\n".join(f"- {a['title']} (Due: {a.get('due_date','')} | {a.get('severity','').upper()})" for a in alerts)
+    return html, plain
+
+@app.route("/api/notifications/send-digest", methods=["POST"])
+@require_role("superadmin", "manager")
+def send_alert_digest():
+    """Send compliance alert digest emails to all active users in the tenant."""
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT id, name, email FROM users WHERE tenant_id=%s AND is_active=1", (g.tenant_id,))
+    users = rows(c.fetchall())
+    c.execute("""SELECT a.*, co.name as company_name FROM alerts a
+                 LEFT JOIN companies co ON a.company_id=co.id
+                 WHERE a.tenant_id=%s AND a.status='active' AND a.severity IN ('critical','high')
+                 ORDER BY a.due_date""", (g.tenant_id,))
+    alert_list = rows(c.fetchall())
+    conn.close()
+
+    if not alert_list:
+        return jsonify({"success": True, "message": "No active critical/high alerts to notify about", "sent": 0})
+
+    sent = 0
+    for u in users:
+        if not u.get("email"): continue
+        html, plain = _html_alert_email(u["name"], alert_list)
+        if _send_email(u["email"], f"[Taxly CMS] {len(alert_list)} Compliance Alerts Require Attention", html, plain):
+            sent += 1
+
+    return jsonify({"success": True, "sent": sent, "total_users": len(users), "alerts": len(alert_list),
+                    "mail_enabled": _MAIL_ENABLED})
+
+@app.route("/api/notifications/test-email", methods=["POST"])
+@require_role("superadmin")
+def test_email():
+    """Send a test email to the requesting user."""
+    ok = _send_email(g.user["email"], "[Taxly CMS] Test Email",
+                     "<h2>Test email from Taxly CMS</h2><p>Email configuration is working correctly.</p>",
+                     "Test email from Taxly CMS — email configuration is working correctly.")
+    return jsonify({"success": ok, "mail_enabled": _MAIL_ENABLED,
+                    "to": g.user["email"],
+                    "note": "Set MAIL_USERNAME, MAIL_PASSWORD, MAIL_SERVER env vars to enable." if not _MAIL_ENABLED else None})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P0 FIX #4 — API Pagination (page/limit on key list endpoints)
+# ══════════════════════════════════════════════════════════════════════════════
+def _paginate(c, base_query: str, params: list, request_args) -> dict:
+    """
+    Execute base_query with optional LIMIT/OFFSET pagination.
+    Returns {"data": [...], "total": N, "page": P, "limit": L, "pages": total_pages}
+    If ?limit=0 or limit not provided, returns all rows (legacy behaviour).
+    """
+    limit = request_args.get("limit", "0", type=int)
+    page  = max(1, request_args.get("page", 1, type=int))
+
+    # Count total rows first
+    count_sql = f"SELECT COUNT(*) FROM ({base_query}) AS _cnt"
+    c.execute(count_sql, params)
+    _r = c.fetchone()
+    total = int(list(_r.values())[0] if isinstance(_r, dict) else _r[0]) if _r else 0
+
+    if limit > 0:
+        offset = (page - 1) * limit
+        c.execute(base_query + f" LIMIT {limit} OFFSET {offset}", params)
+    else:
+        c.execute(base_query, params)
+
+    data = rows(c.fetchall())
+    pages = (total + limit - 1) // limit if limit > 0 else 1
+    return {"data": data, "total": total, "page": page,
+            "limit": limit, "pages": pages}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P0 FIX #5 — 2FA / TOTP
+# ══════════════════════════════════════════════════════════════════════════════
+try:
+    import pyotp, qrcode, base64 as _b64
+    from io import BytesIO as _BytesIO
+    _TOTP_AVAILABLE = True
+except ImportError:
+    _TOTP_AVAILABLE = False
+
+def _ensure_totp_columns():
+    """Add TOTP columns to users table if not present."""
+    conn = get_db(); c = conn.cursor()
+    for col, typ in [("totp_secret", "TEXT"), ("totp_enabled", "INTEGER DEFAULT 0"),
+                     ("totp_verified", "INTEGER DEFAULT 0")]:
+        try:
+            c.execute(f"ALTER TABLE users ADD COLUMN {col} {typ}")
+            conn.commit()
+        except Exception:
+            pass
+    conn.close()
+
+@app.route("/api/auth/2fa/setup", methods=["POST"])
+@login_required
+def totp_setup():
+    """Generate a TOTP secret and QR code URI for the requesting user."""
+    if not _TOTP_AVAILABLE:
+        return jsonify({"error": "2FA not available — install pyotp and qrcode"}), 501
+    _ensure_totp_columns()
+    secret = pyotp.random_base32()
+    totp   = pyotp.TOTP(secret)
+    issuer = "TaxlyCMS"
+    uri    = totp.provisioning_uri(name=g.user["email"], issuer_name=issuer)
+
+    # Generate QR code as base64 PNG
+    qr = qrcode.make(uri)
+    buf = _BytesIO()
+    qr.save(buf, format="PNG")
+    qr_b64 = _b64.b64encode(buf.getvalue()).decode()
+
+    # Store secret (not yet enabled — must be confirmed with a valid code)
+    conn = get_db(); c = conn.cursor()
+    c.execute("UPDATE users SET totp_secret=%s, totp_enabled=0, totp_verified=0 WHERE id=%s",
+              (secret, g.user_id))
+    conn.commit(); conn.close()
+    return jsonify({"secret": secret, "uri": uri, "qr_code": f"data:image/png;base64,{qr_b64}"})
+
+@app.route("/api/auth/2fa/verify", methods=["POST"])
+@login_required
+def totp_verify():
+    """Confirm TOTP setup by verifying the first code. Enables 2FA on success."""
+    if not _TOTP_AVAILABLE:
+        return jsonify({"error": "2FA not available"}), 501
+    _ensure_totp_columns()
+    d = request.get_json(silent=True) or {}
+    code = str(d.get("code", "")).strip()
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT totp_secret FROM users WHERE id=%s", (g.user_id,))
+    r = c.fetchone()
+    secret = (r.get("totp_secret") if isinstance(r, dict) else r[0]) if r else None
+    if not secret:
+        conn.close(); return jsonify({"error": "Run /api/auth/2fa/setup first"}), 400
+    totp = pyotp.TOTP(secret)
+    if not totp.verify(code, valid_window=1):
+        conn.close(); return jsonify({"error": "Invalid code"}), 400
+    c.execute("UPDATE users SET totp_enabled=1, totp_verified=1 WHERE id=%s", (g.user_id,))
+    conn.commit(); conn.close()
+    return jsonify({"success": True, "message": "2FA enabled successfully"})
+
+@app.route("/api/auth/2fa/disable", methods=["POST"])
+@login_required
+def totp_disable():
+    """Disable 2FA for the requesting user (requires password confirmation)."""
+    _ensure_totp_columns()
+    d = request.get_json(silent=True) or {}
+    pw = d.get("password", "")
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT password FROM users WHERE id=%s", (g.user_id,))
+    r = c.fetchone()
+    stored = (r.get("password") if isinstance(r, dict) else r[0]) if r else ""
+    if not verify_pw(pw, stored):
+        conn.close(); return jsonify({"error": "Password incorrect"}), 400
+    c.execute("UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE id=%s", (g.user_id,))
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/auth/2fa/validate", methods=["POST"])
+def totp_validate():
+    """
+    Second-step login: validate TOTP code after password check.
+    Expects {"user_id": "...", "code": "123456"} in the request body.
+    Returns a JWT on success.
+    """
+    if not _TOTP_AVAILABLE:
+        return jsonify({"error": "2FA not available"}), 501
+    _ensure_totp_columns()
+    d = request.get_json(silent=True) or {}
+    user_id = d.get("user_id", "")
+    code    = str(d.get("code", "")).strip()
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE id=%s AND is_active=1", (user_id,))
+    user = row(c.fetchone())
+    if not user:
+        conn.close(); return jsonify({"error": "User not found"}), 401
+    secret = user.get("totp_secret")
+    if not secret or not user.get("totp_enabled"):
+        conn.close(); return jsonify({"error": "2FA not enabled for this user"}), 400
+    if not pyotp.TOTP(secret).verify(code, valid_window=1):
+        conn.close(); return jsonify({"error": "Invalid 2FA code"}), 401
+    c.execute("UPDATE users SET last_login=NOW() WHERE id=%s", (user_id,))
+    conn.commit(); conn.close()
+    is_pa = bool(user.get("is_platform_admin", 0))
+    return jsonify({
+        "token": make_token(user["id"], user["role"], user["name"], user.get("tenant_id"), is_pa),
+        "user": {"id": user["id"], "name": user["name"], "email": user["email"], "role": user["role"]},
+    })
+
+@app.route("/api/auth/2fa/status")
+@login_required
+def totp_status():
+    """Return 2FA enabled status for the requesting user."""
+    _ensure_totp_columns()
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT totp_enabled, totp_verified FROM users WHERE id=%s", (g.user_id,))
+    r = c.fetchone()
+    conn.close()
+    enabled  = bool((r.get("totp_enabled")  if isinstance(r, dict) else r[0]) if r else False)
+    verified = bool((r.get("totp_verified") if isinstance(r, dict) else r[1]) if r else False)
+    return jsonify({"enabled": enabled, "verified": verified, "available": _TOTP_AVAILABLE})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P0 FIX #6 — Task Comments
+# ══════════════════════════════════════════════════════════════════════════════
+def _ensure_task_comments_table():
+    conn = get_db(); c = conn.cursor()
+    if USE_POSTGRES:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS task_comments (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+                content TEXT NOT NULL,
+                tenant_id TEXT REFERENCES tenants(id),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task_comments(task_id)")
+    else:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS task_comments (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                user_id TEXT,
+                content TEXT NOT NULL,
+                tenant_id TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+    conn.commit(); conn.close()
+
+from database import USE_POSTGRES
+
+@app.route("/api/tasks/<task_id>/comments")
+@login_required
+def list_task_comments(task_id):
+    _ensure_task_comments_table()
+    conn = get_db(); c = conn.cursor()
+    c.execute("""
+        SELECT tc.*, u.name AS author_name, u.email AS author_email
+        FROM task_comments tc
+        LEFT JOIN users u ON tc.user_id = u.id
+        WHERE tc.task_id = %s
+        ORDER BY tc.created_at ASC
+    """, (task_id,))
+    result = rows(c.fetchall()); conn.close()
+    return jsonify(result)
+
+@app.route("/api/tasks/<task_id>/comments", methods=["POST"])
+@login_required
+def create_task_comment(task_id):
+    _ensure_task_comments_table()
+    d = request.get_json(silent=True) or {}
+    content = (d.get("content") or "").strip()
+    if not content:
+        return jsonify({"error": "Comment content is required"}), 400
+    cid = str(uuid.uuid4())
+    conn = get_db(); c = conn.cursor()
+    # Verify task exists and belongs to tenant
+    c.execute("SELECT id FROM tasks WHERE id=%s AND tenant_id=%s", (task_id, g.tenant_id))
+    if not c.fetchone():
+        conn.close(); return jsonify({"error": "Task not found"}), 404
+    c.execute("""
+        INSERT INTO task_comments (id, task_id, user_id, content, tenant_id)
+        VALUES (%s, %s, %s, %s, %s)
+    """, (cid, task_id, g.user_id, content, g.tenant_id))
+    conn.commit()
+    c.execute("""
+        SELECT tc.*, u.name AS author_name, u.email AS author_email
+        FROM task_comments tc LEFT JOIN users u ON tc.user_id=u.id
+        WHERE tc.id=%s
+    """, (cid,))
+    result = row(c.fetchone()); conn.close()
+    return jsonify(result), 201
+
+@app.route("/api/tasks/<task_id>/comments/<comment_id>", methods=["PUT"])
+@login_required
+def update_task_comment(task_id, comment_id):
+    _ensure_task_comments_table()
+    d = request.get_json(silent=True) or {}
+    content = (d.get("content") or "").strip()
+    if not content:
+        return jsonify({"error": "Comment content is required"}), 400
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT user_id FROM task_comments WHERE id=%s AND task_id=%s", (comment_id, task_id))
+    r = c.fetchone()
+    if not r:
+        conn.close(); return jsonify({"error": "Comment not found"}), 404
+    owner = r.get("user_id") if isinstance(r, dict) else r[0]
+    if owner != g.user_id and g.role not in ("superadmin", "manager"):
+        conn.close(); return jsonify({"error": "Not authorised to edit this comment"}), 403
+    c.execute("UPDATE task_comments SET content=%s, updated_at=NOW() WHERE id=%s", (content, comment_id))
+    conn.commit()
+    c.execute("""SELECT tc.*, u.name AS author_name FROM task_comments tc
+                 LEFT JOIN users u ON tc.user_id=u.id WHERE tc.id=%s""", (comment_id,))
+    result = row(c.fetchone()); conn.close()
+    return jsonify(result)
+
+@app.route("/api/tasks/<task_id>/comments/<comment_id>", methods=["DELETE"])
+@login_required
+def delete_task_comment(task_id, comment_id):
+    _ensure_task_comments_table()
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT user_id FROM task_comments WHERE id=%s AND task_id=%s", (comment_id, task_id))
+    r = c.fetchone()
+    if not r:
+        conn.close(); return jsonify({"error": "Comment not found"}), 404
+    owner = r.get("user_id") if isinstance(r, dict) else r[0]
+    if owner != g.user_id and g.role not in ("superadmin", "manager"):
+        conn.close(); return jsonify({"error": "Not authorised"}), 403
+    c.execute("DELETE FROM task_comments WHERE id=%s", (comment_id,))
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P0 FIX #7 — File Attachments (tasks & documents)
+# ══════════════════════════════════════════════════════════════════════════════
+ATTACH_DIR  = BASE_DIR / "data" / "attachments"
+ATTACH_ALLOWED = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".xlsx", ".xls", ".csv", ".txt"}
+ATTACH_MAX_MB  = int(os.environ.get("ATTACH_MAX_MB", "20"))
+
+def _ensure_attachments_table():
+    conn = get_db(); c = conn.cursor()
+    if USE_POSTGRES:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS attachments (
+                id TEXT PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                original_name TEXT NOT NULL,
+                file_size INTEGER DEFAULT 0,
+                mime_type TEXT,
+                uploaded_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+                tenant_id TEXT REFERENCES tenants(id),
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id)")
+    else:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS attachments (
+                id TEXT PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                original_name TEXT NOT NULL,
+                file_size INTEGER DEFAULT 0,
+                mime_type TEXT,
+                uploaded_by TEXT,
+                tenant_id TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+    conn.commit(); conn.close()
+
+@app.route("/api/attachments/<entity_type>/<entity_id>", methods=["GET"])
+@login_required
+def list_attachments(entity_type, entity_id):
+    _ensure_attachments_table()
+    conn = get_db(); c = conn.cursor()
+    c.execute("""SELECT a.*, u.name AS uploader_name FROM attachments a
+                 LEFT JOIN users u ON a.uploaded_by=u.id
+                 WHERE a.entity_type=%s AND a.entity_id=%s AND a.tenant_id=%s
+                 ORDER BY a.created_at DESC""",
+              (entity_type, entity_id, g.tenant_id))
+    result = rows(c.fetchall()); conn.close()
+    return jsonify(result)
+
+@app.route("/api/attachments/<entity_type>/<entity_id>", methods=["POST"])
+@login_required
+def upload_attachment(entity_type, entity_id):
+    _ensure_attachments_table()
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "Empty filename"}), 400
+    ext = Path(f.filename).suffix.lower()
+    if ext not in ATTACH_ALLOWED:
+        return jsonify({"error": f"File type {ext} not allowed. Allowed: {', '.join(sorted(ATTACH_ALLOWED))}"}), 400
+
+    raw = f.read()
+    if len(raw) > ATTACH_MAX_MB * 1024 * 1024:
+        return jsonify({"error": f"File exceeds {ATTACH_MAX_MB}MB limit"}), 413
+
+    aid = str(uuid.uuid4())
+    ATTACH_DIR.mkdir(parents=True, exist_ok=True)
+    stored_name = f"{aid}{ext}"
+    (ATTACH_DIR / stored_name).write_bytes(raw)
+
+    conn = get_db(); c = conn.cursor()
+    c.execute("""
+        INSERT INTO attachments (id, entity_type, entity_id, filename, original_name,
+                                  file_size, mime_type, uploaded_by, tenant_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (aid, entity_type, entity_id, stored_name,
+          secure_filename(f.filename), len(raw),
+          f.content_type or "application/octet-stream",
+          g.user_id, g.tenant_id))
+    conn.commit()
+    c.execute("""SELECT a.*, u.name AS uploader_name FROM attachments a
+                 LEFT JOIN users u ON a.uploaded_by=u.id WHERE a.id=%s""", (aid,))
+    result = row(c.fetchone()); conn.close()
+    return jsonify(result), 201
+
+@app.route("/api/attachments/<attach_id>/download")
+@login_required
+def download_attachment(attach_id):
+    _ensure_attachments_table()
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM attachments WHERE id=%s AND tenant_id=%s", (attach_id, g.tenant_id))
+    att = row(c.fetchone()); conn.close()
+    if not att:
+        return jsonify({"error": "Attachment not found"}), 404
+    fpath = ATTACH_DIR / att["filename"]
+    if not fpath.exists():
+        return jsonify({"error": "File missing on disk"}), 404
+    return send_file(str(fpath), as_attachment=True,
+                     download_name=att["original_name"],
+                     mimetype=att.get("mime_type", "application/octet-stream"))
+
+@app.route("/api/attachments/<attach_id>", methods=["DELETE"])
+@login_required
+def delete_attachment(attach_id):
+    _ensure_attachments_table()
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM attachments WHERE id=%s AND tenant_id=%s", (attach_id, g.tenant_id))
+    att = row(c.fetchone())
+    if not att:
+        conn.close(); return jsonify({"error": "Attachment not found"}), 404
+    # Only uploader, manager, or superadmin may delete
+    if att.get("uploaded_by") != g.user_id and g.role not in ("superadmin", "manager"):
+        conn.close(); return jsonify({"error": "Not authorised"}), 403
+    try:
+        (ATTACH_DIR / att["filename"]).unlink(missing_ok=True)
+    except Exception:
+        pass
+    c.execute("DELETE FROM attachments WHERE id=%s", (attach_id,))
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P0 FIX #8 — Forgot Password / Self-serve reset
+# ══════════════════════════════════════════════════════════════════════════════
+import secrets as _secrets
+import hashlib as _hashlib
+
+def _ensure_password_reset_table():
+    conn = get_db(); c = conn.cursor()
+    if USE_POSTGRES:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at TIMESTAMPTZ NOT NULL,
+                used INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_prt_token ON password_reset_tokens(token_hash)")
+    else:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at TEXT NOT NULL,
+                used INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+    conn.commit(); conn.close()
+
+@app.route("/api/auth/forgot-password", methods=["POST"])
+def forgot_password():
+    """
+    Request a password-reset link. Always returns 200 to prevent email enumeration.
+    Sends an email if the address exists and mail is configured.
+    """
+    _ensure_password_reset_table()
+    d = request.get_json(silent=True) or {}
+    email = (d.get("email") or "").strip().lower()
+    if not email:
+        return jsonify({"message": "If that email is registered you will receive a reset link."}), 200
+
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT id, name, email FROM users WHERE email=%s AND is_active=1", (email,))
+    user = row(c.fetchone())
+
+    if user:
+        # Invalidate any existing unused tokens for this user
+        c.execute("UPDATE password_reset_tokens SET used=1 WHERE user_id=%s AND used=0", (user["id"],))
+        # Generate a secure token
+        raw_token   = _secrets.token_urlsafe(32)
+        token_hash  = _hashlib.sha256(raw_token.encode()).hexdigest()
+        expires_at  = datetime.utcnow() + timedelta(hours=2)
+        c.execute("""INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at)
+                     VALUES (%s, %s, %s, %s)""",
+                  (str(uuid.uuid4()), user["id"], token_hash, expires_at.isoformat()))
+        conn.commit()
+
+        # Build reset URL (frontend handles the form)
+        reset_url = os.environ.get("FRONTEND_URL", "http://localhost:5000").rstrip("/")
+        reset_url += f"/#/reset-password?token={raw_token}"
+
+        html = f"""
+        <div style='font-family:Arial,sans-serif;max-width:520px;margin:auto'>
+          <div style='background:#0f2d5c;padding:20px;text-align:center'>
+            <h2 style='color:white;margin:0'>Taxly CMS — Password Reset</h2>
+          </div>
+          <div style='padding:24px'>
+            <p>Hi {user['name']},</p>
+            <p>We received a request to reset your password. Click the button below to set a new one.
+               This link is valid for <b>2 hours</b>.</p>
+            <p style='text-align:center;margin:28px 0'>
+              <a href='{reset_url}' style='background:#1a56db;color:white;padding:12px 28px;text-decoration:none;border-radius:4px;font-weight:bold'>
+                Reset My Password
+              </a>
+            </p>
+            <p style='font-size:13px;color:#718096'>If you did not request this, ignore this email — your password will not change.</p>
+            <p style='font-size:12px;color:#a0aec0;word-break:break-all'>Link: {reset_url}</p>
+          </div>
+        </div>"""
+        plain = (f"Hi {user['name']},\n\nReset your Taxly CMS password:\n{reset_url}\n\n"
+                 "This link expires in 2 hours. If you didn't request this, ignore this email.")
+        _send_email(user["email"], "[Taxly CMS] Password Reset Request", html, plain)
+
+    conn.close()
+    return jsonify({"message": "If that email is registered you will receive a reset link."})
+
+@app.route("/api/auth/reset-password", methods=["POST"])
+def reset_password():
+    """Consume a password-reset token and set a new password."""
+    _ensure_password_reset_table()
+    d = request.get_json(silent=True) or {}
+    raw_token = (d.get("token") or "").strip()
+    new_pw    = (d.get("password") or "").strip()
+
+    if not raw_token or not new_pw:
+        return jsonify({"error": "Token and new password are required"}), 400
+    if len(new_pw) < 8:
+        return jsonify({"error": "Password must be at least 8 characters"}), 400
+
+    token_hash = _hashlib.sha256(raw_token.encode()).hexdigest()
+    conn = get_db(); c = conn.cursor()
+    c.execute("""SELECT prt.*, u.id AS uid FROM password_reset_tokens prt
+                 JOIN users u ON prt.user_id=u.id
+                 WHERE prt.token_hash=%s AND prt.used=0""", (token_hash,))
+    rec = row(c.fetchone())
+    if not rec:
+        conn.close(); return jsonify({"error": "Invalid or already-used reset token"}), 400
+
+    # Check expiry
+    expires_str = rec.get("expires_at") or ""
+    try:
+        expires = datetime.fromisoformat(str(expires_str)[:19])
+    except Exception:
+        expires = datetime.utcnow() - timedelta(seconds=1)  # treat as expired
+    if datetime.utcnow() > expires:
+        conn.close(); return jsonify({"error": "Reset token has expired — please request a new one"}), 400
+
+    # All good — update password and mark token used
+    c.execute("UPDATE users SET password=%s WHERE id=%s", (hash_pw(new_pw), rec["user_id"]))
+    c.execute("UPDATE password_reset_tokens SET used=1 WHERE token_hash=%s", (token_hash,))
+    conn.commit(); conn.close()
+    return jsonify({"success": True, "message": "Password updated successfully. You can now log in."})
+
+@app.route("/api/auth/reset-password/validate", methods=["POST"])
+def validate_reset_token():
+    """Check if a reset token is valid without consuming it (for frontend UX)."""
+    _ensure_password_reset_table()
+    d = request.get_json(silent=True) or {}
+    raw_token = (d.get("token") or "").strip()
+    if not raw_token:
+        return jsonify({"valid": False}), 200
+    token_hash = _hashlib.sha256(raw_token.encode()).hexdigest()
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT expires_at, used FROM password_reset_tokens WHERE token_hash=%s", (token_hash,))
+    rec = row(c.fetchone()); conn.close()
+    if not rec or rec.get("used"):
+        return jsonify({"valid": False, "reason": "Token not found or already used"})
+    try:
+        expires = datetime.fromisoformat(str(rec["expires_at"])[:19])
+        if datetime.utcnow() > expires:
+            return jsonify({"valid": False, "reason": "Token expired"})
+    except Exception:
+        return jsonify({"valid": False, "reason": "Could not parse expiry"})
+    return jsonify({"valid": True})
+
 
 _startup()  # called at import time so gunicorn workers also initialise DB
 
