@@ -1583,7 +1583,6 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="nav-item" data-page="meetings"><span class="nav-icon">🗓️</span><span class="nav-label">Meetings</span></div>
       <div class="nav-item" data-page="alerts">  <span class="nav-icon">🔔</span><span class="nav-label">Alerts</span></div>
       <div class="nav-item" data-page="tasks">   <span class="nav-icon">✅</span><span class="nav-label">Tasks</span></div>
-      <div class="nav-item" data-page="compliance-calendar"><span class="nav-icon">📅</span><span class="nav-label">ROC Calendar</span></div>
     </div>
   </div>
 
@@ -1870,6 +1869,18 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
             <div id="da-cos" style="max-height:280px;overflow-y:auto"></div>
           </div>
         </div>
+
+        <!-- ── ROC COMPLIANCE CALENDAR (inside Dashboard) ── -->
+        <div class="card" style="margin-top:14px">
+          <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+            <div class="card-title">📅 ROC Compliance Calendar — MCA Filing Deadlines</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <select id="cc-yr-f" class="fc" style="width:120px;font-size:12px" onchange="loadComplianceCalendar()"></select>
+              <button class="btn btn-xs btn-outline" onclick="loadComplianceCalendar()">🔄</button>
+            </div>
+          </div>
+          <div id="cc-tbl" style="padding:4px 0"><div class="loading"><div class="spin"></div></div></div>
+        </div>
       </div>
     </div>
 
@@ -2056,15 +2067,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="card"><div id="tsk-tbl"><div class="loading"><div class="spin"></div></div></div></div>
     </div>
 
-    <!-- ── COMPLIANCE CALENDAR ── -->
-    <div class="page" id="page-compliance-calendar">
-      <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <select class="fc" style="width:220px" id="cc-co-f" onchange="loadComplianceCalendar()"><option value="">All Companies</option></select>
-        <select class="fc" style="width:130px" id="cc-yr-f" onchange="loadComplianceCalendar()"></select>
-        <button class="btn btn-outline" onclick="loadComplianceCalendar()">🔄 Refresh</button>
-      </div>
-      <div class="card"><div id="cc-tbl"><div class="loading"><div class="spin"></div></div></div></div>
-    </div>
+    <!-- ── DSC RECORDS ── -->
     <div class="page" id="page-dsc">
       <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="dsc-search" placeholder="Search holder name, company…" oninput="debounce(loadDSC,300)()"></div>
@@ -2529,7 +2532,6 @@ const PAGE_META = {
   users:       { title:'Users',               sub:'Role-based access control',                               cta:'+ New User' },
   settings:    { title:'Settings',            sub:'Account & preferences',                                   cta:null },
   platform:    { title:'Tenant Management',    sub:'Manage tenants, plans and billing',                         cta:'+ New Tenant' },
-  'compliance-calendar': { title:'ROC Compliance Calendar', sub:'MCA annual filing deadlines — MGT-7, AOC-4, DIR-3 KYC, DPT-3 and more', cta:null },
   investments: { title:'Investments (MBP-3)', sub:'Loans, investments and guarantees under Section 186',     cta:null },
   loans:       { title:'Loans & Guarantees',  sub:'Inter-company loans and guarantees — Section 186',        cta:null },
 };
@@ -2959,7 +2961,6 @@ function navigateTo(page) {
      'dir-kyc': loadDirKYC,
      auditors: loadAuditors, shareholders: loadShareholders, dsc: loadDSC,
      meetings: loadMeetings, alerts: loadAlerts, tasks: loadTasks,
-     'compliance-calendar': loadComplianceCalendar,
      registers: initRegisters, documents: initDocPage, templates: loadTemplates,
      users: loadUsers, settings: initSettingsPage, platform: loadPlatformPage }[page] || (() => {}))();
 }
@@ -3032,7 +3033,7 @@ function coOptions(sel = '', blank = 'All Companies') {
 
 async function refreshCache() {
   COMPANIES = await api('/api/companies') || [];
-  ['dir-co-f','aud-co-f','sh-co-f','mtg-co-f','tsk-co-f','reg-co','dsc-co-f','cc-co-f'].forEach(id => {
+  ['dir-co-f','aud-co-f','sh-co-f','mtg-co-f','tsk-co-f','reg-co','dsc-co-f'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = coOptions('', (id === 'sh-co-f' || id === 'reg-co') ? '— Select Company —' : 'All Companies');
   });
@@ -3744,6 +3745,9 @@ async function loadComplianceDashboard() {
 
   const cols = document.getElementById('dash-alert-cols');
   if (cols) cols.style.display = 'grid';
+
+  // Load ROC compliance calendar panel
+  loadComplianceCalendar();
 }
 
 
@@ -9326,65 +9330,77 @@ async function disable2FA() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// P0 FIX #1 — COMPLIANCE CALENDAR FRONTEND
+// P0 FIX #1 — COMPLIANCE CALENDAR FRONTEND (Dashboard panel)
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadComplianceCalendar() {
-  const cid  = document.getElementById('cc-co-f')?.value || '';
   const year = document.getElementById('cc-yr-f')?.value || '';
   const tbl  = document.getElementById('cc-tbl');
   if (!tbl) return;
-  tbl.innerHTML = '<div class="loading"><div class="spin"></div></div>';
+  tbl.innerHTML = '<div style="padding:20px;text-align:center"><div class="spin" style="display:inline-block;width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite"></div></div>';
 
   const params = new URLSearchParams();
-  if (cid)  params.set('company_id', cid);
   if (year) params.set('year', year);
-  const d = await fetch(`/api/compliance-calendar?${params}`, { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => null);
-  if (!d) { tbl.innerHTML = '<div class="empty-state"><div class="empty-title">Failed to load</div></div>'; return; }
+  const d = await fetch('/api/compliance-calendar?' + params, { headers: { Authorization: 'Bearer ' + TOKEN } }).then(r => r.json()).catch(() => null);
+  if (!d) { tbl.innerHTML = '<div style="padding:16px;color:var(--text3);text-align:center">Could not load calendar</div>'; return; }
 
-  const statusBadge = s => ({
-    overdue:    '<span style="background:#fef2f2;color:#d93535;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;border:1px solid #fca5a5">⚠️ Overdue</span>',
-    due_soon:   '<span style="background:#fff7ed;color:#d97706;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;border:1px solid #fcd34d">🔔 Due Soon</span>',
-    upcoming:   '<span style="background:#eff6ff;color:#1d50e0;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;border:1px solid #93c5fd">📅 Upcoming</span>',
-    future:     '<span style="background:#f0fdf4;color:#16a34a;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600;border:1px solid #86efac">✅ Future</span>',
-    event_based:'<span style="background:#faf5ff;color:#6d41c4;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600;border:1px solid #c4b5fd">⚡ Event-Based</span>',
+  // Populate year selector if not done yet
+  const yrEl = document.getElementById('cc-yr-f');
+  if (yrEl && !yrEl.options.length) {
+    const fy = d.target_year;
+    yrEl.innerHTML = [fy-1, fy, fy+1].map(y =>
+      '<option value="' + y + '"' + (y === fy ? ' selected' : '') + '>' + y + '-' + String(y+1).slice(-2) + ' FY</option>'
+    ).join('');
+  }
+
+  const sb = s => ({
+    overdue:     '<span style="background:#fef2f2;color:#d93535;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;border:1px solid #fca5a5;white-space:nowrap">⚠ Overdue</span>',
+    due_soon:    '<span style="background:#fff7ed;color:#d97706;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;border:1px solid #fcd34d;white-space:nowrap">🔔 Due Soon</span>',
+    upcoming:    '<span style="background:#eff6ff;color:#1d50e0;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #93c5fd;white-space:nowrap">📅 Upcoming</span>',
+    future:      '<span style="background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #86efac;white-space:nowrap">✅ Future</span>',
+    event_based: '<span style="background:#faf5ff;color:#6d41c4;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #c4b5fd;white-space:nowrap">⚡ Event-Based</span>',
   }[s] || s);
 
-  const overdue  = d.deadlines.filter(x => x.status === 'overdue').length;
-  const due_soon = d.deadlines.filter(x => x.status === 'due_soon').length;
+  const daysCell = x => {
+    if (!x.due_date) return '<span style="color:var(--text3)">—</span>';
+    const n = x.days_left;
+    const color = n < 0 ? '#d93535' : n <= 30 ? '#d97706' : '#16a34a';
+    const label = n < 0 ? Math.abs(n) + 'd overdue' : n + 'd left';
+    return '<span style="font-weight:700;color:' + color + '">' + label + '</span>';
+  };
 
-  tbl.innerHTML = `
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-      <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:12px 20px;min-width:120px">
-        <div style="font-size:24px;font-weight:800;color:#d93535">${overdue}</div>
-        <div style="font-size:11px;color:#991b1b;font-weight:600;margin-top:2px">Overdue</div>
-      </div>
-      <div style="background:#fff7ed;border:1px solid #fcd34d;border-radius:10px;padding:12px 20px;min-width:120px">
-        <div style="font-size:24px;font-weight:800;color:#d97706">${due_soon}</div>
-        <div style="font-size:11px;color:#92400e;font-weight:600;margin-top:2px">Due in 30 days</div>
-      </div>
-      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 20px;min-width:120px">
-        <div style="font-size:24px;font-weight:800;color:#16a34a">${d.total - overdue - due_soon}</div>
-        <div style="font-size:11px;color:#15803d;font-weight:600;margin-top:2px">Scheduled</div>
-      </div>
-    </div>
-    <div class="table-wrap"><table>
-      <thead><tr>
-        <th>Form</th><th>Description</th><th>Company</th>
-        <th>Due Date</th><th>Days Left</th><th>Status</th><th>Note</th>
-      </tr></thead>
-      <tbody>${d.deadlines.map(x => `<tr style="${x.status==='overdue'?'background:#fff5f5':''}">
-        <td><b style="font-family:monospace;color:#1d50e0">${esc(x.form)}</b></td>
-        <td style="font-size:12px">${esc(x.description)}</td>
-        <td style="font-size:12px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.company_name)}</td>
-        <td style="font-size:12px;font-weight:600">${x.due_date ? fd(x.due_date) : '—'}</td>
-        <td style="font-size:12px;font-weight:700;color:${x.days_left<0?'#d93535':x.days_left<=30?'#d97706':'#16a34a'}">${x.due_date?(x.days_left<0?`${Math.abs(x.days_left)}d ago`:`${x.days_left}d`):'—'}</td>
-        <td>${statusBadge(x.status)}</td>
-        <td style="font-size:11px;color:var(--text3);max-width:160px">${esc(x.note||'')}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-  `;
+  // Summary strip
+  const summaryHtml = '<div style="display:flex;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg3)">' +
+    ['overdue','due_soon','upcoming','future','event_based'].map(st => {
+      const cnt = d.deadlines.filter(x => x.status === st).length;
+      if (!cnt) return '';
+      const colors = { overdue:'#d93535', due_soon:'#d97706', upcoming:'#1d50e0', future:'#16a34a', event_based:'#6d41c4' };
+      const labels = { overdue:'Overdue', due_soon:'Due ≤30d', upcoming:'In 90d', future:'Future', event_based:'Event-Based' };
+      return '<span style="font-size:12px;font-weight:700;color:' + colors[st] + '">' + cnt + ' <span style="font-weight:500;color:var(--text2)">' + labels[st] + '</span></span>';
+    }).filter(Boolean).join('<span style="color:var(--border2);margin:0 4px">|</span>') +
+  '</div>';
+
+  const rowsHtml = d.deadlines.map(x =>
+    '<tr style="' + (x.status==='overdue' ? 'background:#fffafa' : '') + '">' +
+    '<td style="white-space:nowrap"><b style="font-family:monospace;font-size:12px;color:#1d50e0">' + esc(x.form) + '</b></td>' +
+    '<td style="font-size:12px;color:var(--text)">' + esc(x.description) + '</td>' +
+    '<td style="font-size:12px;font-weight:600">' + (x.due_date ? fd(x.due_date) : '<span style="color:var(--text3)">—</span>') + '</td>' +
+    '<td>' + daysCell(x) + '</td>' +
+    '<td>' + sb(x.status) + '</td>' +
+    '<td style="font-size:11px;color:var(--text3);max-width:200px">' + esc(x.note||'') + '</td>' +
+    '</tr>'
+  ).join('');
+
+  tbl.innerHTML = summaryHtml +
+    '<div class="table-wrap" style="margin:0">' +
+    '<table style="font-size:12px"><thead><tr>' +
+    '<th style="width:90px">Form</th>' +
+    '<th>Description</th>' +
+    '<th style="width:110px">Due Date</th>' +
+    '<th style="width:110px">Days Left</th>' +
+    '<th style="width:120px">Status</th>' +
+    '<th>Note</th>' +
+    '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // P0 FIX #6 — TASK COMMENTS FRONTEND
 // ═══════════════════════════════════════════════════════════════════════════
