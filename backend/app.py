@@ -2504,12 +2504,30 @@ def list_tasks():
 
     if cid: q+=" AND t.company_id=%s"; params.append(cid)
     if status: q+=" AND t.status=%s"; params.append(status)
-    q+=" ORDER BY CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, t.due_date NULLS LAST"
-    result = _paginate(c, q, params if params else [], request.args)
+    # Order without NULLS LAST (SQLite compat): push NULLs last via CASE
+    order_sql = " ORDER BY CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date"
+    # Paginated path
+    if request.args.get("page") or request.args.get("limit"):
+        limit = request.args.get("limit", 0, type=int)
+        page  = max(1, request.args.get("page", 1, type=int))
+        count_sql = f"SELECT COUNT(*) FROM ({q}) AS _cnt"
+        c.execute(count_sql, params if params else [])
+        _r = c.fetchone()
+        total = int(list(_r.values())[0] if isinstance(_r, dict) else _r[0]) if _r else 0
+        if limit > 0:
+            offset = (page-1)*limit
+            c.execute(q + order_sql + f" LIMIT {limit} OFFSET {offset}", params if params else [])
+        else:
+            c.execute(q + order_sql, params if params else [])
+        data = rows(c.fetchall())
+        pages = (total + limit - 1) // limit if limit > 0 else 1
+        conn.close()
+        return jsonify({"data": data, "total": total, "page": page, "limit": limit, "pages": pages})
+    # Default: plain array (backwards-compat)
+    c.execute(q + order_sql, params if params else [])
+    data = rows(c.fetchall())
     conn.close()
-    if not request.args.get("page") and not request.args.get("limit"):
-        return jsonify(result["data"])
-    return jsonify(result)
+    return jsonify(data)
 
 @app.route("/api/tasks", methods=["POST"])
 @login_required
@@ -4340,94 +4358,55 @@ _MCA_DEADLINES = [
 @login_required
 def compliance_calendar():
     """
-    Returns MCA filing deadlines for the current & next financial year,
-    enriched with status flags (upcoming / overdue) relative to each
-    company's incorporation date and real task data.
+    General MCA filing calendar — one row per statutory form per FY.
+    Company-agnostic: shows what filings are due this FY regardless of
+    how many companies the tenant has.
     """
-    company_id = request.args.get("company_id", "")
-    year_arg    = request.args.get("year", "")
-    today = date.today()
-    fy_start = today.year if today.month >= 4 else today.year - 1
+    year_arg  = request.args.get("year", "")
+    today     = date.today()
+    fy_start  = today.year if today.month >= 4 else today.year - 1
     target_year = int(year_arg) if year_arg.isdigit() else fy_start
 
-    conn = get_db(); c = conn.cursor()
+    import calendar as _cal
+    calendar_rows = []
+    for form, desc, month, day, note in _MCA_DEADLINES:
+        if month is None:
+            entry = {
+                "form": form, "description": desc,
+                "due_date": None, "days_left": None,
+                "status": "event_based", "note": note,
+                "financial_year": f"{target_year}-{str(target_year+1)[-2:]}",
+            }
+        else:
+            yr = target_year + (1 if month < 4 else 0)
+            max_day = _cal.monthrange(yr, month)[1]
+            due = date(yr, month, min(day, max_day))
+            days_left = (due - today).days
+            if days_left < 0:        status = "overdue"
+            elif days_left <= 30:    status = "due_soon"
+            elif days_left <= 90:    status = "upcoming"
+            else:                    status = "future"
+            entry = {
+                "form": form, "description": desc,
+                "due_date": due.isoformat(), "days_left": days_left,
+                "status": status, "note": note,
+                "financial_year": f"{target_year}-{str(target_year+1)[-2:]}",
+            }
+        calendar_rows.append(entry)
 
-    # Fetch companies in scope
-    if company_id:
-        c.execute("SELECT id, name, cin, company_type, incorporation_date FROM companies WHERE id=%s AND tenant_id=%s",
-                  (company_id, g.tenant_id))
-    else:
-        c.execute("SELECT id, name, cin, company_type, incorporation_date FROM companies WHERE tenant_id=%s AND status='active'",
-                  (g.tenant_id,))
-    companies = rows(c.fetchall())
+    # Sort: overdue → due_soon → upcoming → future → event_based
+    _order = {"overdue": 0, "due_soon": 1, "upcoming": 2, "future": 3, "event_based": 4}
+    calendar_rows.sort(key=lambda e: (_order.get(e["status"], 5), e.get("due_date") or ""))
 
-    # Fetch open tasks to cross-reference
-    c.execute("SELECT module, company_id, title, status, due_date FROM tasks WHERE tenant_id=%s AND status NOT IN ('completed','cancelled')",
-              (g.tenant_id,))
-    open_tasks = rows(c.fetchall())
-    conn.close()
-
-    # Build calendar entries
-    calendar = []
-    for item in _MCA_DEADLINES:
-        form, desc, month, day, note = item
-        for co in companies:
-            if month is None:
-                # Event-based — show once per company as a reminder row
-                entry = {
-                    "form": form, "description": desc, "company_id": co["id"],
-                    "company_name": co["name"], "due_date": None,
-                    "status": "event_based", "note": note,
-                    "financial_year": f"{target_year}-{str(target_year+1)[-2:]}",
-                }
-            else:
-                # Build the actual deadline date for this FY
-                due = date(target_year + (1 if month < 4 else 0), month, day)
-                # Clamp to valid month-end if day exceeds month length
-                import calendar as _cal
-                max_day = _cal.monthrange(due.year, due.month)[1]
-                if day > max_day:
-                    due = due.replace(day=max_day)
-                days_left = (due - today).days
-                if days_left < 0:
-                    status = "overdue"
-                elif days_left <= 30:
-                    status = "due_soon"
-                elif days_left <= 90:
-                    status = "upcoming"
-                else:
-                    status = "future"
-
-                # Check if a task already exists for this filing
-                linked_task = next(
-                    (t for t in open_tasks
-                     if t.get("company_id") == co["id"]
-                     and form.lower().replace("-","") in (t.get("title","") or "").lower().replace("-","")),
-                    None
-                )
-                entry = {
-                    "form": form, "description": desc,
-                    "company_id": co["id"], "company_name": co["name"],
-                    "due_date": due.isoformat(), "days_left": days_left,
-                    "status": status, "note": note,
-                    "financial_year": f"{target_year}-{str(target_year+1)[-2:]}",
-                    "linked_task": linked_task,
-                }
-            calendar.append(entry)
-
-    # Sort: overdue first, then by due_date
-    def _sort_key(e):
-        if e["status"] == "overdue": return (0, e.get("due_date") or "")
-        if e["status"] == "due_soon": return (1, e.get("due_date") or "")
-        if e["status"] == "upcoming": return (2, e.get("due_date") or "")
-        return (3, e.get("due_date") or "")
-
-    calendar.sort(key=_sort_key)
+    overdue_cnt  = sum(1 for e in calendar_rows if e["status"] == "overdue")
+    due_soon_cnt = sum(1 for e in calendar_rows if e["status"] == "due_soon")
     return jsonify({
         "financial_year": f"{target_year}-{str(target_year+1)[-2:]}",
         "target_year": target_year,
-        "total": len(calendar),
-        "deadlines": calendar,
+        "total": len(calendar_rows),
+        "overdue": overdue_cnt,
+        "due_soon": due_soon_cnt,
+        "deadlines": calendar_rows,
     })
 
 
