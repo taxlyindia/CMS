@@ -677,15 +677,25 @@ body {
 ══════════════════════════════════════════════════════════════════ */
 .main { margin-left:220px; flex:1; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
 .topbar {
-  background:rgba(244,246,251,.95); backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--border);
-  padding:0 22px; height:54px;
+  background: linear-gradient(90deg, #0f1829 0%, #1a2744 60%, #1d50e0 100%);
+  border-bottom:1px solid rgba(255,255,255,.1);
+  padding:0 22px; height:58px;
   display:flex; align-items:center; justify-content:space-between;
   position:sticky; top:0; z-index:50; gap:12px;
+  box-shadow: 0 2px 16px rgba(15,24,41,.18);
 }
-.topbar-title { font-size:16px; font-weight:700; color:var(--text); letter-spacing:-.3px }
-.topbar-sub { font-size:11.5px; color:var(--text3); margin-top:1px }
+.topbar-title { font-size:16px; font-weight:700; color:#fff; letter-spacing:-.3px }
+.topbar-sub { font-size:11.5px; color:rgba(255,255,255,.6); margin-top:1px }
+/* page-title = used by pg-title element */
+.page-title { font-size:16px; font-weight:700; color:#fff; letter-spacing:-.3px }
+.page-sub   { font-size:11.5px; color:rgba(255,255,255,.65); margin-top:1px }
 .topbar-right { display:flex; align-items:center; gap:8px }
+.topbar .btn-primary { background:#fff; color:#1d50e0; border-color:#fff; }
+.topbar .btn-primary:hover { background:#e0e7ff; }
+.topbar .btn-outline { color:#fff; border-color:rgba(255,255,255,.4); }
+.topbar .btn-outline:hover { background:rgba(255,255,255,.12); }
+.topbar .btn-sm { color:#fff; border-color:rgba(255,255,255,.35); font-size:12px; }
+.topbar .btn-sm:hover { background:rgba(255,255,255,.1); }
 .content { padding:20px 22px; flex:1; overflow-y:auto; overflow-x:hidden }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -2877,7 +2887,7 @@ function fd(s) {
 }
 function fc(n) { if (n == null) return '—'; return '₹' + Number(n).toLocaleString('en-IN'); }
 function dl(s) { if (!s) return null; return Math.ceil((new Date(s) - new Date()) / 86400000); }
-function esc(s) { return (s || '').replace(/'/g, "\\'"); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function cap(s) { return (s || '').replace(/\b\w/g, c => c.toUpperCase()); }
 
 function badge(s, extra = '') {
@@ -3783,7 +3793,7 @@ function openCoModal(id = null) {
     <div class="fg2">
       <div class="fg" style="grid-column:1/-1"><label class="fl">Company Name <span class="req">*</span></label>
         <input class="fc" id="co-name" value="${co.name || ''}" placeholder="ABC Solutions Pvt Ltd"></div>
-      <div class="fg"><label class="fl">CIN</label><input class="fc" id="co-cin" value="${co.cin || ''}" placeholder="U72200MH2020PTC123456"></div>
+      <div class="fg"><label class="fl">CIN</label><input class="fc" id="co-cin" maxlength="21" value="${co.cin || ''}" placeholder="U72200MH2020PTC123456"></div>
       <div class="fg"><label class="fl">Company Type</label>
         <select class="fc" id="co-type">${['Private Limited','Public Limited','One Person Company','LLP','Section 8 Company'].map(t => `<option ${(co.company_type || 'Private Limited') === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">PAN</label><input class="fc" id="co-pan" value="${co.pan || ''}" placeholder="AABCI1234P" style="text-transform:uppercase"></div>
@@ -6280,8 +6290,7 @@ async function downloadExcel() {
   const currentPage = PAGE;
   const meta = PAGE_EXPORT[currentPage];
 
-  console.log('[Excel] PAGE=' + currentPage + ', meta=' + JSON.stringify(meta));
-
+  
   if (!meta) {
     toast('Excel export not available on the ' + currentPage + ' page', 'err');
     return;
@@ -6307,9 +6316,7 @@ async function downloadExcel() {
       date_to:      dateTo,
     };
 
-    console.log('[Excel] Sending payload:', JSON.stringify(payload));
-    console.log('[Excel] TOKEN present:', !!TOKEN, TOKEN ? TOKEN.slice(0,20)+'...' : 'NULL');
-
+        
     // Step 3: Fetch and download
     await fetchAndDownload('/api/export/excel', 'POST', payload, fname);
     toast('Excel downloaded ✓', 'ok');
