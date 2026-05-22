@@ -3137,30 +3137,39 @@ let RW_ACTIVE_MODULE = '';
 let RW_ACTIVE_ROLE   = '';
 
 async function loadRWWidget() {
+  // ── Fetch role-wise summary for the logged-in user ─────────────────────────
   const d = await api('/api/tasks/rolewise-summary');
-  if (!d) {
-    const strip = document.getElementById('rw-person-strip');
-    if (strip) strip.innerHTML = '<div style="font-size:12px;color:var(--red);padding:6px 0">⚠️ Could not load task data</div>';
+
+  if (!d || d.error) {
     const tbody = document.getElementById('rw-table-body');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3)">No data available</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--red)">⚠️ Could not load task data</td></tr>';
     return;
   }
+
   RW_DATA = d;
 
-  // ── Top-level totals: MY tasks per role ────────────────────────────────────
-  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
-  set('rw-leader-count',   d.totals.leader);    // tasks where I am Task Leader
-  set('rw-manager-count',  d.totals.manager);   // tasks where I am Task Manager
-  set('rw-assignee-count', d.totals.assignee);  // tasks where I am Assigned User
+  // ── Top counters ────────────────────────────────────────────────────────────
+  const totals   = d.totals   || {};
+  const lCount   = Number(totals.leader   || 0);
+  const mCount   = Number(totals.manager  || 0);
+  const aCount   = Number(totals.assignee || 0);
 
-  // ── Person strip — show team members (fallback to /api/users if empty) ─────
+  const elL = document.getElementById('rw-leader-count');
+  const elM = document.getElementById('rw-manager-count');
+  const elA = document.getElementById('rw-assignee-count');
+  if (elL) elL.textContent = lCount;
+  if (elM) elM.textContent = mCount;
+  if (elA) elA.textContent = aCount;
+
+  // ── Person strip ────────────────────────────────────────────────────────────
   let persons = (d.persons || []).filter(p => p.id !== d.uid);
   if (!persons.length) {
-    const allUsers = await api('/api/users') || [];
-    persons = allUsers
-      .filter(u => u.is_active && !u.is_platform_admin && u.id !== d.uid)
-      .map(u => ({ id:u.id, name:u.name, role:u.role,
-                   as_leader:0, as_manager:0, as_assignee:0, pending:0, completed:0 }));
+    try {
+      const allUsers = await api('/api/users') || [];
+      persons = allUsers
+        .filter(u => u.is_active && !u.is_platform_admin && u.id !== d.uid)
+        .map(u => ({ id:u.id, name:u.name, role:u.role, pending:0, completed:0, overdue:0 }));
+    } catch(e) { persons = []; }
   }
   persons.sort((a,b)=>({superadmin:1,manager:2,staff:3}[a.role]||9)-({superadmin:1,manager:2,staff:3}[b.role]||9));
   renderRWPersonStrip(persons, d.my_role);
@@ -3220,25 +3229,28 @@ function renderRWTable() {
   if (!RW_DATA) return;
   const tbody = document.getElementById('rw-table-body');
   if (!tbody) return;
-  const mods = RW_DATA.modules || [];
+
+  const mods   = RW_DATA.modules || [];
+  const totals = RW_DATA.totals  || {};
 
   if (!mods.length) {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text3)">No pending tasks assigned to you yet</td></tr>';
     return;
   }
 
-  // Build rows — no nested template literals
-  function mkChip(count, role, mod) {
-    if (!count) return '<span style="color:var(--border2);font-size:14px;font-weight:500">0</span>';
-    const colors = {leader:'#92400e',manager:'#3730a3',assignee:'#065f46'};
-    const bgs    = {leader:'#fef3c7',manager:'#e0e7ff',assignee:'#d1fae5'};
-    const col    = colors[role] || '#374151';
-    const bg     = bgs[role]   || '#f3f4f6';
-    return '<span style="display:inline-flex;align-items:center;justify-content:center;'
-      + 'width:38px;height:38px;border-radius:50%;background:'+bg+';color:'+col+';'
-      + 'font-size:15px;font-weight:800;cursor:pointer" '
-      + 'onclick="event.stopPropagation();rwOpenDrilldown(&quot;'+mod+'&quot;,&quot;'+role+'&quot;)">'
-      + count + '</span>';
+  function mkChip(n, role, mod) {
+    n = Number(n) || 0;
+    var colors = {leader:'#92400e', manager:'#3730a3', assignee:'#065f46'};
+    var bgs    = {leader:'#fef3c7', manager:'#e0e7ff',  assignee:'#d1fae5'};
+    var col = colors[role] || '#374151';
+    var bg  = bgs[role]   || '#f3f4f6';
+    if (!n) return '<span style="color:#cbd5e1;font-size:14px;font-weight:600">0</span>';
+    var dq = '&quot;';
+    return '<span onclick="event.stopPropagation();rwOpenDrilldown(' + dq + mod + dq + ',' + dq + role + dq + ')"'
+         + ' style="display:inline-flex;align-items:center;justify-content:center;'
+         + 'width:40px;height:40px;border-radius:50%;background:' + bg + ';color:' + col + ';'
+         + 'font-size:16px;font-weight:800;cursor:pointer;border:2px solid ' + col + '22">'
+         + n + '</span>';
   }
 
   let html = '';
