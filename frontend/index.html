@@ -4466,7 +4466,7 @@ async function deleteSh(id) { await deactivateSh(id); }
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadMeetings() {
   // Sync board-meeting compliance alerts
-  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:JSON.stringify({})}); } catch(e){}
+  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:{}}); } catch(e){}
   const cid = PB.company_id || document.getElementById('mtg-co-f')?.value || '';
   if (cid) { const el = document.getElementById('mtg-co-f'); if(el) el.value = cid; }
   const params = new URLSearchParams();
@@ -4530,7 +4530,7 @@ async function deleteMtg(id) { if (!confirm('Delete meeting?')) return; await ap
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadAlerts() {
   // Sync board-meeting compliance alerts first
-  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:JSON.stringify({})}); } catch(e){}
+  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:{}}); } catch(e){}
   // Show scope badge based on role
   const scopeBadge = document.getElementById('alt-scope-badge');
   if (scopeBadge && ME) {
@@ -8372,7 +8372,7 @@ async function loadBMCWidget() {
   body.innerHTML = '<div style="text-align:center;padding:28px;color:var(--text3)"><div class="spin" style="margin:0 auto 8px"></div>Syncing…</div>';
 
   // Trigger sync first
-  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:JSON.stringify({})}); } catch(e){}
+  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:{}}); } catch(e){}
 
   // Fetch board_meeting_compliance alerts
   const alerts = await api('/api/alerts?type=meeting') || [];
@@ -8439,7 +8439,7 @@ async function loadBMCWidget() {
 }
 
 async function dismissBMCAlert(aid) {
-  await api(`/api/alerts/${aid}/dismiss`,{method:'POST',body:JSON.stringify({})});
+  await api(`/api/alerts/${aid}/dismiss`,{method:'POST',body:{}});
   loadBMCWidget();
   // Also refresh main alert count
   const d = await api('/api/dashboard');
