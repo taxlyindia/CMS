@@ -1464,6 +1464,11 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
         Sign In →
       </button>
 
+      <div style="text-align:center;margin-top:12px">
+        <span style="font-size:13px;color:#94a3b8">Forgot your password? </span>
+        <a onclick="showForgotPassword()" style="font-size:13px;color:#1d50e0;cursor:pointer;text-decoration:underline;font-weight:600">Reset it here</a>
+      </div>
+
       <div class="login-divider"><span>or</span></div>
 
       <div class="login-back" onclick="showLanding()">
@@ -1475,6 +1480,61 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
         <div class="login-trust-item">🇮🇳 India Hosted</div>
         <div class="login-trust-item">✅ Companies Act 2013</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FORGOT PASSWORD SCREEN ══ -->
+<div id="forgot-screen" style="display:none;position:fixed;inset:0;background:#f4f6fb;z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:40px;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.1)">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:36px;margin-bottom:12px">🔑</div>
+      <div style="font-size:22px;font-weight:700;color:#0f1829" id="fp-title">Forgot Password</div>
+      <div style="font-size:13px;color:#4a5878;margin-top:6px" id="fp-sub">Enter your email and we'll send a reset link.</div>
+    </div>
+    <div id="fp-form">
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;font-weight:600;color:#4a5878;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Email Address</label>
+        <input id="fp-email" type="email" style="width:100%;padding:10px 14px;border:1.5px solid #dde2ef;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none" placeholder="you@example.com" onkeydown="if(event.key==='Enter')submitForgotPassword()">
+      </div>
+      <button onclick="submitForgotPassword()" id="fp-btn" style="width:100%;padding:12px;background:#1d50e0;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer">Send Reset Link</button>
+    </div>
+    <div id="fp-success" style="display:none;text-align:center;padding:16px 0">
+      <div style="font-size:32px;margin-bottom:10px">📧</div>
+      <div style="font-size:15px;font-weight:600;color:#0f9e68">Check your inbox!</div>
+      <div style="font-size:13px;color:#4a5878;margin-top:8px">If that email is registered, a reset link is on its way. Check your spam folder too.</div>
+    </div>
+    <div style="text-align:center;margin-top:20px">
+      <a onclick="hideForgotPassword()" style="font-size:13px;color:#1d50e0;cursor:pointer;text-decoration:underline">← Back to Sign In</a>
+    </div>
+  </div>
+</div>
+
+<!-- ══ RESET PASSWORD SCREEN ══ -->
+<div id="reset-screen" style="display:none;position:fixed;inset:0;background:#f4f6fb;z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:40px;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.1)">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:36px;margin-bottom:12px">🔐</div>
+      <div style="font-size:22px;font-weight:700;color:#0f1829">Set New Password</div>
+      <div style="font-size:13px;color:#4a5878;margin-top:6px" id="rp-sub">Enter your new password below.</div>
+    </div>
+    <div id="rp-form">
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;font-weight:600;color:#4a5878;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">New Password</label>
+        <input id="rp-pw1" type="password" style="width:100%;padding:10px 14px;border:1.5px solid #dde2ef;border-radius:8px;font-size:14px;box-sizing:border-box" placeholder="Minimum 8 characters">
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:12px;font-weight:600;color:#4a5878;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Confirm Password</label>
+        <input id="rp-pw2" type="password" style="width:100%;padding:10px 14px;border:1.5px solid #dde2ef;border-radius:8px;font-size:14px;box-sizing:border-box" placeholder="Repeat new password" onkeydown="if(event.key==='Enter')submitResetPassword()">
+      </div>
+      <div id="rp-err" style="display:none;color:#d93535;font-size:13px;margin-bottom:12px;padding:8px 12px;background:#fef2f2;border-radius:6px"></div>
+      <button onclick="submitResetPassword()" id="rp-btn" style="width:100%;padding:12px;background:#1d50e0;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer">Update Password</button>
+    </div>
+    <div id="rp-success" style="display:none;text-align:center;padding:16px 0">
+      <div style="font-size:32px;margin-bottom:10px">✅</div>
+      <div style="font-size:15px;font-weight:600;color:#0f9e68">Password updated!</div>
+      <div style="font-size:13px;color:#4a5878;margin-top:8px">You can now sign in with your new password.</div>
+      <button onclick="hideForgotPassword()" style="margin-top:16px;padding:10px 24px;background:#1d50e0;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">← Go to Sign In</button>
     </div>
   </div>
 </div>
@@ -1523,6 +1583,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="nav-item" data-page="meetings"><span class="nav-icon">🗓️</span><span class="nav-label">Meetings</span></div>
       <div class="nav-item" data-page="alerts">  <span class="nav-icon">🔔</span><span class="nav-label">Alerts</span></div>
       <div class="nav-item" data-page="tasks">   <span class="nav-icon">✅</span><span class="nav-label">Tasks</span></div>
+      <div class="nav-item" data-page="compliance-calendar"><span class="nav-icon">📅</span><span class="nav-label">ROC Calendar</span></div>
     </div>
   </div>
 
@@ -1995,7 +2056,15 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
       <div class="card"><div id="tsk-tbl"><div class="loading"><div class="spin"></div></div></div></div>
     </div>
 
-    <!-- ── DSC RECORDS ── -->
+    <!-- ── COMPLIANCE CALENDAR ── -->
+    <div class="page" id="page-compliance-calendar">
+      <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <select class="fc" style="width:220px" id="cc-co-f" onchange="loadComplianceCalendar()"><option value="">All Companies</option></select>
+        <select class="fc" style="width:130px" id="cc-yr-f" onchange="loadComplianceCalendar()"></select>
+        <button class="btn btn-outline" onclick="loadComplianceCalendar()">🔄 Refresh</button>
+      </div>
+      <div class="card"><div id="cc-tbl"><div class="loading"><div class="spin"></div></div></div></div>
+    </div>
     <div class="page" id="page-dsc">
       <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="dsc-search" placeholder="Search holder name, company…" oninput="debounce(loadDSC,300)()"></div>
@@ -2367,6 +2436,34 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
           </div>
         </div>
 
+        <!-- Two-Factor Authentication -->
+        <div class="card" id="s-2fa-card">
+          <div class="card-header"><div class="card-title">🔐 Two-Factor Authentication</div></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Add an extra layer of security to your account. You'll need an authenticator app like Google Authenticator or Authy.</p>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+              <span style="font-size:13px;font-weight:600;color:var(--text2)">Status:</span>
+              <span id="s-2fa-status"><div class="loading" style="width:80px;height:20px"></div></span>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" id="s-2fa-enable-btn" onclick="setup2FA()" style="display:none">Enable 2FA</button>
+              <button class="btn btn-danger" id="s-2fa-disable-btn" onclick="disable2FA()" style="display:none">Disable 2FA</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Email Notifications -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">📧 Email Notifications</div></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Send compliance alert digests by email. Configure <code>MAIL_USERNAME</code>, <code>MAIL_PASSWORD</code>, and <code>MAIL_SERVER</code> environment variables to enable.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-primary" id="s-digest-btn" onclick="sendAlertDigest()">📧 Send Alert Digest Now</button>
+              <button class="btn btn-outline" id="s-test-email-btn" onclick="sendTestEmail()">🧪 Send Test Email</button>
+            </div>
+          </div>
+        </div>
+
         <!-- About Taxly-CMS -->
         <div class="card" style="grid-column:1/-1">
           <div class="card-header"><div class="card-title">ℹ️ About Taxly-CMS</div></div>
@@ -2432,7 +2529,7 @@ const PAGE_META = {
   users:       { title:'Users',               sub:'Role-based access control',                               cta:'+ New User' },
   settings:    { title:'Settings',            sub:'Account & preferences',                                   cta:null },
   platform:    { title:'Tenant Management',    sub:'Manage tenants, plans and billing',                         cta:'+ New Tenant' },
-  charges:     { title:'Charges (CHG-1)',     sub:'Register of charges on company assets',                   cta:null },
+  'compliance-calendar': { title:'ROC Compliance Calendar', sub:'MCA annual filing deadlines — MGT-7, AOC-4, DIR-3 KYC, DPT-3 and more', cta:null },
   investments: { title:'Investments (MBP-3)', sub:'Loans, investments and guarantees under Section 186',     cta:null },
   loans:       { title:'Loans & Guarantees',  sub:'Inter-company loans and guarantees — Section 186',        cta:null },
 };
@@ -2862,6 +2959,7 @@ function navigateTo(page) {
      'dir-kyc': loadDirKYC,
      auditors: loadAuditors, shareholders: loadShareholders, dsc: loadDSC,
      meetings: loadMeetings, alerts: loadAlerts, tasks: loadTasks,
+     'compliance-calendar': loadComplianceCalendar,
      registers: initRegisters, documents: initDocPage, templates: loadTemplates,
      users: loadUsers, settings: initSettingsPage, platform: loadPlatformPage }[page] || (() => {}))();
 }
@@ -2934,12 +3032,21 @@ function coOptions(sel = '', blank = 'All Companies') {
 
 async function refreshCache() {
   COMPANIES = await api('/api/companies') || [];
-  ['dir-co-f','aud-co-f','sh-co-f','mtg-co-f','tsk-co-f','reg-co','dsc-co-f'].forEach(id => {
+  ['dir-co-f','aud-co-f','sh-co-f','mtg-co-f','tsk-co-f','reg-co','dsc-co-f','cc-co-f'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = coOptions('', (id === 'sh-co-f' || id === 'reg-co') ? '— Select Company —' : 'All Companies');
   });
   const dc = document.getElementById('doc-co');
   if (dc) dc.innerHTML = coOptions('', 'Select company…');
+  // Populate year selector for compliance calendar
+  const yrEl = document.getElementById('cc-yr-f');
+  if (yrEl && !yrEl.options.length) {
+    const cur = new Date().getFullYear();
+    const fyStart = new Date().getMonth() >= 3 ? cur : cur - 1;
+    yrEl.innerHTML = [fyStart-1, fyStart, fyStart+1].map(y =>
+      `<option value="${y}" ${y===fyStart?'selected':''}>${y}-${String(y+1).slice(-2)} FY</option>`
+    ).join('');
+  }
 }
 
 function credSpan(val, label = '') {
@@ -4988,6 +5095,8 @@ async function loadTasks() {
           <td><div class="td-actions">
             ${t.status !== 'completed' && t.status !== 'cancelled' ? `<button class="btn btn-xs btn-success" onclick="completeTask('${t.id}')" title="Mark complete">✓</button>` : ''}
             <button class="btn btn-xs btn-ghost" onclick="openTskModal('${t.id}')">Edit</button>
+            <button class="btn btn-xs btn-ghost" onclick="openTaskComments('${t.id}',${JSON.stringify(t.title||'')})" title="Comments">💬</button>
+            <button class="btn btn-xs btn-ghost" onclick="openAttachments('task','${t.id}',${JSON.stringify(t.title||'')})" title="Attachments">📎</button>
             <button class="btn btn-xs btn-danger" onclick="deleteTask('${t.id}')">✕</button>
           </div></td>
         </tr>`;
@@ -9053,5 +9162,417 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
 </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// P0 FIX #8 — FORGOT / RESET PASSWORD FRONTEND
+// ═══════════════════════════════════════════════════════════════════════════
+let _resetToken = null;
+
+function showForgotPassword() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('fp-form').style.display = '';
+  document.getElementById('fp-success').style.display = 'none';
+  document.getElementById('forgot-screen').style.display = 'flex';
+  setTimeout(() => document.getElementById('fp-email').focus(), 50);
+}
+
+function hideForgotPassword() {
+  document.getElementById('forgot-screen').style.display = 'none';
+  document.getElementById('reset-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+async function submitForgotPassword() {
+  const email = document.getElementById('fp-email').value.trim();
+  if (!email) { document.getElementById('fp-email').focus(); return; }
+  const btn = document.getElementById('fp-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await fetch('/api/auth/forgot-password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+  } catch(e) {}
+  document.getElementById('fp-form').style.display = 'none';
+  document.getElementById('fp-success').style.display = '';
+  btn.disabled = false; btn.textContent = 'Send Reset Link';
+}
+
+async function submitResetPassword() {
+  const pw1 = document.getElementById('rp-pw1').value;
+  const pw2 = document.getElementById('rp-pw2').value;
+  const errEl = document.getElementById('rp-err');
+  errEl.style.display = 'none';
+  if (!pw1 || pw1.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display = ''; return; }
+  if (pw1 !== pw2) { errEl.textContent = 'Passwords do not match.'; errEl.style.display = ''; return; }
+  const btn = document.getElementById('rp-btn');
+  btn.disabled = true; btn.textContent = 'Updating…';
+  try {
+    const r = await fetch('/api/auth/reset-password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: _resetToken, password: pw1 })
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.error || 'Reset failed. Try requesting a new link.'; errEl.style.display = ''; btn.disabled = false; btn.textContent = 'Update Password'; return; }
+    document.getElementById('rp-form').style.display = 'none';
+    document.getElementById('rp-success').style.display = '';
+  } catch(e) { errEl.textContent = 'Network error. Please try again.'; errEl.style.display = ''; btn.disabled = false; btn.textContent = 'Update Password'; }
+}
+
+// Check URL hash for reset token on page load
+(function checkResetToken() {
+  const hash = window.location.hash || '';
+  const m = hash.match(/[?&]token=([^&]+)/);
+  if (m) {
+    _resetToken = decodeURIComponent(m[1]);
+    // Validate token then show reset screen
+    fetch('/api/auth/reset-password/validate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: _resetToken })
+    }).then(r => r.json()).then(d => {
+      if (d.valid) {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('rp-form').style.display = '';
+        document.getElementById('rp-success').style.display = 'none';
+        document.getElementById('reset-screen').style.display = 'flex';
+      } else {
+        // Show error inline in forgot screen
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('fp-form').style.display = '';
+        document.getElementById('fp-success').style.display = 'none';
+        document.getElementById('fp-title').textContent = 'Reset Link Expired';
+        document.getElementById('fp-sub').textContent = (d.reason || 'That link is no longer valid.') + ' Enter your email to get a new one.';
+        document.getElementById('forgot-screen').style.display = 'flex';
+      }
+      // Clean URL
+      history.replaceState(null, '', window.location.pathname);
+    }).catch(() => {});
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P0 FIX #5 — 2FA / TOTP FRONTEND (in Settings page)
+// ═══════════════════════════════════════════════════════════════════════════
+async function load2FAStatus() {
+  const card = document.getElementById('s-2fa-card');
+  if (!card) return;
+  const d = await fetch('/api/auth/2fa/status', { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => ({ enabled: false, available: false }));
+  const statusEl = document.getElementById('s-2fa-status');
+  const enableBtn = document.getElementById('s-2fa-enable-btn');
+  const disableBtn = document.getElementById('s-2fa-disable-btn');
+  if (!d.available) {
+    statusEl.innerHTML = '<span style="color:var(--text3);font-size:12px">2FA not available — install pyotp on server</span>';
+    if (enableBtn) enableBtn.style.display = 'none';
+    if (disableBtn) disableBtn.style.display = 'none';
+    return;
+  }
+  if (d.enabled) {
+    statusEl.innerHTML = '<span style="background:#d1fae5;color:#065f46;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600">✅ Enabled</span>';
+    if (enableBtn) enableBtn.style.display = 'none';
+    if (disableBtn) disableBtn.style.display = '';
+  } else {
+    statusEl.innerHTML = '<span style="background:#fee2e2;color:#991b1b;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600">❌ Disabled</span>';
+    if (enableBtn) enableBtn.style.display = '';
+    if (disableBtn) disableBtn.style.display = 'none';
+  }
+}
+
+async function setup2FA() {
+  const r = await fetch('/api/auth/2fa/setup', { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` } });
+  if (!r.ok) { toast('Failed to set up 2FA', 'err'); return; }
+  const d = await r.json();
+  openModal('Set Up Two-Factor Authentication', `
+    <div style="text-align:center;padding:8px 0">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Scan this QR code with <b>Google Authenticator</b>, <b>Authy</b>, or any TOTP app.</p>
+      <img src="${d.qr_code}" alt="QR Code" style="width:200px;height:200px;border:2px solid var(--border);border-radius:8px;margin-bottom:16px">
+      <p style="font-size:11px;color:var(--text3);margin-bottom:16px">Or enter this key manually: <code style="background:var(--bg3);padding:3px 8px;border-radius:4px;font-size:12px">${d.secret}</code></p>
+      <div class="fg">
+        <label class="fl">Enter the 6-digit code from your app to confirm</label>
+        <input class="fc" id="totp-confirm-code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" style="text-align:center;font-size:18px;letter-spacing:6px;font-family:monospace">
+      </div>
+    </div>
+  `, `
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="confirm2FA()">Confirm & Enable 2FA</button>
+  `);
+}
+
+async function confirm2FA() {
+  const code = document.getElementById('totp-confirm-code')?.value.trim();
+  if (!code || code.length !== 6) { toast('Enter the 6-digit code from your app', 'err'); return; }
+  const r = await fetch('/api/auth/2fa/verify', {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code })
+  });
+  const d = await r.json();
+  if (!r.ok) { toast(d.error || 'Invalid code — try again', 'err'); return; }
+  toast('2FA enabled successfully 🔐', 'ok');
+  closeModal();
+  load2FAStatus();
+}
+
+async function disable2FA() {
+  const pw = prompt('Enter your current password to disable 2FA:');
+  if (!pw) return;
+  const r = await fetch('/api/auth/2fa/disable', {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: pw })
+  });
+  const d = await r.json();
+  if (!r.ok) { toast(d.error || 'Failed to disable 2FA', 'err'); return; }
+  toast('2FA disabled', 'ok');
+  load2FAStatus();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P0 FIX #1 — COMPLIANCE CALENDAR FRONTEND
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadComplianceCalendar() {
+  const cid  = document.getElementById('cc-co-f')?.value || '';
+  const year = document.getElementById('cc-yr-f')?.value || '';
+  const tbl  = document.getElementById('cc-tbl');
+  if (!tbl) return;
+  tbl.innerHTML = '<div class="loading"><div class="spin"></div></div>';
+
+  const params = new URLSearchParams();
+  if (cid)  params.set('company_id', cid);
+  if (year) params.set('year', year);
+  const d = await fetch(`/api/compliance-calendar?${params}`, { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => null);
+  if (!d) { tbl.innerHTML = '<div class="empty-state"><div class="empty-title">Failed to load</div></div>'; return; }
+
+  const statusBadge = s => ({
+    overdue:    '<span style="background:#fef2f2;color:#d93535;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;border:1px solid #fca5a5">⚠️ Overdue</span>',
+    due_soon:   '<span style="background:#fff7ed;color:#d97706;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;border:1px solid #fcd34d">🔔 Due Soon</span>',
+    upcoming:   '<span style="background:#eff6ff;color:#1d50e0;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;border:1px solid #93c5fd">📅 Upcoming</span>',
+    future:     '<span style="background:#f0fdf4;color:#16a34a;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600;border:1px solid #86efac">✅ Future</span>',
+    event_based:'<span style="background:#faf5ff;color:#6d41c4;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600;border:1px solid #c4b5fd">⚡ Event-Based</span>',
+  }[s] || s);
+
+  const overdue  = d.deadlines.filter(x => x.status === 'overdue').length;
+  const due_soon = d.deadlines.filter(x => x.status === 'due_soon').length;
+
+  tbl.innerHTML = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+      <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:12px 20px;min-width:120px">
+        <div style="font-size:24px;font-weight:800;color:#d93535">${overdue}</div>
+        <div style="font-size:11px;color:#991b1b;font-weight:600;margin-top:2px">Overdue</div>
+      </div>
+      <div style="background:#fff7ed;border:1px solid #fcd34d;border-radius:10px;padding:12px 20px;min-width:120px">
+        <div style="font-size:24px;font-weight:800;color:#d97706">${due_soon}</div>
+        <div style="font-size:11px;color:#92400e;font-weight:600;margin-top:2px">Due in 30 days</div>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 20px;min-width:120px">
+        <div style="font-size:24px;font-weight:800;color:#16a34a">${d.total - overdue - due_soon}</div>
+        <div style="font-size:11px;color:#15803d;font-weight:600;margin-top:2px">Scheduled</div>
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>Form</th><th>Description</th><th>Company</th>
+        <th>Due Date</th><th>Days Left</th><th>Status</th><th>Note</th>
+      </tr></thead>
+      <tbody>${d.deadlines.map(x => `<tr style="${x.status==='overdue'?'background:#fff5f5':''}">
+        <td><b style="font-family:monospace;color:#1d50e0">${esc(x.form)}</b></td>
+        <td style="font-size:12px">${esc(x.description)}</td>
+        <td style="font-size:12px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.company_name)}</td>
+        <td style="font-size:12px;font-weight:600">${x.due_date ? fd(x.due_date) : '—'}</td>
+        <td style="font-size:12px;font-weight:700;color:${x.days_left<0?'#d93535':x.days_left<=30?'#d97706':'#16a34a'}">${x.due_date?(x.days_left<0?`${Math.abs(x.days_left)}d ago`:`${x.days_left}d`):'—'}</td>
+        <td>${statusBadge(x.status)}</td>
+        <td style="font-size:11px;color:var(--text3);max-width:160px">${esc(x.note||'')}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P0 FIX #6 — TASK COMMENTS FRONTEND
+// ═══════════════════════════════════════════════════════════════════════════
+async function openTaskComments(taskId, taskTitle) {
+  const comments = await fetch(`/api/tasks/${taskId}/comments`, { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => []);
+
+  const renderComments = (list) => list.length
+    ? list.map(c => `
+        <div style="display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--border)" data-comment-id="${c.id}">
+          <div style="width:34px;height:34px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">
+            ${esc((c.author_name||'?')[0].toUpperCase())}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span style="font-size:12px;font-weight:700;color:var(--text)">${esc(c.author_name||'Unknown')}</span>
+              <span style="font-size:11px;color:var(--text3)">${fd(c.created_at)}</span>
+              ${c.user_id === ME?.id || ME?.role === 'superadmin' || ME?.role === 'manager'
+                ? `<button onclick="deleteTaskComment('${taskId}','${c.id}')" style="margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;hover:background:var(--rbg)" title="Delete">✕</button>` : ''}
+            </div>
+            <div style="font-size:13px;color:var(--text2);line-height:1.5;word-break:break-word">${esc(c.content)}</div>
+          </div>
+        </div>`).join('')
+    : '<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No comments yet. Be the first to add one.</div>';
+
+  openModal(
+    `💬 Comments — ${esc(taskTitle)}`,
+    `<div id="comments-list" style="max-height:340px;overflow-y:auto;margin-bottom:16px">${renderComments(comments)}</div>
+     <div style="border-top:1px solid var(--border);padding-top:14px">
+       <textarea id="new-comment-text" class="fc" rows="3" placeholder="Add a comment…" style="resize:vertical"></textarea>
+     </div>`,
+    `<span style="font-size:12px;color:var(--text3)">${comments.length} comment(s)</span>
+     <div style="display:flex;gap:8px">
+       <button class="btn btn-outline" onclick="closeModal()">Close</button>
+       <button class="btn btn-primary" onclick="postTaskComment('${taskId}')">Post Comment</button>
+     </div>`,
+    'lg'
+  );
+}
+
+async function postTaskComment(taskId) {
+  const txt = document.getElementById('new-comment-text')?.value.trim();
+  if (!txt) { toast('Please enter a comment', 'err'); return; }
+  const r = await fetch(`/api/tasks/${taskId}/comments`, {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: txt })
+  });
+  if (!r.ok) { toast('Failed to post comment', 'err'); return; }
+  const c = await r.json();
+  // Re-open to refresh
+  const tasks = await fetch('/api/tasks', { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => []);
+  const task = (Array.isArray(tasks) ? tasks : tasks.data || []).find(t => t.id === taskId);
+  closeModal();
+  if (task) openTaskComments(taskId, task.title);
+}
+
+async function deleteTaskComment(taskId, commentId) {
+  if (!confirm('Delete this comment?')) return;
+  const r = await fetch(`/api/tasks/${taskId}/comments/${commentId}`, {
+    method: 'DELETE', headers: { Authorization: `Bearer ${TOKEN}` }
+  });
+  if (!r.ok) { toast('Failed to delete comment', 'err'); return; }
+  const tasks = await fetch('/api/tasks', { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => []);
+  const task = (Array.isArray(tasks) ? tasks : tasks.data || []).find(t => t.id === taskId);
+  closeModal();
+  if (task) openTaskComments(taskId, task.title);
+  toast('Comment deleted');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P0 FIX #7 — FILE ATTACHMENTS FRONTEND
+// ═══════════════════════════════════════════════════════════════════════════
+async function openAttachments(entityType, entityId, entityTitle) {
+  const list = await fetch(`/api/attachments/${entityType}/${entityId}`, { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => []);
+  const fmtSize = b => b < 1024 ? `${b}B` : b < 1048576 ? `${(b/1024).toFixed(1)}KB` : `${(b/1048576).toFixed(1)}MB`;
+  const fileIcon = name => {
+    const ext = (name||'').split('.').pop().toLowerCase();
+    return { pdf:'📄', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', jpg:'🖼️', jpeg:'🖼️', png:'🖼️', csv:'📋', txt:'📃' }[ext] || '📎';
+  };
+
+  openModal(
+    `📎 Attachments — ${esc(entityTitle)}`,
+    `<div id="attach-list" style="margin-bottom:16px;max-height:300px;overflow-y:auto">
+      ${list.length ? list.map(a => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
+          <span style="font-size:22px">${fileIcon(a.original_name)}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.original_name)}</div>
+            <div style="font-size:11px;color:var(--text3)">${fmtSize(a.file_size||0)} · ${fd(a.created_at)} · ${esc(a.uploader_name||'Unknown')}</div>
+          </div>
+          <a href="/api/attachments/${a.id}/download" target="_blank" class="btn btn-xs btn-outline">⬇️ Download</a>
+          ${a.uploaded_by === ME?.id || ME?.role === 'superadmin' || ME?.role === 'manager'
+            ? `<button class="btn btn-xs btn-danger" onclick="deleteAttachment('${entityType}','${entityId}','${a.id}','${esc(entityTitle)}')">✕</button>` : ''}
+        </div>`).join('')
+        : '<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No attachments yet.</div>'
+      }
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:14px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:8px">Upload File (PDF, Word, Excel, Image — max 20MB)</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="file" id="attach-file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.csv,.txt"
+               style="flex:1;padding:8px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;cursor:pointer"
+               onchange="previewAttachFile(this)">
+        <button class="btn btn-primary" onclick="uploadAttachment('${entityType}','${entityId}','${esc(entityTitle)}')" id="attach-upload-btn">Upload</button>
+      </div>
+      <div id="attach-preview" style="font-size:11.5px;color:var(--text3);margin-top:6px"></div>
+    </div>`,
+    `<span style="font-size:12px;color:var(--text3)">${list.length} attachment(s)</span>
+     <button class="btn btn-outline" onclick="closeModal()">Close</button>`,
+    'lg'
+  );
+}
+
+function previewAttachFile(input) {
+  const el = document.getElementById('attach-preview');
+  if (!el) return;
+  const f = input.files[0];
+  if (!f) { el.textContent = ''; return; }
+  const fmtSize = b => b < 1048576 ? `${(b/1024).toFixed(1)}KB` : `${(b/1048576).toFixed(1)}MB`;
+  el.textContent = `Selected: ${f.name} (${fmtSize(f.size)})`;
+}
+
+async function uploadAttachment(entityType, entityId, entityTitle) {
+  const input = document.getElementById('attach-file-input');
+  if (!input || !input.files[0]) { toast('Please select a file first', 'err'); return; }
+  const btn = document.getElementById('attach-upload-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  const formData = new FormData();
+  formData.append('file', input.files[0]);
+  try {
+    const r = await fetch(`/api/attachments/${entityType}/${entityId}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` }, body: formData
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Upload failed', 'err'); btn.disabled = false; btn.textContent = 'Upload'; return; }
+    toast('File uploaded ✓', 'ok');
+    closeModal();
+    openAttachments(entityType, entityId, entityTitle);
+  } catch(e) { toast('Upload error', 'err'); }
+  btn.disabled = false; btn.textContent = 'Upload';
+}
+
+async function deleteAttachment(entityType, entityId, attachId, entityTitle) {
+  if (!confirm('Delete this attachment?')) return;
+  const r = await fetch(`/api/attachments/${attachId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${TOKEN}` } });
+  if (!r.ok) { toast('Failed to delete attachment', 'err'); return; }
+  toast('Attachment deleted');
+  closeModal();
+  openAttachments(entityType, entityId, entityTitle);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P0 FIX #2 — EMAIL NOTIFICATIONS FRONTEND (Settings page)
+// ═══════════════════════════════════════════════════════════════════════════
+async function sendAlertDigest() {
+  const btn = document.getElementById('s-digest-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  const r = await fetch('/api/notifications/send-digest', { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` } });
+  const d = await r.json();
+  if (r.ok) {
+    toast(d.mail_enabled ? `Digest sent to ${d.sent} user(s) ✉️` : 'Email not configured — set MAIL_USERNAME/PASSWORD env vars', d.mail_enabled ? 'ok' : '');
+  } else { toast(d.error || 'Failed to send digest', 'err'); }
+  if (btn) { btn.disabled = false; btn.textContent = '📧 Send Alert Digest Now'; }
+}
+
+async function sendTestEmail() {
+  const btn = document.getElementById('s-test-email-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  const r = await fetch('/api/notifications/test-email', { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` } });
+  const d = await r.json();
+  if (r.ok) {
+    toast(d.success ? `Test email sent to ${d.to} ✉️` : 'Email not configured — check server env vars', d.success ? 'ok' : '');
+  } else { toast(d.error || 'Failed', 'err'); }
+  if (btn) { btn.disabled = false; btn.textContent = '🧪 Send Test Email'; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WIRE NEW PAGES INTO ROUTER
+// ═══════════════════════════════════════════════════════════════════════════
+// Patch initSettingsPage to load 2FA status after it runs
+document.addEventListener('DOMContentLoaded', function() {
+  const _origInitSettings = window.initSettingsPage;
+  if (typeof _origInitSettings === 'function') {
+    window.initSettingsPage = async function() {
+      await _origInitSettings();
+      load2FAStatus();
+    };
+  }
+});
+</script>
 </body>
 </html>
