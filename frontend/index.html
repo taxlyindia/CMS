@@ -3030,7 +3030,7 @@ async function loadMyDashboard() {
     // Show for all roles — everyone sees their own task summary
     rws.style.display = '';
     loadRWWidget();
-    loadBMCWidget();
+  loadBMCWidget();
   }
 
   // ── Alert badge ───────────────────────────────────────────────────────────
@@ -3114,26 +3114,15 @@ function applyMyTaskFilter() {
 }
 
 function filterMyTasks(filter) {
+  // Stat card clicks open the drilldown pre-filtered by status
   MY_TASK_FILTER = filter;
-  // Map status filter
+  if (!MY_DASH_DATA) return;
+  // Map filter to status and open drilldown
   const statusMap = { completed:'completed', pending:'pending', overdue:'pending', due_today:'pending', due_week:'pending' };
   const st = document.getElementById('rw-p2-status');
   if (st) st.value = statusMap[filter] || '';
-  // Determine my role column
-  var myRoleCol = ME?.role === 'superadmin' ? 'leader'
-                : ME?.role === 'manager'    ? 'manager'
-                : 'assignee';
-  if (MY_DASH_DATA && MY_DASH_DATA.my_col) {
-    myRoleCol = MY_DASH_DATA.my_col === 'task_leader'  ? 'leader'
-              : MY_DASH_DATA.my_col === 'task_manager' ? 'manager'
-              : 'assignee';
-  }
-  // If widget hasn't loaded yet, load it first
-  if (!RW_DATA) {
-    loadRWWidget().then(function() { rwOpenDrilldown('all', myRoleCol); });
-  } else {
-    rwOpenDrilldown('all', myRoleCol);
-  }
+  rwOpenDrilldown('all', MY_DASH_DATA?.my_col === 'task_leader' ? 'leader' :
+                          MY_DASH_DATA?.my_col === 'task_manager' ? 'manager' : 'assignee');
 }
 
 function renderMyTaskListDirect(tasks, role) {
@@ -3190,57 +3179,50 @@ async function loadRWWidget() {
 }
 
 function renderRWPersonStrip(persons, myRole) {
-  var strip = document.getElementById('rw-person-strip');
+  const strip = document.getElementById('rw-person-strip');
   if (!strip) return;
-  if (!persons || !persons.length) {
-    strip.innerHTML = '<span style="font-size:12px;color:var(--text3);padding:6px 0">No team members yet</span>';
+  if (!persons.length) {
+    strip.innerHTML = '<span style="font-size:12px;color:var(--text3);padding:6px 0">No team members in hierarchy yet</span>';
     return;
   }
+  const roleIcon  = r => r==='superadmin'?'👑':r==='manager'?'🔧':'📋';
+  const roleCls   = r => r==='superadmin'?'role-badge-leader':r==='manager'?'role-badge-manager':'role-badge-assigned';
+  const roleLabel = r => r==='superadmin'?'Task Leader':r==='manager'?'Task Manager':'Assigned User';
 
-  function roleIcon(r)  { return r==='superadmin'?'👑':r==='manager'?'🔧':'📋'; }
-  function roleCls(r)   { return r==='superadmin'?'role-badge-leader':r==='manager'?'role-badge-manager':'role-badge-assigned'; }
-  function roleLabel(r) { return r==='superadmin'?'Task Leader':r==='manager'?'Task Manager':'Assigned User'; }
-
-  var html = '';
-  persons.forEach(function(p) {
-    var isMe    = p.id === (ME && ME.id);
-    var overdue = Number(p.overdue||0) > 0;
-    var bg      = isMe ? '#eff6ff' : '#fff';
-    var bc      = isMe ? 'var(--accent)' : 'var(--border)';
-    var initial = (p.name && p.name.charAt(0).toUpperCase()) || '?';
-    var pname   = p.name || '?';
-    var pid     = p.id   || '';
-    var pname_esc = pname.replace(/'/g,'&#39;');
-
-    html += '<div onclick="rwFilterByPerson(&#39;' + pid + '&#39;,&#39;' + pname_esc + '&#39;)"'
-          + ' style="background:' + bg + ';border:1px solid ' + bc + ';border-radius:10px;padding:12px 14px;min-width:148px;cursor:pointer;transition:all .15s;text-align:center">'
-          + '<div style="width:32px;height:32px;border-radius:50%;background:var(--glow);border:2px solid var(--accent);'
-          +   'display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--accent);margin:0 auto 5px">'
-          +   initial
-          + '</div>'
-          + '<div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:124px;margin:0 auto">'
-          +   pname + (isMe ? ' <span style="font-size:9px;color:var(--accent)">(you)</span>' : '')
-          + '</div>'
-          + '<div class="' + roleCls(p.role) + '" style="font-size:9px;margin:4px auto 8px;display:inline-block">'
-          +   roleIcon(p.role) + ' ' + roleLabel(p.role)
-          + '</div>'
-          + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px">'
-          +   '<div style="background:var(--obg);border-radius:4px;padding:3px 2px">'
-          +     '<div style="font-size:15px;font-weight:800;color:var(--orange)">' + Number(p.pending||0) + '</div>'
-          +     '<div style="font-size:8px;color:var(--text3)">Pending</div>'
-          +   '</div>'
-          +   '<div style="background:var(--gbg);border-radius:4px;padding:3px 2px">'
-          +     '<div style="font-size:15px;font-weight:800;color:var(--green)">' + Number(p.completed||0) + '</div>'
-          +     '<div style="font-size:8px;color:var(--text3)">Done</div>'
-          +   '</div>'
-          +   '<div style="background:' + (overdue?'var(--rbg)':'var(--bg3)') + ';border-radius:4px;padding:3px 2px">'
-          +     '<div style="font-size:15px;font-weight:800;color:' + (overdue?'var(--red)':'var(--text3)') + '">' + Number(p.overdue||0) + '</div>'
-          +     '<div style="font-size:8px;color:var(--text3)">Overdue</div>'
-          +   '</div>'
-          + '</div>'
-          + '</div>';
-  });
-  strip.innerHTML = html;
+  strip.innerHTML = persons.map(p => {
+    const isMe    = p.id === ME?.id;
+    const overdue = (p.overdue||0) > 0;
+    return `<div onclick="rwFilterByPerson('${p.id}','${esc(p.name)}')"
+      style="background:${isMe?'#eff6ff':'#fff'};border:1px solid ${isMe?'var(--accent)':'var(--border)'};
+             border-radius:10px;padding:12px 14px;min-width:148px;cursor:pointer;transition:all .15s;text-align:center"
+      onmouseover="this.style.boxShadow='0 4px 14px rgba(29,80,224,.12)';this.style.borderColor='var(--accent)'"
+      onmouseout="this.style.boxShadow='';this.style.borderColor='${isMe?'var(--accent)':'var(--border)'}'">
+      <div style="width:32px;height:32px;border-radius:50%;background:var(--glow);border:2px solid var(--accent);
+                  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;
+                  color:var(--accent);margin:0 auto 5px">${p.name?.charAt(0)?.toUpperCase()||'?'}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;
+                  text-overflow:ellipsis;max-width:124px;margin:0 auto">
+        ${p.name}${isMe?' <span style="font-size:9px;color:var(--accent)">(you)</span>':''}
+      </div>
+      <div class="${roleCls(p.role)}" style="font-size:9px;margin:4px auto 8px;display:inline-block">
+        ${roleIcon(p.role)} ${roleLabel(p.role)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px">
+        <div style="background:var(--obg);border-radius:4px;padding:3px 2px">
+          <div style="font-size:15px;font-weight:800;color:var(--orange)">${p.pending||0}</div>
+          <div style="font-size:8px;color:var(--text3)">Pending</div>
+        </div>
+        <div style="background:var(--gbg);border-radius:4px;padding:3px 2px">
+          <div style="font-size:15px;font-weight:800;color:var(--green)">${p.completed||0}</div>
+          <div style="font-size:8px;color:var(--text3)">Done</div>
+        </div>
+        <div style="background:${overdue?'var(--rbg)':'var(--bg3)'};border-radius:4px;padding:3px 2px">
+          <div style="font-size:15px;font-weight:800;color:${overdue?'var(--red)':'var(--text3)'}">${p.overdue||0}</div>
+          <div style="font-size:8px;color:var(--text3)">Overdue</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderRWTable() {
@@ -8651,7 +8633,7 @@ async function loadBMCWidget() {
   if (!wrap || !body) return;
 
   // Only show for superadmin/manager
-  const myRole = ME?.role || '';
+  const myRole = CURRENT_USER?.role || '';
   if (!['superadmin','manager'].includes(myRole)) { wrap.style.display='none'; return; }
   wrap.style.display = '';
   body.innerHTML = '<div style="text-align:center;padding:28px;color:var(--text3)"><div class="spin" style="margin:0 auto 8px"></div>Syncing…</div>';
