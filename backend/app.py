@@ -377,8 +377,7 @@ def dashboard():
     run_compliance_checks()
     # Refresh board meeting compliance alerts on every dashboard load
     try:
-        _tid = g.tenant_id if hasattr(g, "tenant_id") else None
-        sync_board_meeting_alerts(tenant_id=_tid)
+        sync_board_meeting_alerts(tenant_id=getattr(g, "tenant_id", None))
     except Exception:
         pass  # Never block dashboard for alert sync failures
     uid  = g.user_id
@@ -2104,14 +2103,14 @@ def list_alerts():
 @login_required
 def dismiss_alert(aid):
     conn=get_db(); c=conn.cursor()
-    c.execute("UPDATE alerts SET status='dismissed',resolved_at=NOW() WHERE id=%s",(aid,))
+    c.execute("UPDATE alerts SET status='dismissed',resolved_at=datetime('now') WHERE id=%s",(aid,))
     conn.commit(); conn.close(); return jsonify({"success":True})
 
 @app.route("/api/alerts/<aid>/resolve", methods=["POST"])
 @login_required
 def resolve_alert(aid):
     conn=get_db(); c=conn.cursor()
-    c.execute("UPDATE alerts SET status='resolved',resolved_at=NOW() WHERE id=%s",(aid,))
+    c.execute("UPDATE alerts SET status='resolved',resolved_at=datetime('now') WHERE id=%s",(aid,))
     conn.commit(); conn.close(); return jsonify({"success":True})
 
 
@@ -2153,37 +2152,37 @@ def _upsert_board_alert(c, conn, company_id, tenant_id, alert_key,
     due_str = due_date.isoformat() if hasattr(due_date,'isoformat') else str(due_date)
     # Check existing active
     c.execute("""SELECT id FROM alerts
-                 WHERE company_id=%s AND alert_type='board_meeting_compliance'
-                   AND entity_id=%s AND status='active'""",
+                 WHERE company_id=? AND alert_type='board_meeting_compliance'
+                   AND entity_id=? AND status='active'""",
               (company_id, alert_key))
     row = c.fetchone()
     if row:
-        c.execute("""UPDATE alerts SET title=%s, message=%s, due_date=%s,
-                         severity=%s, created_at=datetime('now')
-                     WHERE id=%s""",
+        c.execute("""UPDATE alerts SET title=?, message=?, due_date=?,
+                         severity=?, created_at=datetime('now')
+                     WHERE id=?""",
                   (title, message, due_str, severity, row[0]))
     else:
         c.execute("""INSERT INTO alerts
                      (id,company_id,entity_type,entity_id,alert_type,
                       title,message,due_date,severity,status,tenant_id)
-                     VALUES (%s,%s,'meeting',%s,'board_meeting_compliance',
-                             %s,%s,%s,%s,'active',%s)""",
+                     VALUES (?,?,'meeting',?,'board_meeting_compliance',
+                             ?,?,?,?,'active',?)""",
                   (str(uuid.uuid4()), company_id, alert_key,
                    title, message, due_str, severity, tenant_id))
 
 def _clear_stale_board_alerts(c, company_id, active_keys):
     """Dismiss board_meeting_compliance alerts whose keys are no longer relevant."""
     if active_keys:
-        placeholders = ','.join(['%s']*len(active_keys))
+        placeholders = ','.join(['?']*len(active_keys))
         c.execute(f"""UPDATE alerts SET status='resolved', resolved_at=datetime('now')
-                      WHERE company_id=%s
+                      WHERE company_id=?
                         AND alert_type='board_meeting_compliance'
                         AND status='active'
                         AND entity_id NOT IN ({placeholders})""",
                   [company_id] + list(active_keys))
     else:
         c.execute("""UPDATE alerts SET status='resolved', resolved_at=datetime('now')
-                     WHERE company_id=%s
+                     WHERE company_id=?
                        AND alert_type='board_meeting_compliance'
                        AND status='active'""",
                   (company_id,))
@@ -2201,9 +2200,9 @@ def sync_board_meeting_alerts(company_id=None, tenant_id=None):
 
     # ── Fetch companies ───────────────────────────────────────────────────────
     if company_id:
-        c.execute("SELECT id, name, tenant_id FROM companies WHERE id=%s", (company_id,))
+        c.execute("SELECT id, name, tenant_id FROM companies WHERE id=?", (company_id,))
     elif tenant_id:
-        c.execute("SELECT id, name, tenant_id FROM companies WHERE tenant_id=%s", (tenant_id,))
+        c.execute("SELECT id, name, tenant_id FROM companies WHERE tenant_id=?", (tenant_id,))
     else:
         c.execute("SELECT id, name, tenant_id FROM companies")
     companies = rows(c.fetchall())
@@ -2219,7 +2218,7 @@ def sync_board_meeting_alerts(company_id=None, tenant_id=None):
         # ── Fetch all HELD/scheduled Board meetings for this company ─────────
         # Include both past (held) and future (scheduled) for gap analysis
         c.execute("""SELECT meeting_date FROM meetings
-                     WHERE company_id=%s
+                     WHERE company_id=?
                        AND meeting_type='Board'
                        AND status IN ('held','completed','scheduled','minutes_approved')
                      ORDER BY meeting_date ASC""", (cid,))
@@ -2319,16 +2318,17 @@ def sync_board_meeting_alerts(company_id=None, tenant_id=None):
     conn.close()
 
 
-@app.route("/api/alerts/sync-board-meetings", methods=["POST"])
+@app.route("/api/alerts/sync-board-meetings", methods=["GET","POST"])
 @login_required
 def sync_board_meeting_alerts_route():
     """Trigger board meeting compliance alert sync (superadmin or manager)."""
     role = g.role
     if role not in ("superadmin", "manager"):
         return jsonify({"error": "Forbidden"}), 403
-    cid = request.json.get("company_id") if request.json else None
-    tid = g.tenant_id if hasattr(g, "tenant_id") else None
     try:
+        body = request.get_json(silent=True, force=True) or {}
+        cid  = body.get("company_id") if body else None
+        tid  = getattr(g, "tenant_id", None)
         sync_board_meeting_alerts(company_id=cid, tenant_id=tid)
         return jsonify({"success": True, "message": "Board meeting compliance alerts synced."})
     except Exception as e:
