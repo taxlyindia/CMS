@@ -1805,6 +1805,25 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
       </div>
     </div>
 
+    <!-- ── BOARD MEETING COMPLIANCE WIDGET (Dashboard) ── -->
+    <div id="bmc-widget-wrap" style="display:none;padding:0 20px 20px">
+      <div class="card" style="border:1.5px solid var(--border2)">
+        <div class="card-header" style="background:linear-gradient(90deg,#0f1829,#1a2744);border-radius:10px 10px 0 0;padding:14px 18px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:18px">📅</span>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:.2px">BOARD MEETING COMPLIANCE</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:2px">Quarterly compliance & 120-day gap tracking. Alert raised 15 days before deadline.</div>
+            </div>
+            <button class="btn btn-xs" onclick="loadBMCWidget()" style="margin-left:auto;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:11px">↺ Refresh</button>
+          </div>
+        </div>
+        <div id="bmc-body" style="padding:12px 0">
+          <div style="text-align:center;padding:28px;color:var(--text3)"><div class="spin" style="margin:0 auto 8px"></div>Loading…</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── COMPANIES ── -->
     <div class="page" id="page-companies">
       <div class="filter-bar" style="margin-bottom:14px">
@@ -3014,6 +3033,7 @@ async function loadMyDashboard() {
     // Show for all roles — everyone sees their own task summary
     rws.style.display = '';
     loadRWWidget();
+  loadBMCWidget();
   }
 
   // ── Alert badge ───────────────────────────────────────────────────────────
@@ -4445,6 +4465,8 @@ async function deleteSh(id) { await deactivateSh(id); }
 // MEETINGS
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadMeetings() {
+  // Sync board-meeting compliance alerts
+  try { await api('/api/alerts/sync-board-meetings','POST',{}); } catch(e){}
   const cid = PB.company_id || document.getElementById('mtg-co-f')?.value || '';
   if (cid) { const el = document.getElementById('mtg-co-f'); if(el) el.value = cid; }
   const params = new URLSearchParams();
@@ -4507,6 +4529,8 @@ async function deleteMtg(id) { if (!confirm('Delete meeting?')) return; await ap
 // ALERTS
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadAlerts() {
+  // Sync board-meeting compliance alerts first
+  try { await api('/api/alerts/sync-board-meetings','POST',{}); } catch(e){}
   // Show scope badge based on role
   const scopeBadge = document.getElementById('alt-scope-badge');
   if (scopeBadge && ME) {
@@ -8332,6 +8356,100 @@ function scheduleAutoPreview() { _schedulePreview(); }
 
 
 // Wrap all DOM-dependent init code in DOMContentLoaded to prevent null-reference crashes
+
+// ═══════════════════════════════════════════════════════════════════
+// BOARD MEETING COMPLIANCE WIDGET
+// ═══════════════════════════════════════════════════════════════════
+async function loadBMCWidget() {
+  const wrap = document.getElementById('bmc-widget-wrap');
+  const body = document.getElementById('bmc-body');
+  if (!wrap || !body) return;
+
+  // Only show for superadmin/manager
+  const myRole = CURRENT_USER?.role || '';
+  if (!['superadmin','manager'].includes(myRole)) { wrap.style.display='none'; return; }
+  wrap.style.display = '';
+  body.innerHTML = '<div style="text-align:center;padding:28px;color:var(--text3)"><div class="spin" style="margin:0 auto 8px"></div>Syncing…</div>';
+
+  // Trigger sync first
+  try { await api('/api/alerts/sync-board-meetings','POST',{}); } catch(e){}
+
+  // Fetch board_meeting_compliance alerts
+  const alerts = await api('/api/alerts?type=meeting') || [];
+  const bmAlerts = alerts.filter(a => a.alert_type === 'board_meeting_compliance');
+
+  if (!bmAlerts.length) {
+    body.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text3)">
+      <div style="font-size:28px;margin-bottom:8px">✅</div>
+      <div style="font-weight:600;font-size:13px;color:var(--green)">All companies are compliant</div>
+      <div style="font-size:11px;margin-top:4px">No board meeting compliance issues detected.</div>
+    </div>`;
+    return;
+  }
+
+  // Group by company
+  const byCompany = {};
+  bmAlerts.forEach(a => {
+    const k = a.company_id;
+    if (!byCompany[k]) byCompany[k] = { name: a.company_name || a.company_id, alerts: [] };
+    byCompany[k].alerts.push(a);
+  });
+
+  const sevColor = { critical:'#dc2626', high:'#ea580c', medium:'#d97706', low:'#16a34a' };
+  const sevBg    = { critical:'#fef2f2', high:'#fff7ed', medium:'#fffbeb', low:'#f0fdf4' };
+  const sevIcon  = { critical:'🔴', high:'🟠', medium:'🟡', low:'🟢' };
+
+  let html = `<div style="padding:6px 12px">`;
+
+  Object.values(byCompany).forEach(co => {
+    html += `<div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);padding:6px 8px 4px;
+                  border-bottom:1px solid var(--border);margin-bottom:6px">
+        🏢 ${co.name}
+      </div>`;
+    co.alerts.forEach(a => {
+      const sev = a.severity || 'medium';
+      const isGap = a.entity_id?.startsWith('gap120');
+      const typeLabel = isGap ? '⏱️ 120-Day Gap' : '📅 Quarterly';
+      const dueDate = a.due_date ? new Date(a.due_date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+      const daysLeft = a.due_date ? Math.ceil((new Date(a.due_date)-new Date())/(86400000)) : null;
+      const daysStr = daysLeft !== null ? (daysLeft < 0 ? `<span style="color:#dc2626">${Math.abs(daysLeft)}d overdue</span>` : `<span style="color:${sevColor[sev]}">${daysLeft}d left</span>`) : '';
+
+      html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;margin-bottom:4px;
+                            border-radius:8px;background:${sevBg[sev]};border:1px solid ${sevColor[sev]}22">
+        <div style="font-size:16px;margin-top:1px">${sevIcon[sev]}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:${sevColor[sev]}">${a.title}</span>
+            <span style="font-size:10px;background:${sevColor[sev]}22;color:${sevColor[sev]};
+                          border-radius:4px;padding:1px 7px;font-weight:600">${sev.toUpperCase()}</span>
+            <span style="font-size:10px;color:var(--text3)">${typeLabel}</span>
+            <span style="font-size:10px;color:var(--text3);margin-left:auto">Due: ${dueDate} &nbsp;${daysStr}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px;line-height:1.5">${a.message || ''}</div>
+        </div>
+        <button onclick="dismissBMCAlert('${a.id}')" title="Dismiss" 
+          style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 4px;flex-shrink:0">✕</button>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  html += `</div>`;
+  body.innerHTML = html;
+}
+
+async function dismissBMCAlert(aid) {
+  await api(`/api/alerts/${aid}/dismiss`, 'POST', {});
+  loadBMCWidget();
+  // Also refresh main alert count
+  const d = await api('/api/dashboard');
+  if (d) {
+    const ac = document.getElementById('alert-count');
+    const n = (d.active_alerts || 0);
+    if (ac) { ac.textContent = n; ac.style.display = n>0 ? '' : 'none'; }
+  }
+}
+
 // ── Sidebar group-wise collapse/expand ───────────────────────────────────
 function toggleNavGroup(groupId) {
   const grp = document.getElementById(groupId);
