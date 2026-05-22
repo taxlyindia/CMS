@@ -1708,10 +1708,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
                   <div style="font-family:var(--font-display);font-size:24px;font-weight:800;color:var(--green);letter-spacing:-1px;cursor:pointer" id="rw-assignee-count" onclick="rwOpenDrilldown('all','assignee')">—</div>
                   <div style="font-size:9.5px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px">📋 ASSIGNED USER</div>
                 </div>
-                <div style="width:130px;text-align:center;padding:8px;border-left:1px solid var(--border)">
-                  <div style="font-family:var(--font-display);font-size:24px;font-weight:800;color:var(--purple);letter-spacing:-1px;cursor:pointer" id="rw-total-count" onclick="rwOpenDrilldown('all','all')">—</div>
-                  <div style="font-size:9.5px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.5px">🤝 TEAM MEMBER</div>
-                </div>
+
               </div>
 
               <!-- Module breakdown table -->
@@ -1720,10 +1717,10 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
                   <thead>
                     <tr style="background:linear-gradient(90deg,#0f1829,#1a2744)">
                       <th style="padding:10px 18px;text-align:left;font-size:11px;font-weight:700;color:rgba(255,255,255,.55);letter-spacing:.6px;text-transform:uppercase">Module / Type</th>
-                      <th style="width:100px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:11px;font-weight:700;color:#fcd34d">👑 Leader</th>
-                      <th style="width:100px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:11px;font-weight:700;color:#a5b4fc">🔧 Manager</th>
-                      <th style="width:100px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:11px;font-weight:700;color:#6ee7b7">📋 Assignee</th>
-                      <th style="width:80px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:11px;font-weight:700;color:rgba(255,255,255,.55)">Total</th>
+                      <th style="width:120px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:10px;font-weight:700;color:#fcd34d;letter-spacing:.5px;text-transform:uppercase">👑 As Leader</th>
+                      <th style="width:120px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:10px;font-weight:700;color:#a5b4fc;letter-spacing:.5px;text-transform:uppercase">🔧 As Manager</th>
+                      <th style="width:120px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:10px;font-weight:700;color:#6ee7b7;letter-spacing:.5px;text-transform:uppercase">📋 As Assignee</th>
+                      <th style="width:80px;text-align:center;padding:8px;border-left:1px solid rgba(255,255,255,.08);font-size:10px;font-weight:700;color:rgba(255,255,255,.55);letter-spacing:.5px;text-transform:uppercase">Total</th>
                     </tr>
                   </thead>
                   <tbody id="rw-table-body">
@@ -3143,35 +3140,33 @@ async function loadRWWidget() {
   const d = await api('/api/tasks/rolewise-summary');
   if (!d) {
     const strip = document.getElementById('rw-person-strip');
-    if (strip) strip.innerHTML = '<div style="font-size:12px;color:var(--red);padding:6px 0">⚠️ Could not load team data — try refreshing</div>';
+    if (strip) strip.innerHTML = '<div style="font-size:12px;color:var(--red);padding:6px 0">⚠️ Could not load task data</div>';
     const tbody = document.getElementById('rw-table-body');
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3)">No data available</td></tr>';
     return;
   }
   RW_DATA = d;
 
-  // Totals strip
+  // ── Top-level totals: MY tasks per role ────────────────────────────────────
   const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
   set('rw-leader-count',   d.totals.leader);
   set('rw-manager-count',  d.totals.manager);
   set('rw-assignee-count', d.totals.assignee);
-  set('rw-total-count', (d.totals.leader||0)+(d.totals.manager||0)+(d.totals.assignee||0));
+  set('rw-total-count',    d.totals.total);
 
-  // Hierarchy person cards — if backend returned no persons (0 tasks), load from /api/users
-  let persons = d.persons || [];
+  // ── Person strip — show team members (fallback to /api/users if empty) ─────
+  let persons = (d.persons || []).filter(p => p.id !== d.uid);
   if (!persons.length) {
     const allUsers = await api('/api/users') || [];
     persons = allUsers
-      .filter(u => u.is_active && !u.is_platform_admin)
-      .map(u => ({ id: u.id, name: u.name, role: u.role, pending: 0, completed: 0, overdue: 0 }));
-    persons.sort((a,b) => {
-      const r = {superadmin:1, manager:2, staff:3};
-      return (r[a.role]||9) - (r[b.role]||9);
-    });
+      .filter(u => u.is_active && !u.is_platform_admin && u.id !== d.uid)
+      .map(u => ({ id:u.id, name:u.name, role:u.role,
+                   as_leader:0, as_manager:0, as_assignee:0, pending:0, completed:0 }));
   }
+  persons.sort((a,b)=>({superadmin:1,manager:2,staff:3}[a.role]||9)-({superadmin:1,manager:2,staff:3}[b.role]||9));
   renderRWPersonStrip(persons, d.my_role);
 
-  // Module table
+  // ── Module table ────────────────────────────────────────────────────────────
   renderRWTable();
 }
 
@@ -3224,42 +3219,66 @@ function renderRWPersonStrip(persons, myRole) {
 
 function renderRWTable() {
   if (!RW_DATA) return;
-  const tbody  = document.getElementById('rw-table-body');
+  const tbody = document.getElementById('rw-table-body');
   if (!tbody) return;
-  const mods   = RW_DATA.modules || [];
-  const capMod = s => (s||'general').charAt(0).toUpperCase() + (s||'general').slice(1);
-
-  const chip = (count, role, module) => {
-    if (!count) return '<span style="color:var(--border2);font-size:13px">—</span>';
-    const cls = role==='leader'?'rw-count-leader':role==='manager'?'rw-count-manager':'rw-count-assignee';
-    return `<span class="rw-count-chip ${cls}"
-      onclick="event.stopPropagation();rwOpenDrilldown('${module}','${role}')">${count}</span>`;
-  };
+  const mods = RW_DATA.modules || [];
 
   if (!mods.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text3)">No tasks in your hierarchy yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text3)">No pending tasks assigned to you yet</td></tr>';
     return;
   }
 
-  tbody.innerHTML = mods.map(m => `
-    <tr style="cursor:pointer;border-bottom:1px solid var(--border)"
-        onclick="rwOpenDrilldown('${m.module}','all')"
-        onmouseover="this.style.background='rgba(29,80,224,.025)'"
-        onmouseout="this.style.background=''">
-      <td style="padding:11px 18px">
-        <div style="font-size:13px;font-weight:600;color:var(--text)">${capMod(m.module)}</div>
-        <div style="font-size:10.5px;color:var(--text3);margin-top:2px">${m.total} task${m.total!==1?'s':''} pending</div>
-      </td>
-      <td style="width:130px;text-align:center;padding:8px;border-left:1px solid var(--border)">
-        ${chip(m.leader,'leader',m.module)}</td>
-      <td style="width:130px;text-align:center;padding:8px;border-left:1px solid var(--border)">
-        ${chip(m.manager,'manager',m.module)}</td>
-      <td style="width:130px;text-align:center;padding:8px;border-left:1px solid var(--border)">
-        ${chip(m.assignee,'assignee',m.module)}</td>
-      <td style="width:130px;text-align:center;padding:8px;border-left:1px solid var(--border)">
-        <span style="font-size:13px;font-weight:700;color:var(--text2)">${m.total||0}</span>
-      </td>
-    </tr>`).join('');
+  // Build rows — no nested template literals
+  function mkChip(count, role, mod) {
+    if (!count) return '<span style="color:var(--border2);font-size:14px;font-weight:500">0</span>';
+    const colors = {leader:'#92400e',manager:'#3730a3',assignee:'#065f46'};
+    const bgs    = {leader:'#fef3c7',manager:'#e0e7ff',assignee:'#d1fae5'};
+    const col    = colors[role] || '#374151';
+    const bg     = bgs[role]   || '#f3f4f6';
+    return '<span style="display:inline-flex;align-items:center;justify-content:center;'
+      + 'width:38px;height:38px;border-radius:50%;background:'+bg+';color:'+col+';'
+      + 'font-size:15px;font-weight:800;cursor:pointer" '
+      + 'onclick="event.stopPropagation();rwOpenDrilldown(&quot;'+mod+'&quot;,&quot;'+role+'&quot;)">'
+      + count + '</span>';
+  }
+
+  let html = '';
+  mods.forEach(function(m) {
+    const mod = m.module || 'general';
+    const lbl = _mod_label(mod);
+    const tc  = m.total || 0;
+    html += '<tr class="rw-mod-row" style="cursor:pointer;border-bottom:1px solid var(--border)" '
+      + 'onclick="rwOpenDrilldown(&quot;'+mod+'&quot;,&quot;all&quot;)">'    
+      + '<td style="padding:11px 18px">'
+      +   '<div style="font-size:13px;font-weight:600;color:var(--text)">' + lbl + '</div>'
+      +   '<div style="font-size:10.5px;color:var(--text3);margin-top:2px">' + tc + ' task' + (tc!==1?'s':'') + ' pending</div>'
+      + '</td>'
+      + '<td style="width:120px;text-align:center;padding:10px 8px;border-left:1px solid var(--border)">'
+      +   mkChip(m.leader,'leader',mod)
+      + '</td>'
+      + '<td style="width:120px;text-align:center;padding:10px 8px;border-left:1px solid var(--border)">'
+      +   mkChip(m.manager,'manager',mod)
+      + '</td>'
+      + '<td style="width:120px;text-align:center;padding:10px 8px;border-left:1px solid var(--border)">'
+      +   mkChip(m.assignee,'assignee',mod)
+      + '</td>'
+      + '<td style="width:100px;text-align:center;padding:10px 8px;border-left:1px solid var(--border)">'
+      +   '<span style="font-size:15px;font-weight:800;color:var(--text)">' + tc + '</span>'
+      + '</td>'
+      + '</tr>';
+  });
+
+  // Totals row
+  const t = RW_DATA.totals || {};
+  html += '<tr style="background:var(--bg3);border-top:2px solid var(--border2)">'
+    + '<td style="padding:10px 18px;font-size:11.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Total</td>'
+    + '<td style="text-align:center;padding:10px 8px;border-left:1px solid var(--border);font-size:17px;font-weight:800;color:#92400e">' + (t.leader||0) + '</td>'
+    + '<td style="text-align:center;padding:10px 8px;border-left:1px solid var(--border);font-size:17px;font-weight:800;color:#3730a3">' + (t.manager||0) + '</td>'
+    + '<td style="text-align:center;padding:10px 8px;border-left:1px solid var(--border);font-size:17px;font-weight:800;color:#065f46">' + (t.assignee||0) + '</td>'
+    + '<td style="text-align:center;padding:10px 8px;border-left:1px solid var(--border);font-size:17px;font-weight:800;color:var(--text)">' + (t.total||0) + '</td>'
+    + '</tr>';
+
+  tbody.innerHTML = html;
 }
 
 function rwFilterByPerson(personId, name) {
