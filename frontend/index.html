@@ -1684,8 +1684,8 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
             <div class="rw-widget" id="rw-widget">
               <!-- Header -->
               <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
-                <div style="font-size:13px;font-weight:700;color:var(--text);letter-spacing:.2px">TASK ASSIGNED TO ME</div>
-                <div style="font-size:11px;color:var(--text3);margin-top:2px">Complete hierarchy pendency — your tasks and your team's tasks. Click any count to view.</div>
+                <div style="font-size:13px;font-weight:700;color:var(--text);letter-spacing:.2px">MY TASK PENDENCY</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px">Tasks where you are Leader, Manager, or Assigned User — click any count to drill down.</div>
               </div>
 
               <!-- Hierarchy person cards -->
@@ -3149,10 +3149,9 @@ async function loadRWWidget() {
 
   // ── Top-level totals: MY tasks per role ────────────────────────────────────
   const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
-  set('rw-leader-count',   d.totals.leader);
-  set('rw-manager-count',  d.totals.manager);
-  set('rw-assignee-count', d.totals.assignee);
-  set('rw-total-count',    d.totals.total);
+  set('rw-leader-count',   d.totals.leader);    // tasks where I am Task Leader
+  set('rw-manager-count',  d.totals.manager);   // tasks where I am Task Manager
+  set('rw-assignee-count', d.totals.assignee);  // tasks where I am Assigned User
 
   // ── Person strip — show team members (fallback to /api/users if empty) ─────
   let persons = (d.persons || []).filter(p => p.id !== d.uid);
