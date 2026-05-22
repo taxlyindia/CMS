@@ -3654,7 +3654,11 @@ def tasks_rolewise_summary():
     try:
         conn = get_db(); c = conn.cursor()
 
-        # ── Per-module breakdown (MY roles only) ──────────────────────────────
+        # ── Active statuses (not completed/cancelled) ────────────────────────
+        ACTIVE = ('completed', 'cancelled')
+
+        # ── Per-module breakdown: tasks where I appear in each role ───────────
+        # No tenant filter on tasks — task roles are user-id based
         c.execute("""
             SELECT
                 COALESCE(module,'general') AS module,
@@ -3684,7 +3688,7 @@ def tasks_rolewise_summary():
                 "total":    int(_d.get('total')        or 0),
             })
 
-        # ── Top-level totals ──────────────────────────────────────────────────
+        # ── Top-level totals (same logic, whole table, no module grouping) ────
         c.execute("""
             SELECT
                 COUNT(CASE WHEN task_leader=%s  AND status NOT IN ('completed','cancelled') THEN 1 END) AS leader_cnt,
