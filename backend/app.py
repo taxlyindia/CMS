@@ -375,6 +375,12 @@ def reset_user_password(uid):
 @login_required
 def dashboard():
     run_compliance_checks()
+    # Refresh board meeting compliance alerts on every dashboard load
+    try:
+        _tid = g.tenant_id if hasattr(g, "tenant_id") else None
+        sync_board_meeting_alerts(tenant_id=_tid)
+    except Exception:
+        pass  # Never block dashboard for alert sync failures
     uid  = g.user_id
     role = g.role
     tid  = g.tenant_id          # ← tenant scope
@@ -1048,7 +1054,10 @@ def create_meeting():
          d.get("status","scheduled"),g.user_id,g.tenant_id))
     conn.commit()
     c.execute("SELECT m.*,co.name as company_name FROM meetings m JOIN companies co ON m.company_id=co.id WHERE m.id=%s",(mid,))
-    result=row(c.fetchone()); conn.close(); return jsonify(result),201
+    result=row(c.fetchone()); conn.close()
+    try: sync_board_meeting_alerts(company_id=d.get("company_id"))
+    except Exception: pass
+    return jsonify(result),201
 
 @app.route("/api/meetings/<mid>", methods=["PUT"])
 @login_required
@@ -1060,7 +1069,10 @@ def update_meeting(mid):
     c.execute(f"UPDATE meetings SET {','.join(k+'=%s' for k in fields)} WHERE id=%s",list(fields.values())+[mid])
     conn.commit()
     c.execute("SELECT m.*,co.name as company_name FROM meetings m JOIN companies co ON m.company_id=co.id WHERE m.id=%s",(mid,))
-    result=row(c.fetchone()); conn.close(); return jsonify(result)
+    result=row(c.fetchone()); conn.close()
+    try: sync_board_meeting_alerts(company_id=(result or {}).get("company_id"))
+    except Exception: pass
+    return jsonify(result)
 
 @app.route("/api/meetings/<mid>", methods=["DELETE"])
 @login_required
@@ -2101,6 +2113,228 @@ def resolve_alert(aid):
     conn=get_db(); c=conn.cursor()
     c.execute("UPDATE alerts SET status='resolved',resolved_at=NOW() WHERE id=%s",(aid,))
     conn.commit(); conn.close(); return jsonify({"success":True})
+
+
+# ══ BOARD MEETING COMPLIANCE ALERTS ═════════════════════════════════════════
+# Rules:
+#   1. Every company must hold ≥1 Board Meeting per FY quarter
+#      (Q1: Apr–Jun, Q2: Jul–Sep, Q3: Oct–Dec, Q4: Jan–Mar)
+#   2. Gap between any two consecutive Board Meetings ≤ 120 days
+#   3. Alert raised 15 days BEFORE the deadline
+# ═════════════════════════════════════════════════════════════════════════════
+
+import calendar
+
+def _fy_quarters(today):
+    """
+    Return the current FY and its 4 quarter boundaries as
+    [(q_label, q_start, q_end), ...] where dates are date objects.
+    Indian FY: 1-Apr to 31-Mar
+    """
+    from datetime import date
+    yr = today.year if today.month >= 4 else today.year - 1
+    quarters = [
+        (f"Q1 FY{yr}-{str(yr+1)[-2:]}", date(yr,   4, 1), date(yr,   6, 30)),
+        (f"Q2 FY{yr}-{str(yr+1)[-2:]}", date(yr,   7, 1), date(yr,   9, 30)),
+        (f"Q3 FY{yr}-{str(yr+1)[-2:]}", date(yr,  10, 1), date(yr,  12, 31)),
+        (f"Q4 FY{yr}-{str(yr+1)[-2:]}", date(yr+1, 1, 1), date(yr+1,  3, 31)),
+    ]
+    return quarters
+
+def _upsert_board_alert(c, conn, company_id, tenant_id, alert_key,
+                        title, message, due_date, severity):
+    """
+    Insert or refresh a board-meeting compliance alert.
+    alert_key is stored in entity_id to avoid duplicates.
+    If an identical active alert exists, just refresh due_date/severity/message.
+    """
+    import uuid
+    from datetime import date
+    due_str = due_date.isoformat() if hasattr(due_date,'isoformat') else str(due_date)
+    # Check existing active
+    c.execute("""SELECT id FROM alerts
+                 WHERE company_id=%s AND alert_type='board_meeting_compliance'
+                   AND entity_id=%s AND status='active'""",
+              (company_id, alert_key))
+    row = c.fetchone()
+    if row:
+        c.execute("""UPDATE alerts SET title=%s, message=%s, due_date=%s,
+                         severity=%s, created_at=datetime('now')
+                     WHERE id=%s""",
+                  (title, message, due_str, severity, row[0]))
+    else:
+        c.execute("""INSERT INTO alerts
+                     (id,company_id,entity_type,entity_id,alert_type,
+                      title,message,due_date,severity,status,tenant_id)
+                     VALUES (%s,%s,'meeting',%s,'board_meeting_compliance',
+                             %s,%s,%s,%s,'active',%s)""",
+                  (str(uuid.uuid4()), company_id, alert_key,
+                   title, message, due_str, severity, tenant_id))
+
+def _clear_stale_board_alerts(c, company_id, active_keys):
+    """Dismiss board_meeting_compliance alerts whose keys are no longer relevant."""
+    if active_keys:
+        placeholders = ','.join(['%s']*len(active_keys))
+        c.execute(f"""UPDATE alerts SET status='resolved', resolved_at=datetime('now')
+                      WHERE company_id=%s
+                        AND alert_type='board_meeting_compliance'
+                        AND status='active'
+                        AND entity_id NOT IN ({placeholders})""",
+                  [company_id] + list(active_keys))
+    else:
+        c.execute("""UPDATE alerts SET status='resolved', resolved_at=datetime('now')
+                     WHERE company_id=%s
+                       AND alert_type='board_meeting_compliance'
+                       AND status='active'""",
+                  (company_id,))
+
+def sync_board_meeting_alerts(company_id=None, tenant_id=None):
+    """
+    Core engine. Call with optional company_id to restrict scope.
+    Runs full analysis for all active companies (or the specified one).
+    """
+    from datetime import date, timedelta
+    today = date.today()
+    alert_window = timedelta(days=15)   # alert this many days before deadline
+
+    conn = get_db(); c = conn.cursor()
+
+    # ── Fetch companies ───────────────────────────────────────────────────────
+    if company_id:
+        c.execute("SELECT id, name, tenant_id FROM companies WHERE id=%s", (company_id,))
+    elif tenant_id:
+        c.execute("SELECT id, name, tenant_id FROM companies WHERE tenant_id=%s", (tenant_id,))
+    else:
+        c.execute("SELECT id, name, tenant_id FROM companies")
+    companies = rows(c.fetchall())
+
+    quarters = _fy_quarters(today)
+
+    for co in companies:
+        cid  = co['id']
+        cname = co['name']
+        ctid  = co['tenant_id']
+        active_keys = set()
+
+        # ── Fetch all HELD/scheduled Board meetings for this company ─────────
+        # Include both past (held) and future (scheduled) for gap analysis
+        c.execute("""SELECT meeting_date FROM meetings
+                     WHERE company_id=%s
+                       AND meeting_type='Board'
+                       AND status IN ('held','completed','scheduled','minutes_approved')
+                     ORDER BY meeting_date ASC""", (cid,))
+        mtg_rows = c.fetchall()
+        mtg_dates = []
+        for r in mtg_rows:
+            try:
+                from datetime import datetime as dt
+                d = r[0] if isinstance(r[0], date) else dt.strptime(str(r[0])[:10],'%Y-%m-%d').date()
+                mtg_dates.append(d)
+            except Exception:
+                pass
+
+        # ── RULE 1: Quarterly check ──────────────────────────────────────────
+        for (qlabel, qstart, qend) in quarters:
+            # Only alert for current or upcoming quarters (skip long past)
+            if qend < today - timedelta(days=30):
+                continue
+
+            # Has a board meeting been held in this quarter?
+            held_in_q = [d for d in mtg_dates if qstart <= d <= qend and d <= today]
+
+            if held_in_q:
+                # Requirement already met — no alert needed
+                continue
+
+            # Upcoming scheduled meetings in this quarter
+            sched_in_q = [d for d in mtg_dates if qstart <= d <= qend and d > today]
+
+            # Deadline to hold = last day of quarter; alert 15 days before
+            alert_trigger = qend - alert_window
+
+            if today >= alert_trigger or today >= qstart:
+                # We're inside the alert window or already in the quarter
+                key = f"quarterly_{cid}_{qlabel.replace(' ','_')}"
+                active_keys.add(key)
+
+                days_left = (qend - today).days
+                if sched_in_q:
+                    # Meeting scheduled — just a reminder
+                    sched_str = min(sched_in_q).strftime('%d %b %Y')
+                    sev = 'medium'
+                    title = f"Board Meeting Scheduled — {qlabel} ({cname})"
+                    msg = (f"A Board Meeting is scheduled on {sched_str} for {qlabel}. "
+                           f"Quarter ends on {qend.strftime('%d %b %Y')} ({days_left} days left).")
+                else:
+                    # No meeting at all
+                    sev = 'critical' if days_left <= 7 else ('high' if days_left <= 15 else 'medium')
+                    title = f"Board Meeting Pending — {qlabel} ({cname})"
+                    msg = (f"No Board Meeting held or scheduled in {qlabel} "
+                           f"({qstart.strftime('%d %b')} – {qend.strftime('%d %b %Y')}). "
+                           f"Deadline: {qend.strftime('%d %b %Y')} ({days_left} days left).")
+
+                _upsert_board_alert(c, conn, cid, ctid, key,
+                                    title, msg, qend, sev)
+
+        # ── RULE 2: 120-day gap check ─────────────────────────────────────────
+        if len(mtg_dates) >= 1:
+            # Consider only past/today meetings for gap analysis
+            past = sorted([d for d in mtg_dates if d <= today])
+
+            if past:
+                last_held = past[-1]
+                gap_deadline = last_held + timedelta(days=120)
+                alert_trigger = gap_deadline - alert_window
+
+                if today >= alert_trigger:
+                    # Check whether a future meeting is scheduled before gap_deadline
+                    future_before_deadline = [d for d in mtg_dates
+                                              if d > today and d <= gap_deadline]
+                    days_to_deadline = (gap_deadline - today).days
+                    key = f"gap120_{cid}_{last_held.isoformat()}"
+                    active_keys.add(key)
+
+                    if future_before_deadline:
+                        sched_str = min(future_before_deadline).strftime('%d %b %Y')
+                        sev = 'medium'
+                        title = f"120-Day Gap — Meeting Scheduled ({cname})"
+                        msg = (f"Last Board Meeting: {last_held.strftime('%d %b %Y')}. "
+                               f"Next meeting scheduled {sched_str} (within 120-day limit of "
+                               f"{gap_deadline.strftime('%d %b %Y')}).")
+                    else:
+                        sev = 'critical' if days_to_deadline <= 7 else ('high' if days_to_deadline <= 15 else 'medium')
+                        title = f"120-Day Board Meeting Gap Alert ({cname})"
+                        msg = (f"Last Board Meeting was on {last_held.strftime('%d %b %Y')}. "
+                               f"Next meeting must be held by {gap_deadline.strftime('%d %b %Y')} "
+                               f"(120-day limit). {days_to_deadline} days remaining. "
+                               f"No meeting scheduled yet.")
+
+                    _upsert_board_alert(c, conn, cid, ctid, key,
+                                        title, msg, gap_deadline, sev)
+
+        # ── Remove stale alerts for this company ──────────────────────────────
+        _clear_stale_board_alerts(c, cid, active_keys)
+
+    conn.commit()
+    conn.close()
+
+
+@app.route("/api/alerts/sync-board-meetings", methods=["POST"])
+@login_required
+def sync_board_meeting_alerts_route():
+    """Trigger board meeting compliance alert sync (superadmin or manager)."""
+    role = g.role
+    if role not in ("superadmin", "manager"):
+        return jsonify({"error": "Forbidden"}), 403
+    cid = request.json.get("company_id") if request.json else None
+    tid = g.tenant_id if hasattr(g, "tenant_id") else None
+    try:
+        sync_board_meeting_alerts(company_id=cid, tenant_id=tid)
+        return jsonify({"success": True, "message": "Board meeting compliance alerts synced."})
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "detail": traceback.format_exc()[-800:]}), 500
+
 
 # ══ TASKS ════════════════════════════════════════════════════════════════════
 @app.route("/api/tasks")
