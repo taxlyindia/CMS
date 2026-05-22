@@ -3636,80 +3636,81 @@ def my_dashboard():
 @login_required
 def tasks_rolewise_summary():
     """
-    Task pendency for the LOGGED-IN USER broken down by their role per task.
-    - leader_cnt   = tasks where I am task_leader   (active/pending)
-    - manager_cnt  = tasks where I am task_manager  (active/pending)
-    - assignee_cnt = tasks where I am assigned_to   (active/pending)
-    - total        = distinct tasks where I appear in ANY of the three roles
-    Grouped by module for the table, plus top-level totals.
-    Also returns team members (persons) for the person-strip.
+    Returns task counts for the logged-in user broken down by role:
+      leader_cnt   = tasks where task_leader  = me  (not done)
+      manager_cnt  = tasks where task_manager = me  (not done)
+      assignee_cnt = tasks where assigned_to  = me  (not done)
+      total        = distinct tasks where I appear in any role
     """
-    uid   = g.user_id
-    role  = g.role
-    _tid  = g.tenant_id
-    DONE  = ('completed', 'cancelled')
+    uid  = g.user_id
+    role = g.role
+    _tid = getattr(g, 'tenant_id', None)
     empty = {"uid": uid, "my_role": role,
              "totals": {"leader":0,"manager":0,"assignee":0,"total":0},
-             "modules": [], "persons": []}
+             "modules": [], "persons": [], "debug": ""}
     try:
         conn = get_db(); c = conn.cursor()
+        EXCL = ('completed', 'cancelled')
 
-        # ── Active statuses (not completed/cancelled) ────────────────────────
-        ACTIVE = ('completed', 'cancelled')
-
-        # ── Per-module breakdown: tasks where I appear in each role ───────────
-        # No tenant filter on tasks — task roles are user-id based
+        # ── Per-module breakdown ──────────────────────────────────────────────
         c.execute("""
             SELECT
-                COALESCE(module,'general') AS module,
-                COUNT(CASE WHEN task_leader=%s   AND status NOT IN ('completed','cancelled') THEN 1 END) AS leader_cnt,
-                COUNT(CASE WHEN task_manager=%s  AND status NOT IN ('completed','cancelled') THEN 1 END) AS manager_cnt,
-                COUNT(CASE WHEN assigned_to=%s   AND status NOT IN ('completed','cancelled') THEN 1 END) AS assignee_cnt,
-                COUNT(CASE WHEN (task_leader=%s OR task_manager=%s OR assigned_to=%s)
+                COALESCE(module, 'general')                                         AS module,
+                COUNT(CASE WHEN task_leader  = %s AND status NOT IN ('completed','cancelled') THEN 1 END) AS leader_cnt,
+                COUNT(CASE WHEN task_manager = %s AND status NOT IN ('completed','cancelled') THEN 1 END) AS manager_cnt,
+                COUNT(CASE WHEN assigned_to  = %s AND status NOT IN ('completed','cancelled') THEN 1 END) AS assignee_cnt,
+                COUNT(CASE WHEN (task_leader = %s OR task_manager = %s OR assigned_to = %s)
                                AND status NOT IN ('completed','cancelled') THEN 1 END) AS total
             FROM tasks
-            WHERE (task_leader=%s OR task_manager=%s OR assigned_to=%s)
+            WHERE (task_leader = %s OR task_manager = %s OR assigned_to = %s)
               AND status NOT IN ('completed','cancelled')
-            GROUP BY COALESCE(module,'general')
+            GROUP BY COALESCE(module, 'general')
             ORDER BY total DESC
         """, (uid, uid, uid, uid, uid, uid, uid, uid, uid))
 
+        # ── Parse module rows ─────────────────────────────────────────────────
         modules = []
         for _r in c.fetchall():
-            _d = _r if isinstance(_r, dict) else {
-                'module': _r[0], 'leader_cnt': _r[1],
-                'manager_cnt': _r[2], 'assignee_cnt': _r[3], 'total': _r[4]
-            }
-            modules.append({
-                "module":   _d.get('module') or 'general',
-                "leader":   int(_d.get('leader_cnt')   or 0),
-                "manager":  int(_d.get('manager_cnt')  or 0),
-                "assignee": int(_d.get('assignee_cnt') or 0),
-                "total":    int(_d.get('total')        or 0),
-            })
+            if isinstance(_r, dict):
+                _mod = _r.get('module') or 'general'
+                _l   = int(_r.get('leader_cnt')   or 0)
+                _m   = int(_r.get('manager_cnt')  or 0)
+                _a   = int(_r.get('assignee_cnt') or 0)
+                _t   = int(_r.get('total')        or 0)
+            else:
+                _mod = _r[0] or 'general'
+                _l   = int(_r[1] or 0)
+                _m   = int(_r[2] or 0)
+                _a   = int(_r[3] or 0)
+                _t   = int(_r[4] or 0)
+            modules.append({"module":_mod,"leader":_l,"manager":_m,"assignee":_a,"total":_t})
 
-        # ── Top-level totals (same logic, whole table, no module grouping) ────
+        # ── Top-level totals ──────────────────────────────────────────────────
         c.execute("""
             SELECT
-                COUNT(CASE WHEN task_leader=%s  AND status NOT IN ('completed','cancelled') THEN 1 END) AS leader_cnt,
-                COUNT(CASE WHEN task_manager=%s AND status NOT IN ('completed','cancelled') THEN 1 END) AS manager_cnt,
-                COUNT(CASE WHEN assigned_to=%s  AND status NOT IN ('completed','cancelled') THEN 1 END) AS assignee_cnt,
-                COUNT(CASE WHEN (task_leader=%s OR task_manager=%s OR assigned_to=%s)
+                COUNT(CASE WHEN task_leader  = %s AND status NOT IN ('completed','cancelled') THEN 1 END) AS leader_cnt,
+                COUNT(CASE WHEN task_manager = %s AND status NOT IN ('completed','cancelled') THEN 1 END) AS manager_cnt,
+                COUNT(CASE WHEN assigned_to  = %s AND status NOT IN ('completed','cancelled') THEN 1 END) AS assignee_cnt,
+                COUNT(CASE WHEN (task_leader = %s OR task_manager = %s OR assigned_to = %s)
                                AND status NOT IN ('completed','cancelled') THEN 1 END) AS total_cnt
             FROM tasks
         """, (uid, uid, uid, uid, uid, uid))
         _tr = c.fetchone()
         if _tr:
-            _td = _tr if isinstance(_tr, dict) else {
-                'leader_cnt': _tr[0], 'manager_cnt': _tr[1],
-                'assignee_cnt': _tr[2], 'total_cnt': _tr[3]
-            }
-            totals = {
-                "leader":   int(_td.get('leader_cnt')   or 0),
-                "manager":  int(_td.get('manager_cnt')  or 0),
-                "assignee": int(_td.get('assignee_cnt') or 0),
-                "total":    int(_td.get('total_cnt')    or 0),
-            }
+            if isinstance(_tr, dict):
+                totals = {
+                    "leader":   int(_tr.get('leader_cnt')   or 0),
+                    "manager":  int(_tr.get('manager_cnt')  or 0),
+                    "assignee": int(_tr.get('assignee_cnt') or 0),
+                    "total":    int(_tr.get('total_cnt')    or 0),
+                }
+            else:
+                totals = {
+                    "leader":   int(_tr[0] or 0),
+                    "manager":  int(_tr[1] or 0),
+                    "assignee": int(_tr[2] or 0),
+                    "total":    int(_tr[3] or 0),
+                }
         else:
             totals = {"leader":0,"manager":0,"assignee":0,"total":0}
 
@@ -3736,12 +3737,17 @@ def tasks_rolewise_summary():
 
         conn.close()
         return jsonify({
-            "uid": uid, "my_role": role,
-            "totals": totals, "modules": modules, "persons": persons
+            "uid":     uid,
+            "my_role": role,
+            "totals":  totals,
+            "modules": modules,
+            "persons": persons,
         })
     except Exception as _ex:
         import traceback as _tb
-        app.logger.error(f"rolewise-summary error: {_ex}\n{_tb.format_exc()}")
+        _tb_str = _tb.format_exc()
+        app.logger.error(f"rolewise-summary error: {_ex}\n{_tb_str}")
+        empty["debug"] = str(_ex)
         return jsonify(empty)
 
 @app.route("/api/tasks/by-role-module")
