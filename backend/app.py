@@ -3635,112 +3635,106 @@ def my_dashboard():
 @app.route("/api/tasks/rolewise-summary")
 @login_required
 def tasks_rolewise_summary():
-    """Role-wise hierarchy pendency tracker. Returns empty data on DB errors."""
-    uid  = g.user_id
-    role = g.role
+    """
+    Task pendency for the LOGGED-IN USER broken down by their role per task.
+    - leader_cnt   = tasks where I am task_leader   (active/pending)
+    - manager_cnt  = tasks where I am task_manager  (active/pending)
+    - assignee_cnt = tasks where I am assigned_to   (active/pending)
+    - total        = distinct tasks where I appear in ANY of the three roles
+    Grouped by module for the table, plus top-level totals.
+    Also returns team members (persons) for the person-strip.
+    """
+    uid   = g.user_id
+    role  = g.role
+    _tid  = g.tenant_id
+    DONE  = ('completed', 'cancelled')
     empty = {"uid": uid, "my_role": role,
              "totals": {"leader":0,"manager":0,"assignee":0,"total":0},
              "modules": [], "persons": []}
     try:
         conn = get_db(); c = conn.cursor()
-        _tid = g.tenant_id
 
-        # Module breakdown
-        if role == "superadmin":
-            c.execute("""
-                SELECT COALESCE(t.module,'general') AS module,
-                    COUNT(CASE WHEN t.task_leader=%s  AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS leader_cnt,
-                    COUNT(CASE WHEN t.task_manager IS NOT NULL AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS manager_cnt,
-                    COUNT(CASE WHEN t.assigned_to  IS NOT NULL AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS assignee_cnt,
-                    COUNT(CASE WHEN t.status NOT IN ('completed','cancelled') THEN 1 END) AS total
-                FROM tasks t WHERE t.task_leader=%s
-                GROUP BY COALESCE(t.module,'general') ORDER BY total DESC
-            """, (uid, uid))
-        elif role == "manager":
-            c.execute("""
-                SELECT COALESCE(t.module,'general') AS module,
-                    COUNT(CASE WHEN t.task_leader IS NOT NULL AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS leader_cnt,
-                    COUNT(CASE WHEN t.task_manager=%s AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS manager_cnt,
-                    COUNT(CASE WHEN t.assigned_to  IS NOT NULL AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS assignee_cnt,
-                    COUNT(CASE WHEN t.status NOT IN ('completed','cancelled') THEN 1 END) AS total
-                FROM tasks t WHERE t.task_manager=%s
-                GROUP BY COALESCE(t.module,'general') ORDER BY total DESC
-            """, (uid, uid))
-        else:
-            c.execute("""
-                SELECT COALESCE(t.module,'general') AS module,
-                    0 AS leader_cnt, 0 AS manager_cnt,
-                    COUNT(CASE WHEN t.assigned_to=%s AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS assignee_cnt,
-                    COUNT(CASE WHEN t.assigned_to=%s AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS total
-                FROM tasks t WHERE t.assigned_to=%s
-                GROUP BY COALESCE(t.module,'general') ORDER BY total DESC
-            """, (uid, uid, uid))
+        # ── Per-module breakdown (MY roles only) ──────────────────────────────
+        c.execute("""
+            SELECT
+                COALESCE(module,'general') AS module,
+                COUNT(CASE WHEN task_leader=%s   AND status NOT IN ('completed','cancelled') THEN 1 END) AS leader_cnt,
+                COUNT(CASE WHEN task_manager=%s  AND status NOT IN ('completed','cancelled') THEN 1 END) AS manager_cnt,
+                COUNT(CASE WHEN assigned_to=%s   AND status NOT IN ('completed','cancelled') THEN 1 END) AS assignee_cnt,
+                COUNT(CASE WHEN (task_leader=%s OR task_manager=%s OR assigned_to=%s)
+                               AND status NOT IN ('completed','cancelled') THEN 1 END) AS total
+            FROM tasks
+            WHERE (task_leader=%s OR task_manager=%s OR assigned_to=%s)
+              AND status NOT IN ('completed','cancelled')
+            GROUP BY COALESCE(module,'general')
+            ORDER BY total DESC
+        """, (uid, uid, uid, uid, uid, uid, uid, uid, uid))
 
         modules = []
         for _r in c.fetchall():
-            if isinstance(_r, dict):
-                modules.append({"module":_r.get('module','general'),"leader":int(_r.get('leader_cnt',0) or 0),
-                                 "manager":int(_r.get('manager_cnt',0) or 0),"assignee":int(_r.get('assignee_cnt',0) or 0),
-                                 "total":int(_r.get('total',0) or 0)})
-            else:
-                modules.append({"module":_r[0],"leader":int(_r[1] or 0),"manager":int(_r[2] or 0),
-                                 "assignee":int(_r[3] or 0),"total":int(_r[4] or 0)})
+            _d = _r if isinstance(_r, dict) else {
+                'module': _r[0], 'leader_cnt': _r[1],
+                'manager_cnt': _r[2], 'assignee_cnt': _r[3], 'total': _r[4]
+            }
+            modules.append({
+                "module":   _d.get('module') or 'general',
+                "leader":   int(_d.get('leader_cnt')   or 0),
+                "manager":  int(_d.get('manager_cnt')  or 0),
+                "assignee": int(_d.get('assignee_cnt') or 0),
+                "total":    int(_d.get('total')        or 0),
+            })
 
-        totals = {"leader":sum(m["leader"] for m in modules),"manager":sum(m["manager"] for m in modules),
-                  "assignee":sum(m["assignee"] for m in modules),"total":sum(m["total"] for m in modules)}
-
-        # Per-person breakdown
-        persons = []
-        if role == "superadmin":
-            q = """
-                SELECT u.id, u.name, u.role,
-                    COUNT(CASE WHEN (
-                        (u.role='superadmin' AND t.task_leader=u.id) OR
-                        (u.role='manager'    AND t.task_manager=u.id) OR
-                        (u.role='staff'      AND t.assigned_to=u.id)
-                    ) AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
-                    COUNT(CASE WHEN (
-                        (u.role='superadmin' AND t.task_leader=u.id) OR
-                        (u.role='manager'    AND t.task_manager=u.id) OR
-                        (u.role='staff'      AND t.assigned_to=u.id)
-                    ) AND t.status='completed' THEN 1 END) AS completed,
-                    COUNT(CASE WHEN (
-                        (u.role='superadmin' AND t.task_leader=u.id) OR
-                        (u.role='manager'    AND t.task_manager=u.id) OR
-                        (u.role='staff'      AND t.assigned_to=u.id)
-                    ) AND t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
-                FROM users u
-                LEFT JOIN tasks t ON t.task_leader=%s
-                WHERE u.is_active=1 AND u.is_platform_admin=0"""
-            # Show ALL active team members even with 0 tasks (use LEFT JOIN)
-            if _tid:
-                c.execute(q + " AND (u.tenant_id=%s OR u.tenant_id IS NULL) GROUP BY u.id,u.name,u.role ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC", (uid, _tid))
-            else:
-                c.execute(q + " GROUP BY u.id,u.name,u.role ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC", (uid,))
-        elif role == "manager":
-            q = """
-                SELECT u.id, u.name, u.role,
-                    COUNT(CASE WHEN t.assigned_to=u.id AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
-                    COUNT(CASE WHEN t.assigned_to=u.id AND t.status='completed' THEN 1 END) AS completed,
-                    COUNT(CASE WHEN t.assigned_to=u.id AND t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
-                FROM users u LEFT JOIN tasks t ON t.task_manager=%s
-                WHERE u.is_active=1 AND u.is_platform_admin=0"""
-            if _tid:
-                c.execute(q + " AND (u.tenant_id=%s OR u.tenant_id IS NULL) GROUP BY u.id,u.name,u.role ORDER BY pending DESC", (uid, _tid))
-            else:
-                c.execute(q + " GROUP BY u.id,u.name,u.role ORDER BY pending DESC", (uid,))
+        # ── Top-level totals ──────────────────────────────────────────────────
+        c.execute("""
+            SELECT
+                COUNT(CASE WHEN task_leader=%s  AND status NOT IN ('completed','cancelled') THEN 1 END) AS leader_cnt,
+                COUNT(CASE WHEN task_manager=%s AND status NOT IN ('completed','cancelled') THEN 1 END) AS manager_cnt,
+                COUNT(CASE WHEN assigned_to=%s  AND status NOT IN ('completed','cancelled') THEN 1 END) AS assignee_cnt,
+                COUNT(CASE WHEN (task_leader=%s OR task_manager=%s OR assigned_to=%s)
+                               AND status NOT IN ('completed','cancelled') THEN 1 END) AS total_cnt
+            FROM tasks
+        """, (uid, uid, uid, uid, uid, uid))
+        _tr = c.fetchone()
+        if _tr:
+            _td = _tr if isinstance(_tr, dict) else {
+                'leader_cnt': _tr[0], 'manager_cnt': _tr[1],
+                'assignee_cnt': _tr[2], 'total_cnt': _tr[3]
+            }
+            totals = {
+                "leader":   int(_td.get('leader_cnt')   or 0),
+                "manager":  int(_td.get('manager_cnt')  or 0),
+                "assignee": int(_td.get('assignee_cnt') or 0),
+                "total":    int(_td.get('total_cnt')    or 0),
+            }
         else:
-            c.execute("""
-                SELECT u.id, u.name, u.role,
-                    COUNT(CASE WHEN t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
-                    COUNT(CASE WHEN t.status='completed' THEN 1 END) AS completed,
-                    COUNT(CASE WHEN t.due_date < CURRENT_DATE AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS overdue
-                FROM users u JOIN tasks t ON t.assigned_to=u.id
-                WHERE u.id=%s GROUP BY u.id,u.name,u.role
-            """, (uid,))
+            totals = {"leader":0,"manager":0,"assignee":0,"total":0}
+
+        # ── Person strip: all active users + their task counts ────────────────
+        # Shows team members for context (leader sees full team, others see peers)
+        q_persons = """
+            SELECT u.id, u.name, u.role,
+                COUNT(CASE WHEN t.task_leader=u.id   AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS as_leader,
+                COUNT(CASE WHEN t.task_manager=u.id  AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS as_manager,
+                COUNT(CASE WHEN t.assigned_to=u.id   AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS as_assignee,
+                COUNT(CASE WHEN (t.task_leader=u.id OR t.task_manager=u.id OR t.assigned_to=u.id)
+                               AND t.status NOT IN ('completed','cancelled') THEN 1 END) AS pending,
+                COUNT(CASE WHEN (t.task_leader=u.id OR t.task_manager=u.id OR t.assigned_to=u.id)
+                               AND t.status='completed' THEN 1 END) AS completed
+            FROM users u
+            LEFT JOIN tasks t ON (t.task_leader=u.id OR t.task_manager=u.id OR t.assigned_to=u.id)
+            WHERE u.is_active=1 AND u.is_platform_admin=0
+        """
+        if _tid:
+            c.execute(q_persons + " AND (u.tenant_id=%s OR u.tenant_id IS NULL) GROUP BY u.id,u.name,u.role ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC", (_tid,))
+        else:
+            c.execute(q_persons + " GROUP BY u.id,u.name,u.role ORDER BY CASE u.role WHEN 'superadmin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END, pending DESC")
         persons = rows(c.fetchall())
+
         conn.close()
-        return jsonify({"uid":uid,"my_role":role,"totals":totals,"modules":modules,"persons":persons})
+        return jsonify({
+            "uid": uid, "my_role": role,
+            "totals": totals, "modules": modules, "persons": persons
+        })
     except Exception as _ex:
         import traceback as _tb
         app.logger.error(f"rolewise-summary error: {_ex}\n{_tb.format_exc()}")
