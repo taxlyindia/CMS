@@ -34,67 +34,159 @@ DB_PATH = BASE_DIR / "data" / "compli.db"
 # ══════════════════════════════════════════════════════════════════════════════
 # PostgreSQL connection
 # ══════════════════════════════════════════════════════════════════════════════
-# ── Connection pool (prevents per-request reconnect overhead) ───────────────
-_PG_POOL = None
+import logging as _log
+_logger = _log.getLogger(__name__)
 
-def _get_pg_pool():
-    global _PG_POOL
-    if _PG_POOL is None:
-        try:
-            from psycopg2 import pool as pg_pool
-            from urllib.parse import urlparse
-            p = urlparse(DATABASE_URL)
-            _PG_POOL = pg_pool.ThreadedConnectionPool(
-                minconn = 2,
-                maxconn = int(os.environ.get("DB_POOL_MAX", "10")),
-                host     = p.hostname,
-                port     = p.port or 5432,
-                dbname   = p.path.lstrip("/"),
-                user     = p.username,
-                password = p.password,
-                sslmode  = os.environ.get("DB_SSLMODE", "require"),
-            )
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Connection pool init failed: {e} — falling back to single connection")
-            _PG_POOL = None
-    return _PG_POOL
-
-
-def _pg_conn():
-    pool = _get_pg_pool()
-    if pool:
-        return pool.getconn()
-    # Fallback: direct connection
+# ── Build connection kwargs once ────────────────────────────────────────────
+def _pg_kwargs():
     from urllib.parse import urlparse
     p = urlparse(DATABASE_URL)
-    return psycopg2.connect(
+    return dict(
         host     = p.hostname,
         port     = p.port or 5432,
         dbname   = p.path.lstrip("/"),
         user     = p.username,
         password = p.password,
         sslmode  = os.environ.get("DB_SSLMODE", "require"),
+        # Keep-alive: detects dead connections before we try to use them
+        keepalives          = 1,
+        keepalives_idle     = 30,   # seconds idle before first keepalive probe
+        keepalives_interval = 10,   # seconds between probes
+        keepalives_count    = 5,    # drop after 5 failed probes
+        connect_timeout     = 10,   # fail fast instead of hanging
     )
 
 
+# ── Connection health check ─────────────────────────────────────────────────
+def _conn_is_alive(conn) -> bool:
+    """
+    Cheaply verify that a pooled connection is still usable.
+    Catches the two errors shown in the screenshot:
+      • psycopg2.OperationalError: SSL error: decryption failed or bad record mac
+      • psycopg2.OperationalError: SSL SYSCALL error: EOF detected
+    """
+    try:
+        conn.poll()   # non-blocking check — raises if connection is dead
+        # Also do a lightweight round-trip to catch silent TCP drops
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+
+# ── Optional connection pool (disable with DB_USE_POOL=0) ──────────────────
+_USE_POOL = os.environ.get("DB_USE_POOL", "1") == "1"
+_PG_POOL  = None
+_POOL_LOCK = None
+
+def _get_pg_pool():
+    """
+    Returns a ThreadedConnectionPool, or None if pool is disabled/failed.
+    Pool is created lazily and protected by a threading.Lock so it is
+    initialised exactly once even under concurrent gunicorn workers.
+    """
+    global _PG_POOL, _POOL_LOCK
+    if not _USE_POOL:
+        return None
+
+    # Initialise the lock on first call (avoids import-time threading overhead)
+    if _POOL_LOCK is None:
+        import threading
+        _POOL_LOCK = threading.Lock()
+
+    if _PG_POOL is not None:
+        return _PG_POOL
+
+    with _POOL_LOCK:
+        if _PG_POOL is not None:     # double-checked locking
+            return _PG_POOL
+        try:
+            from psycopg2 import pool as _pg_pool
+            _PG_POOL = _pg_pool.ThreadedConnectionPool(
+                minconn = int(os.environ.get("DB_POOL_MIN", "1")),
+                maxconn = int(os.environ.get("DB_POOL_MAX", "8")),
+                **_pg_kwargs(),
+            )
+            _logger.info("PostgreSQL connection pool created (min=%s max=%s)",
+                         os.environ.get("DB_POOL_MIN","1"),
+                         os.environ.get("DB_POOL_MAX","8"))
+        except Exception as e:
+            _logger.warning("Connection pool init failed (%s) — using per-request connections", e)
+            _PG_POOL = None
+    return _PG_POOL
+
+
+def _pg_conn():
+    """
+    Obtain a live PostgreSQL connection.
+    If the pool is enabled, pop a connection and health-check it.
+    If the health-check fails, discard the stale connection and open a fresh one.
+    Falls back to per-request connections when the pool is unavailable.
+    """
+    pool = _get_pg_pool()
+    if pool:
+        try:
+            conn = pool.getconn()
+            if conn is None:
+                raise Exception("Pool returned None")
+            # ── Health check: discard stale / dead SSL connections ─────────
+            if not _conn_is_alive(conn):
+                _logger.debug("Discarding stale pooled connection, opening fresh one")
+                try:
+                    pool.putconn(conn, close=True)   # close=True destroys it
+                except Exception:
+                    pass
+                # Open a fresh connection outside the pool for this request
+                conn = psycopg2.connect(**_pg_kwargs())
+            return conn
+        except Exception as e:
+            _logger.warning("Pool.getconn failed (%s), falling back to direct connect", e)
+
+    # Direct connection (no pool, or pool exhausted/failed)
+    return psycopg2.connect(**_pg_kwargs())
+
+
 class PGConnection:
-    """Thin wrapper: makes psycopg2 behave like sqlite3 for our row/rows helpers."""
+    """
+    Thin wrapper that makes psycopg2 behave like sqlite3 for our row/rows helpers.
+    On close():
+      - If conn came from the pool and is healthy → return to pool (putconn)
+      - If conn is broken → discard with close=True so the pool replaces it
+      - If conn was a direct connection → just close()
+    """
     def __init__(self, conn):
-        self._conn = conn
+        self._conn  = conn
+        self._pool  = _get_pg_pool()
+
     def cursor(self):
         return self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    def commit(self):   self._conn.commit()
-    def rollback(self): self._conn.rollback()
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        try:
+            self._conn.rollback()
+        except Exception:
+            pass
+
     def close(self):
-        pool = _get_pg_pool()
-        if pool:
+        if self._pool:
             try:
-                pool.putconn(self._conn)
+                # Only return healthy connections to the pool
+                if _conn_is_alive(self._conn):
+                    self._pool.putconn(self._conn)
+                else:
+                    _logger.debug("Closing broken connection (not returned to pool)")
+                    self._pool.putconn(self._conn, close=True)
                 return
-            except Exception:
-                pass
-        self._conn.close()
+            except Exception as e:
+                _logger.debug("putconn failed (%s), closing directly", e)
+        try:
+            self._conn.close()
+        except Exception:
+            pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -168,9 +260,16 @@ def _sqlite_conn():
 # Public API
 # ══════════════════════════════════════════════════════════════════════════════
 def get_db():
+    """
+    Returns a connection wrapper.
+    For PostgreSQL: always autocommit=False so callers explicitly commit/rollback.
+    """
     if USE_POSTGRES:
         conn = _pg_conn()
-        conn.autocommit = False
+        try:
+            conn.autocommit = False   # explicit transaction control
+        except Exception:
+            pass   # already set or connection is being health-checked
         return PGConnection(conn)
     return _sqlite_conn()
 
