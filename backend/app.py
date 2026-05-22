@@ -36,8 +36,19 @@ UPLOAD_DIR = BASE_DIR / "data" / "uploads"
 ALLOWED_EXT = {".pdf",".doc",".docx",".jpg",".jpeg",".png"}
 
 import os as _os
-_ROOT     = _os.path.dirname(_os.path.abspath(__file__))
-_FRONTEND = _os.path.join(_ROOT, '..', 'frontend')
+_ROOT = _os.path.dirname(_os.path.abspath(__file__))
+# Try multiple candidate paths so deployment works regardless of folder structure
+_FRONTEND_CANDIDATES = [
+    _os.path.join(_ROOT, '..', 'frontend'),   # backend/app.py → ../frontend/
+    _os.path.join(_ROOT, 'frontend'),          # app.py → frontend/  (flat layout)
+    _os.path.join(_ROOT),                      # same folder as app.py
+    _os.path.join(_ROOT, '..'),               # parent of app.py
+]
+_FRONTEND = next(
+    (p for p in _FRONTEND_CANDIDATES
+     if _os.path.isfile(_os.path.join(p, 'index.html'))),
+    _os.path.join(_ROOT, '..', 'frontend')    # fallback (original)
+)
 app = Flask(__name__, static_folder=str(BASE_DIR/"static"))
 import os as _cors_os
 _ALLOWED_ORIGINS = _cors_os.environ.get('ALLOWED_ORIGINS', '*').split(',')
