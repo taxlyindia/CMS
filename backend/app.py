@@ -3514,41 +3514,47 @@ def my_dashboard():
     today = date.today()
     week  = today + timedelta(days=7)
 
-    # Column filter based on role
+    # Role column for primary task list display
     if role == "superadmin":
         my_col = "task_leader"
     elif role == "manager":
         my_col = "task_manager"
-    else:  # staff / any other
+    else:
         my_col = "assigned_to"
 
-    # Task summary counts (only my tasks per role)
-    c.execute(f"""SELECT status, COUNT(*) as cnt FROM tasks WHERE {my_col}=%s GROUP BY status""", (uid,))
+    # Task summary counts — count ALL tasks where I appear in ANY of the 3 roles
+    # This gives accurate totals across leader + manager + assignee columns
+    c.execute("""SELECT status, COUNT(*) AS cnt FROM tasks
+                  WHERE (task_leader=%s OR task_manager=%s OR assigned_to=%s)
+                  GROUP BY status""", (uid, uid, uid))
     task_counts = {}
     for _r in c.fetchall():
         if isinstance(_r, dict):
-            task_counts[_r.get('status', list(_r.values())[0])] = _r.get('cnt', list(_r.values())[1])
+            task_counts[_r.get('status')] = int(_r.get('cnt') or 0)
         else:
-            task_counts[_r[0]] = _r[1]
+            task_counts[_r[0]] = int(_r[1] or 0)
 
-    c.execute(f"""SELECT COUNT(*) FROM tasks WHERE {my_col}=%s
+    c.execute("""SELECT COUNT(*) FROM tasks
+                  WHERE (task_leader=%s OR task_manager=%s OR assigned_to=%s)
                   AND due_date=%s AND status NOT IN ('completed','cancelled')""",
-              (uid, str(today)))
+              (uid, uid, uid, str(today)))
     due_today = _count(c)
 
-    c.execute(f"""SELECT COUNT(*) FROM tasks WHERE {my_col}=%s
+    c.execute("""SELECT COUNT(*) FROM tasks
+                  WHERE (task_leader=%s OR task_manager=%s OR assigned_to=%s)
                   AND due_date BETWEEN %s AND %s AND status NOT IN ('completed','cancelled')""",
-              (uid, str(today), str(week)))
+              (uid, uid, uid, str(today), str(week)))
     due_week = _count(c)
 
-    c.execute(f"""SELECT COUNT(*) FROM tasks WHERE {my_col}=%s
+    c.execute("""SELECT COUNT(*) FROM tasks
+                  WHERE (task_leader=%s OR task_manager=%s OR assigned_to=%s)
                   AND due_date < %s AND status NOT IN ('completed','cancelled')""",
-              (uid, str(today)))
+              (uid, uid, uid, str(today)))
     overdue = _count(c)
 
-    # Full task list — only tasks where I play MY role
-    # Always join all three roles so frontend can show "who else is on this task"
-    task_sql = f"""
+    # Full task list — tasks where I appear in ANY of the 3 role columns
+    # Always join all three roles so frontend shows the complete hierarchy chain
+    task_sql = """
         SELECT t.*,
                co.name  AS company_name,
                ul.name  AS task_leader_name,
@@ -3562,13 +3568,14 @@ def my_dashboard():
         LEFT JOIN users ul ON t.task_leader  = ul.id
         LEFT JOIN users um ON t.task_manager = um.id
         LEFT JOIN users ua ON t.assigned_to  = ua.id
-        WHERE t.{my_col} = %s
+        WHERE (t.task_leader = %s OR t.task_manager = %s OR t.assigned_to = %s)
+          AND t.status NOT IN ('completed', 'cancelled')
         ORDER BY
             CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2
                             WHEN 'medium'   THEN 3 ELSE 4 END,
             t.due_date
     """
-    c.execute(task_sql, (uid,))
+    c.execute(task_sql, (uid, uid, uid))
     my_tasks = rows(c.fetchall())
 
     # ── Role-wise team summary (superadmin + manager see this) ──────────────
