@@ -24,8 +24,8 @@ except ImportError:
 from flask import Flask, request, jsonify, send_file, g, send_from_directory
 from werkzeug.utils import secure_filename
 
-from database import get_db, row, rows, hash_pw, init_db, ensure_custom_placeholders_table, ensure_permission_tables, ensure_custom_placeholders_table
-from auth import login_required, require_role, platform_admin_required, make_token, hash_pw as auth_hash, can, get_token, DEFAULT_PERMISSIONS, ALL_MODULES, tenant_scope
+from database import get_db, row, rows, hash_pw, init_db, write_audit_log, ensure_custom_placeholders_table, ensure_permission_tables, ensure_custom_placeholders_table
+from auth import login_required, require_role, platform_admin_required, make_token, hash_pw as auth_hash, can, get_token, DEFAULT_PERMISSIONS, ALL_MODULES, tenant_scope, rate_limit_login
 from compliance import (run_compliance_checks, generate_document, build_context,
                         extract_placeholders, get_active_entities, AUTO_FILLED,
                         generate_company_master_pdf, generate_register_pdf,
@@ -50,6 +50,33 @@ _FRONTEND = next(
     _os.path.join(_ROOT, '..', 'frontend')    # fallback (original)
 )
 app = Flask(__name__, static_folder=str(BASE_DIR/"static"))
+
+@app.after_request
+def _security_headers(response):
+    """Add security headers to every response."""
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # Only add HSTS in production (not on localhost)
+    if not app.debug:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "Resource not found"}), 404
+
+@app.errorhandler(405)
+def method_not_allowed(e):
+    return jsonify({"error": "Method not allowed"}), 405
+
+@app.errorhandler(500)
+def internal_error(e):
+    import logging
+    logging.getLogger(__name__).exception("Unhandled 500 error")
+    return jsonify({"error": "Internal server error"}), 500
+
 import os as _cors_os
 _ALLOWED_ORIGINS = _cors_os.environ.get('ALLOWED_ORIGINS', '*').split(',')
 CORS(app, resources={r'/api/*': {'origins': _ALLOWED_ORIGINS}})
@@ -178,6 +205,9 @@ def statics(fn): return send_from_directory(str(BASE_DIR/"static"),fn)
 # ══ AUTH ═════════════════════════════════════════════════════════════════════
 @app.route("/api/auth/login", methods=["POST"])
 def login():
+    _ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?").split(",")[0].strip()
+    if not rate_limit_login(_ip):
+        return jsonify({"error": "Too many login attempts — try again in 1 minute"}), 429
     d=request.get_json(silent=True, force=True) or {}
     email=(d.get("email") or "").strip().lower(); pw=d.get("password") or ""
     if not email or not pw: return jsonify({"error":"Email and password required"}),400
@@ -2352,7 +2382,7 @@ def sync_board_meeting_alerts_route():
         return jsonify({"success": True, "message": "Board meeting compliance alerts synced."})
     except Exception as e:
         import traceback
-        return jsonify({"error": str(e), "detail": traceback.format_exc()[-1200:]}), 500
+        return jsonify({"error": str(e), "detail": str(_ex)[:200] if app.debug else "Internal error"}), 500
 
 
 # ══ TASKS ════════════════════════════════════════════════════════════════════
@@ -3514,13 +3544,9 @@ def my_dashboard():
     today = date.today()
     week  = today + timedelta(days=7)
 
-    # Column filter based on role
-    if role == "superadmin":
-        my_col = "task_leader"
-    elif role == "manager":
-        my_col = "task_manager"
-    else:  # staff / any other
-        my_col = "assigned_to"
+    # Column filter based on role — whitelisted to prevent injection
+    MY_COL_MAP = {"superadmin": "task_leader", "manager": "task_manager"}
+    my_col = MY_COL_MAP.get(role, "assigned_to")  # safe whitelist
 
     # Task summary counts (only my tasks per role)
     c.execute(f"""SELECT status, COUNT(*) as cnt FROM tasks WHERE {my_col}=%s GROUP BY status""", (uid,))

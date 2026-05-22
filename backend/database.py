@@ -34,7 +34,38 @@ DB_PATH = BASE_DIR / "data" / "compli.db"
 # ══════════════════════════════════════════════════════════════════════════════
 # PostgreSQL connection
 # ══════════════════════════════════════════════════════════════════════════════
+# ── Connection pool (prevents per-request reconnect overhead) ───────────────
+_PG_POOL = None
+
+def _get_pg_pool():
+    global _PG_POOL
+    if _PG_POOL is None:
+        try:
+            from psycopg2 import pool as pg_pool
+            from urllib.parse import urlparse
+            p = urlparse(DATABASE_URL)
+            _PG_POOL = pg_pool.ThreadedConnectionPool(
+                minconn = 2,
+                maxconn = int(os.environ.get("DB_POOL_MAX", "10")),
+                host     = p.hostname,
+                port     = p.port or 5432,
+                dbname   = p.path.lstrip("/"),
+                user     = p.username,
+                password = p.password,
+                sslmode  = os.environ.get("DB_SSLMODE", "require"),
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Connection pool init failed: {e} — falling back to single connection")
+            _PG_POOL = None
+    return _PG_POOL
+
+
 def _pg_conn():
+    pool = _get_pg_pool()
+    if pool:
+        return pool.getconn()
+    # Fallback: direct connection
     from urllib.parse import urlparse
     p = urlparse(DATABASE_URL)
     return psycopg2.connect(
@@ -55,7 +86,15 @@ class PGConnection:
         return self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     def commit(self):   self._conn.commit()
     def rollback(self): self._conn.rollback()
-    def close(self):    self._conn.close()
+    def close(self):
+        pool = _get_pg_pool()
+        if pool:
+            try:
+                pool.putconn(self._conn)
+                return
+            except Exception:
+                pass
+        self._conn.close()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -389,6 +428,27 @@ CREATE TABLE IF NOT EXISTS audit_log (
     entity_id TEXT, detail TEXT, ip TEXT,
     tenant_id TEXT REFERENCES tenants(id), created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+/* ── Performance Indexes ── */
+CREATE INDEX IF NOT EXISTS idx_users_tenant        ON users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_users_email         ON users(email);
+CREATE INDEX IF NOT EXISTS idx_companies_tenant    ON companies(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_directors_company   ON directors(company_id);
+CREATE INDEX IF NOT EXISTS idx_directors_tenant    ON directors(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_leader        ON tasks(task_leader);
+CREATE INDEX IF NOT EXISTS idx_tasks_manager       ON tasks(task_manager);
+CREATE INDEX IF NOT EXISTS idx_tasks_assignee      ON tasks(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_tasks_status        ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_tenant        ON tasks(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_status       ON alerts(status);
+CREATE INDEX IF NOT EXISTS idx_alerts_company      ON alerts(company_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_tenant       ON alerts(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_meetings_company    ON meetings(company_id);
+CREATE INDEX IF NOT EXISTS idx_meetings_date       ON meetings(meeting_date);
+CREATE INDEX IF NOT EXISTS idx_audit_log_tenant    ON audit_log(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_user      ON audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_dsc_tenant          ON dsc_records(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_dsc_valid_to        ON dsc_records(valid_to);
 """
 
 # ── SQLite schema (dev) ───────────────────────────────────────────────────────
@@ -762,3 +822,20 @@ def _seed_templates(c, conn):
             VALUES (%s,%s,%s,%s,%s,%s,1,'default-tenant-001')""",
             (str(uuid.uuid4()),name,cat,desc,body,json.dumps(ph)))
     conn.commit()
+
+
+def write_audit_log(user_id: str, action: str, module: str = None,
+                    entity_id: str = None, detail: str = None,
+                    ip: str = None, tenant_id: str = None):
+    """Write an audit log entry. Call from route handlers for sensitive operations."""
+    try:
+        conn = get_db(); c = conn.cursor()
+        c.execute("""INSERT INTO audit_log
+                     (id, user_id, action, module, entity_id, detail, ip, tenant_id)
+                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                  (str(uuid.uuid4()), user_id, action, module,
+                   entity_id, detail, ip, tenant_id))
+        conn.commit(); conn.close()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"audit_log write failed: {e}")

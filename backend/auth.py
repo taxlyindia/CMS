@@ -6,8 +6,13 @@ from functools import wraps
 from flask import request, jsonify, g
 from database import get_db, row
 
-SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "taxly-cms-secret-jwt-key-change-in-production-2025")
-TOKEN_EXPIRY_HOURS = 12
+SECRET_KEY = os.environ.get("FLASK_SECRET_KEY")
+if not SECRET_KEY:
+    import secrets as _sec
+    SECRET_KEY = _sec.token_hex(32)  # random per-process in dev; MUST set in prod
+    import warnings
+    warnings.warn("FLASK_SECRET_KEY not set — using random key (tokens won't survive restarts)", stacklevel=2)
+TOKEN_EXPIRY_HOURS = int(os.environ.get('TOKEN_EXPIRY_HOURS', '12'))
 
 # ── Role hierarchy ────────────────────────────────────────────────────────────
 ROLE_HIERARCHY = {"superadmin": 3, "manager": 2, "staff": 1}
@@ -61,8 +66,14 @@ def make_token(user_id, role, name, tenant_id=None, is_platform_admin=False):
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
 def decode_token(token):
-    try: return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-    except: return None
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return None   # expired
+    except jwt.InvalidTokenError:
+        return None   # tampered / invalid
+    except Exception:
+        return None
 
 def get_token():
     auth = request.headers.get("Authorization","")
@@ -81,7 +92,8 @@ def load_user_permissions(user_id):
                 overrides[(_r[0], _r[1])] = bool(_r[2])
         conn.close()
         return overrides
-    except:
+    except Exception as _e:
+        import logging; logging.getLogger(__name__).debug(f'load_user_permissions: {_e}')
         return {}
 
 def login_required(f):
@@ -136,9 +148,34 @@ def can(module, action):
     return role in (DEFAULT_PERMISSIONS.get(module, {}).get(action, []))
 
 def tenant_scope(query, alias=""):
-    """Append tenant_id filter. alias = table alias prefix like 't.' """
+    """Append tenant_id filter — returns (query, params_list) to avoid injection.
+    Usage: sql, params = tenant_scope("SELECT * FROM t WHERE x=%s", "t."); params += [val]
+    DEPRECATED: prefer passing tenant_id as a %s param directly in caller.
+    """
     tid = getattr(g, "tenant_id", None)
     if tid:
         col = f"{alias}tenant_id" if alias else "tenant_id"
-        return query + f" AND {col} = '{tid}'"
-    return query
+        # Use parameterised value, not f-string interpolation
+        return query + f" AND {col} = %s", [tid]
+    return query, []
+
+
+# ── Simple in-memory rate limiter (use Redis in prod) ────────────────────────
+import time, threading
+_rl_lock  = threading.Lock()
+_rl_store = {}  # {key: [timestamp, ...]}
+
+def _rate_limit(key: str, max_calls: int = 5, window_secs: int = 60) -> bool:
+    """Returns True if allowed, False if rate-limited."""
+    now = time.time()
+    with _rl_lock:
+        calls = [t for t in _rl_store.get(key, []) if now - t < window_secs]
+        if len(calls) >= max_calls:
+            return False
+        calls.append(now)
+        _rl_store[key] = calls
+    return True
+
+def rate_limit_login(ip: str) -> bool:
+    """Max 10 login attempts per IP per minute."""
+    return _rate_limit(f"login:{ip}", max_calls=10, window_secs=60)
