@@ -1873,8 +1873,9 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
 
     <!-- ── AUDITORS ── -->
     <div class="page" id="page-auditors">
-      <div class="filter-bar">
-        <select class="fc" style="width:230px" id="aud-co-f" onchange="loadAuditors()"><option value="">All Companies</option></select>
+      <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
+        <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="aud-search" placeholder="Search auditor name, firm, PAN…" oninput="debounce(loadAuditors,300)()"></div>
+        <select class="fc" style="width:220px" id="aud-co-f" onchange="loadAuditors()"><option value="">All Companies</option></select>
         <select class="fc" style="width:200px" id="aud-nat-f" onchange="loadAuditors()">
           <option value="">All Nature of Appointment</option>
           <option value="First Auditor">First Auditor</option>
@@ -1896,8 +1897,9 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
 
     <!-- ── MEETINGS ── -->
     <div class="page" id="page-meetings">
-      <div class="filter-bar" style="margin-bottom:14px">
-        <select class="fc" style="width:220px" id="mtg-co-f" onchange="loadMeetings()"><option value="">All Companies</option></select>
+      <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="mtg-search" placeholder="Search company, meeting no, venue…" oninput="debounce(loadMeetings,300)()"></div>
+        <select class="fc" style="width:200px" id="mtg-co-f" onchange="loadMeetings()"><option value="">All Companies</option></select>
         <select class="fc" style="width:160px" id="mtg-type-f" onchange="loadMeetings()">
           <option value="">All Types</option>
           <option value="Board">Board Meeting</option>
@@ -1905,18 +1907,26 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
           <option value="EGM">EGM</option>
           <option value="Audit Committee">Audit Committee</option>
         </select>
+        <select class="fc" style="width:150px" id="mtg-status-f" onchange="loadMeetings()">
+          <option value="">All Status</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="held">Held</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
       </div>
       <div class="card"><div id="mtg-tbl"><div class="loading"><div class="spin"></div></div></div></div>
     </div>
 
     <!-- ── ALERTS ── -->
     <div class="page" id="page-alerts">
-      <div class="filter-bar" style="margin-bottom:14px">
-        <select class="fc" style="width:160px" id="alt-sev-f" onchange="loadAlerts()">
+      <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="alt-search" placeholder="Search alert title, company, message…" oninput="debounce(loadAlerts,300)()"></div>
+        <select class="fc" style="width:150px" id="alt-sev-f" onchange="loadAlerts()">
           <option value="">All Severity</option>
           <option value="critical">Critical</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
+          <option value="low">Low</option>
         </select>
         <select class="fc" style="width:180px" id="alt-type-f" onchange="loadAlerts()">
           <option value="">All Alert Types</option>
@@ -1926,6 +1936,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
           <option value="filing">Filing Deadline</option>
           <option value="meeting">Meeting</option>
           <option value="charge">Charge Filing</option>
+          <option value="board_meeting_compliance">Board Meeting Compliance</option>
         </select>
         <div id="alt-scope-badge" style="display:none;align-items:center;gap:6px;
           background:var(--glow2);border:1px solid rgba(29,80,224,.2);border-radius:7px;
@@ -1949,8 +1960,9 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
           <div id="task-hierarchy-banner" style="margin-left:8px;font-size:11.5px;color:var(--text3)"></div>
         </div>
       </div>
-      <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap">
-        <select class="fc" style="width:170px" id="tsk-st-f" onchange="loadTasks()">
+      <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="tsk-search" placeholder="Search task title, company…" oninput="debounce(loadTasks,300)()"></div>
+        <select class="fc" style="width:155px" id="tsk-st-f" onchange="loadTasks()">
           <option value="">All Status</option>
           <option value="pending">⏳ Pending</option>
           <option value="in_progress">🔄 In Progress</option>
@@ -1985,8 +1997,9 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
 
     <!-- ── DSC RECORDS ── -->
     <div class="page" id="page-dsc">
-      <div class="filter-bar" style="margin-bottom:14px">
-        <select class="fc" style="width:220px" id="dsc-co-f" onchange="loadDSC()"><option value="">All Companies</option></select>
+      <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="dsc-search" placeholder="Search holder name, company…" oninput="debounce(loadDSC,300)()"></div>
+        <select class="fc" style="width:200px" id="dsc-co-f" onchange="loadDSC()"><option value="">All Companies</option></select>
         <select class="fc" style="width:180px" id="dsc-cust-f" onchange="loadDSC()">
           <option value="">All Custody Status</option>
           <option value="With Us">With Us</option>
@@ -2000,7 +2013,8 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
     <!-- ── REGISTERS ── -->
     <div class="page" id="page-registers">
       <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
-        <select class="fc" style="width:240px" id="reg-co" onchange="loadRegister()"><option value="">— Select Company —</option></select>
+        <div class="sbar" style="width:260px;min-width:160px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="reg-search" placeholder="Search entry data, folio ref…" oninput="debounce(loadRegister,300)()"></div>
+        <select class="fc" style="width:230px" id="reg-co" onchange="loadRegister()"><option value="">— Select Company —</option></select>
         <select class="fc" style="width:300px" id="reg-type" onchange="loadRegister()">
           <optgroup label="Membership Registers">
             <option value="MGT-1">MGT-1 — Register of Members (Sec 88)</option>
@@ -2149,8 +2163,9 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
 
         <!-- Left: template list -->
         <div>
-          <div class="filter-bar" style="margin-bottom:10px">
-            <select class="fc" style="flex:1" id="tpl-cat-f" onchange="loadTemplates()">
+          <div class="filter-bar" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
+            <div class="sbar" style="width:260px;min-width:160px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="tpl-search" placeholder="Search template name…" oninput="debounce(loadTemplates,300)()"></div>
+            <select class="fc" style="flex:1;min-width:140px" id="tpl-cat-f" onchange="loadTemplates()">
               <option value="">All Categories</option>
               <option value="resolution">Resolutions</option>
               <option value="notice">Notices</option>
@@ -2303,8 +2318,9 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
         </div>
       </div>
 
-      <div class="filter-bar" style="margin-bottom:12px">
-        <select class="fc" style="width:160px" id="usr-role-f" onchange="loadUsers()">
+      <div class="filter-bar" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div class="sbar" style="width:260px;min-width:160px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="usr-search" placeholder="Search user name or email…" oninput="debounce(loadUsers,300)()"></div>
+        <select class="fc" style="width:150px" id="usr-role-f" onchange="loadUsers()">
           <option value="">All Roles</option>
           <option value="superadmin">Super Admin</option>
           <option value="manager">Manager</option>
@@ -4233,12 +4249,14 @@ async function deleteDir(id) { await deactivateDir(id); }
 // AUDITORS — with Nature of Appointment column
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadAuditors() {
+  const _aud_srch = document.getElementById('aud-search')?.value || '';
   const cid = PB.company_id || document.getElementById('aud-co-f')?.value || '';
   if (cid) { const el = document.getElementById('aud-co-f'); if(el) el.value = cid; }
   const nat  = document.getElementById('aud-nat-f')?.value || '';
   const params = new URLSearchParams();
   if (PB.from) params.set('date_from', PB.from);
   if (PB.to)   params.set('date_to',   PB.to);
+  if (_aud_srch) params.set('q', _aud_srch);
   const qs = params.toString() ? '?'+params.toString() : '';
   const url = cid ? `/api/companies/${cid}/auditors${qs}` : `/api/auditors${qs}`;
   let auds = await api(url);
@@ -4507,12 +4525,18 @@ async function deleteSh(id) { await deactivateSh(id); }
 async function loadMeetings() {
   // Sync board-meeting compliance alerts
   try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:{}}); } catch(e){}
-  const cid = PB.company_id || document.getElementById('mtg-co-f')?.value || '';
+  const cid    = PB.company_id || document.getElementById('mtg-co-f')?.value   || '';
+  const mtype  = document.getElementById('mtg-type-f')?.value   || '';
+  const mstat  = document.getElementById('mtg-status-f')?.value || '';
+  const msrch  = document.getElementById('mtg-search')?.value   || '';
   if (cid) { const el = document.getElementById('mtg-co-f'); if(el) el.value = cid; }
   const params = new URLSearchParams();
-  if (cid)     params.set('company_id', cid);
-  if (PB.from) params.set('date_from',  PB.from);
-  if (PB.to)   params.set('date_to',    PB.to);
+  if (cid)    params.set('company_id',   cid);
+  if (mtype)  params.set('meeting_type', mtype);
+  if (mstat)  params.set('status',       mstat);
+  if (msrch)  params.set('q',            msrch);
+  if (PB.from) params.set('date_from',   PB.from);
+  if (PB.to)   params.set('date_to',     PB.to);
   const mtgs = await api('/api/meetings' + (params.toString() ? '?'+params.toString() : '')); if (!mtgs) return;
   if (!mtgs.length) { document.getElementById('mtg-tbl').innerHTML = `<div class="empty-state"><div class="empty-icon">🗓️</div><div class="empty-title">No meetings scheduled</div></div>`; return; }
   document.getElementById('mtg-tbl').innerHTML = `
@@ -4587,10 +4611,13 @@ async function loadAlerts() {
     }
   }
 
-  const sev  = document.getElementById('alt-sev-f')?.value || '';
-  const atype = document.getElementById('alt-type-f')?.value || '';
+  const sev    = document.getElementById('alt-sev-f')?.value    || '';
+  const atype  = document.getElementById('alt-type-f')?.value   || '';
+  const asrch  = document.getElementById('alt-search')?.value   || '';
   const params = new URLSearchParams();
   if (sev)           params.set('severity',   sev);
+  if (atype)         params.set('type',       atype);   // ← was MISSING — root cause of broken filter
+  if (asrch)         params.set('q',          asrch);
   if (PB.company_id) params.set('company_id', PB.company_id);
   if (PB.from)       params.set('date_from',  PB.from);
   if (PB.to)         params.set('date_to',    PB.to);
@@ -4873,6 +4900,7 @@ function setTaskHierarchyView(view) {
 }
 
 async function loadTasks() {
+  const _tsk_srch = document.getElementById('tsk-search')?.value || '';
   const myRole = ME?.role || 'staff';
   const st     = document.getElementById('tsk-st-f')?.value     || '';
   const pri    = document.getElementById('tsk-pri-f')?.value    || '';
@@ -4897,6 +4925,7 @@ async function loadTasks() {
   if (myRole === 'superadmin' && _taskHierarchyView !== 'mine') {
     params.set('hierarchy_view', _taskHierarchyView); // 'manager' | 'staff' | 'all'
   }
+  if (_tsk_srch) params.set('q', _tsk_srch);
   url += (params.toString() ? '?' + params.toString() : '');
 
   let tasks = await api(url); if (!tasks) return;
@@ -5127,7 +5156,12 @@ const ROLE_BADGES = {
 };
 
 async function loadUsers() {
-  const users = await api('/api/users');
+  const _usr_srch = document.getElementById('usr-search')?.value || '';
+  const _u_params = new URLSearchParams();
+  if (_usr_srch) _u_params.set('q', _usr_srch);
+  const _u_role = document.getElementById('usr-role-f')?.value || '';
+  if (_u_role) _u_params.set('role', _u_role);
+  const users = await api('/api/users' + (_u_params.toString() ? '?'+_u_params.toString() : ''));
   if (!users) return;
 
   const roleF   = document.getElementById('usr-role-f')?.value   || '';
@@ -6747,6 +6781,7 @@ function buildAutoPreview_OLD() {
 }
 
 async function loadDSC() {
+  const _dsc_srch = document.getElementById('dsc-search')?.value || '';
   const cid  = PB.company_id || document.getElementById('dsc-co-f')?.value || '';
   if (cid) { const el = document.getElementById('dsc-co-f'); if(el) el.value = cid; }
   const cust = document.getElementById('dsc-cust-f')?.value || '';
@@ -6754,6 +6789,7 @@ async function loadDSC() {
   if (cid)     params.set('company_id', cid);
   if (PB.from) params.set('date_from',  PB.from);
   if (PB.to)   params.set('date_to',    PB.to);
+  if (_dsc_srch) params.set('q', _dsc_srch);
   let url = '/api/dsc' + (params.toString() ? '?'+params.toString() : '');
   const dscs = await api(url);
   if (!dscs) {
@@ -6984,6 +7020,7 @@ function initRegisters() {
 }
 
 async function loadRegister() {
+  const _reg_srch = document.getElementById('reg-search')?.value || '';
   const cid  = document.getElementById('reg-co').value;
   const type = document.getElementById('reg-type').value;
   const addBtn = document.getElementById('reg-add-btn');
@@ -7504,8 +7541,12 @@ const PH_DESCRIPTIONS = {
 let ALL_TEMPLATES = [];
 
 async function loadTemplates() {
+  const _tpl_srch = document.getElementById('tpl-search')?.value || '';
   const cat = document.getElementById('tpl-cat-f')?.value || '';
-  const tmpls = await api('/api/document-templates' + (cat ? `?category=${cat}` : ''));
+  const _tpl_qs = new URLSearchParams();
+  if (_tpl_srch) _tpl_qs.set('q', _tpl_srch);
+  if (cat)       _tpl_qs.set('category', cat);
+  const tmpls = await api('/api/document-templates' + (_tpl_qs.toString() ? '?'+_tpl_qs.toString() : ''));
   if (!tmpls) return;
   ALL_TEMPLATES = tmpls;
 
