@@ -271,9 +271,24 @@ def check_email():
 @app.route("/api/users")
 @require_role("superadmin", "manager")
 def list_users():
+    search = request.args.get("q","").strip()
+    role_f = request.args.get("role","")
     conn = get_db(); c = conn.cursor()
-    c.execute("SELECT id,name,email,role,is_active,created_at,last_login FROM users ORDER BY name")
-    return jsonify(rows(c.fetchall()))
+    q = "SELECT id,name,email,role,is_active,created_at,last_login FROM users WHERE 1=1"
+    params = []
+    if g.tenant_id:
+        q += " AND (tenant_id=%s OR is_platform_admin=1)"; params.append(g.tenant_id)
+    if role_f:
+        q += " AND role=%s"; params.append(role_f)
+    if search:
+        q += " AND (name ILIKE %s OR email ILIKE %s)"
+        like = f"%{search}%"
+        params.extend([like, like])
+    q += " ORDER BY name"
+    c.execute(q, params)
+    result = rows(c.fetchall())
+    conn.close()
+    return jsonify(result)
 
 @app.route("/api/users", methods=["POST"])
 @require_role("superadmin")
@@ -805,6 +820,11 @@ def all_auditors():
     if ffrom:   sql += " AND a.end_date>=%s";              params.append(ffrom)
     if fto:     sql += " AND a.end_date<=%s";              params.append(fto)
 
+    fsearch = request.args.get("q","").strip()
+    if fsearch:
+        sql += " AND (a.name ILIKE %s OR a.firm_name ILIKE %s OR co.name ILIKE %s)"
+        like = f"%{fsearch}%"
+        params.extend([like, like, like])
     sql += " ORDER BY a.end_date"
     c.execute(sql, params)
     result = rows(c.fetchall())
@@ -980,6 +1000,11 @@ def all_dsc():
     if ffrom:   sql += " AND d.valid_to>=%s";        params.append(ffrom)
     if fto:     sql += " AND d.valid_to<=%s";        params.append(fto)
 
+    fsearch = request.args.get("q","").strip()
+    if fsearch:
+        sql += " AND (d.holder_name ILIKE %s OR co.name ILIKE %s OR d.issued_by ILIKE %s)"
+        like = f"%{fsearch}%"
+        params.extend([like, like, like])
     sql += " ORDER BY d.valid_to"
     c.execute(sql, params)
     result = rows(c.fetchall())
@@ -1076,12 +1101,36 @@ def dsc_custody_log(dsc_id):
 @app.route("/api/meetings")
 @login_required
 def list_meetings():
-    cid=request.args.get("company_id",""); conn=get_db(); c=conn.cursor()
-    q="SELECT m.*,co.name as company_name FROM meetings m JOIN companies co ON m.company_id=co.id"
-    params=[]
-    if cid: q+=" WHERE m.company_id=%s"; params.append(cid)
-    q+=" ORDER BY m.meeting_date DESC"
-    c.execute(q,params); return jsonify(rows(c.fetchall()))
+    cid     = request.args.get("company_id", "")
+    mtype   = request.args.get("meeting_type", "")
+    status  = request.args.get("status", "")
+    search  = request.args.get("q", "").strip()
+    dfrom   = request.args.get("date_from", "")
+    dto     = request.args.get("date_to", "")
+    conn = get_db(); c = conn.cursor()
+
+    q = "SELECT m.*, co.name as company_name FROM meetings m JOIN companies co ON m.company_id=co.id WHERE 1=1"
+    params = []
+
+    # Tenant isolation
+    if g.tenant_id:
+        q += " AND m.tenant_id=%s"; params.append(g.tenant_id)
+
+    if cid:    q += " AND m.company_id=%s";   params.append(cid)
+    if mtype:  q += " AND m.meeting_type=%s"; params.append(mtype)
+    if status: q += " AND m.status=%s";        params.append(status)
+    if dfrom:  q += " AND m.meeting_date>=%s"; params.append(dfrom)
+    if dto:    q += " AND m.meeting_date<=%s"; params.append(dto)
+    if search:
+        q += " AND (co.name ILIKE %s OR m.meeting_no ILIKE %s OR m.venue ILIKE %s OR m.meeting_type ILIKE %s)"
+        like = f"%{search}%"
+        params.extend([like, like, like, like])
+
+    q += " ORDER BY m.meeting_date DESC"
+    c.execute(q, params)
+    result = rows(c.fetchall())
+    conn.close()
+    return jsonify(result)
 
 @app.route("/api/meetings", methods=["POST"])
 @login_required
@@ -1184,6 +1233,11 @@ def list_doc_templates():
     q="SELECT id,name,category,description,placeholders,is_system,is_active,created_at FROM document_templates WHERE is_active=1"
     params=[]
     if cat: q+=" AND category=%s"; params.append(cat)
+    _tpl_q = request.args.get("q","").strip()
+    if _tpl_q:
+        q += " AND (name ILIKE %s OR description ILIKE %s)"
+        _like = f"%{_tpl_q}%"
+        params.extend([_like, _like])
     q+=" ORDER BY is_system DESC,name"
     c.execute(q,params); return jsonify(rows(c.fetchall()))
 
@@ -2132,13 +2186,20 @@ def list_alerts():
         params.extend([uid, uid])
 
     # Common filters
+    search = request.args.get("q", "").strip()
     if cid:   base += " AND a.company_id = %s"; params.append(cid)
     if sev:   base += " AND a.severity = %s";   params.append(sev)
-    if atype: base += " AND a.entity_type = %s";params.append(atype)
+    if atype: base += " AND a.entity_type = %s"; params.append(atype)
+    if search:
+        base += " AND (a.title ILIKE %s OR a.message ILIKE %s OR co.name ILIKE %s)"
+        like = f"%{search}%"
+        params.extend([like, like, like])
 
     base += " ORDER BY CASE a.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, a.due_date"
     c.execute(base, params)
-    return jsonify(rows(c.fetchall()))
+    result = rows(c.fetchall())
+    conn.close()
+    return jsonify(result)
 
 @app.route("/api/alerts/<aid>/dismiss", methods=["POST"])
 @login_required
@@ -3806,6 +3867,11 @@ def tasks_by_role_module():
     else:                  sql += " AND (t.task_leader=%s OR t.task_manager=%s OR t.assigned_to=%s)"; params.extend([uid,uid,uid])
     if module and module != 'all': sql += " AND COALESCE(t.module,'general')=%s"; params.append(module)
     if status: sql += " AND t.status=%s"; params.append(status)
+    _tsk_q = request.args.get("q","").strip()
+    if _tsk_q:
+        sql += " AND (t.title ILIKE %s OR co.name ILIKE %s OR t.description ILIKE %s)"
+        _like = f"%{_tsk_q}%"
+        params.extend([_like, _like, _like])
     sql += " ORDER BY CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, t.due_date"
 
     c.execute(sql, params)
