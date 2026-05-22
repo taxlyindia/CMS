@@ -2152,37 +2152,37 @@ def _upsert_board_alert(c, conn, company_id, tenant_id, alert_key,
     due_str = due_date.isoformat() if hasattr(due_date,'isoformat') else str(due_date)
     # Check existing active
     c.execute("""SELECT id FROM alerts
-                 WHERE company_id=? AND alert_type='board_meeting_compliance'
-                   AND entity_id=? AND status='active'""",
+                 WHERE company_id=%s AND alert_type='board_meeting_compliance'
+                   AND entity_id=%s AND status='active'""",
               (company_id, alert_key))
     row = c.fetchone()
     if row:
-        c.execute("""UPDATE alerts SET title=?, message=?, due_date=?,
-                         severity=?, created_at=datetime('now')
-                     WHERE id=?""",
+        c.execute("""UPDATE alerts SET title=%s, message=%s, due_date=%s,
+                         severity=%s, created_at=datetime('now')
+                     WHERE id=%s""",
                   (title, message, due_str, severity, row[0]))
     else:
         c.execute("""INSERT INTO alerts
                      (id,company_id,entity_type,entity_id,alert_type,
                       title,message,due_date,severity,status,tenant_id)
-                     VALUES (?,?,'meeting',?,'board_meeting_compliance',
-                             ?,?,?,?,'active',?)""",
+                     VALUES (%s,%s,'meeting',%s,'board_meeting_compliance',
+                             %s,%s,%s,%s,'active',%s)""",
                   (str(uuid.uuid4()), company_id, alert_key,
                    title, message, due_str, severity, tenant_id))
 
 def _clear_stale_board_alerts(c, company_id, active_keys):
     """Dismiss board_meeting_compliance alerts whose keys are no longer relevant."""
     if active_keys:
-        placeholders = ','.join(['?']*len(active_keys))
+        placeholders = ','.join(['%s']*len(active_keys))
         c.execute(f"""UPDATE alerts SET status='resolved', resolved_at=datetime('now')
-                      WHERE company_id=?
+                      WHERE company_id=%s
                         AND alert_type='board_meeting_compliance'
                         AND status='active'
                         AND entity_id NOT IN ({placeholders})""",
                   [company_id] + list(active_keys))
     else:
         c.execute("""UPDATE alerts SET status='resolved', resolved_at=datetime('now')
-                     WHERE company_id=?
+                     WHERE company_id=%s
                        AND alert_type='board_meeting_compliance'
                        AND status='active'""",
                   (company_id,))
@@ -2200,9 +2200,9 @@ def sync_board_meeting_alerts(company_id=None, tenant_id=None):
 
     # ── Fetch companies ───────────────────────────────────────────────────────
     if company_id:
-        c.execute("SELECT id, name, tenant_id FROM companies WHERE id=?", (company_id,))
+        c.execute("SELECT id, name, tenant_id FROM companies WHERE id=%s", (company_id,))
     elif tenant_id:
-        c.execute("SELECT id, name, tenant_id FROM companies WHERE tenant_id=?", (tenant_id,))
+        c.execute("SELECT id, name, tenant_id FROM companies WHERE tenant_id=%s", (tenant_id,))
     else:
         c.execute("SELECT id, name, tenant_id FROM companies")
     companies = rows(c.fetchall())
@@ -2218,7 +2218,7 @@ def sync_board_meeting_alerts(company_id=None, tenant_id=None):
         # ── Fetch all HELD/scheduled Board meetings for this company ─────────
         # Include both past (held) and future (scheduled) for gap analysis
         c.execute("""SELECT meeting_date FROM meetings
-                     WHERE company_id=?
+                     WHERE company_id=%s
                        AND meeting_type='Board'
                        AND status IN ('held','completed','scheduled','minutes_approved')
                      ORDER BY meeting_date ASC""", (cid,))
@@ -2238,7 +2238,7 @@ def sync_board_meeting_alerts(company_id=None, tenant_id=None):
             if qend < today - timedelta(days=30):
                 continue
 
-            # Has a board meeting been held in this quarter?
+            # Has a board meeting been held in this quarter%s
             held_in_q = [d for d in mtg_dates if qstart <= d <= qend and d <= today]
 
             if held_in_q:
@@ -2327,7 +2327,8 @@ def sync_board_meeting_alerts_route():
         return jsonify({"error": "Forbidden"}), 403
     try:
         body = request.get_json(silent=True, force=True) or {}
-        cid  = body.get("company_id") if body else None
+        if not isinstance(body, dict): body = {}
+        cid  = body.get("company_id")
         tid  = getattr(g, "tenant_id", None)
         sync_board_meeting_alerts(company_id=cid, tenant_id=tid)
         return jsonify({"success": True, "message": "Board meeting compliance alerts synced."})
