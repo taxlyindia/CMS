@@ -3945,6 +3945,9 @@ async function loadComplianceDashboard() {
 
   // Load ROC compliance calendar panel
   loadComplianceCalendar();
+  // P1: load analytics charts and health score strip
+  loadAnalyticsCharts();
+  loadHealthScores();
 }
 
 
@@ -5298,8 +5301,8 @@ async function loadTasks() {
           <td><div class="td-actions">
             ${t.status !== 'completed' && t.status !== 'cancelled' ? `<button class="btn btn-xs btn-success" onclick="completeTask('${t.id}')" title="Mark complete">✓</button>` : ''}
             <button class="btn btn-xs btn-ghost" onclick="openTskModal('${t.id}')">Edit</button>
-            <button class="btn btn-xs btn-ghost" onclick="openTaskComments('${t.id}',${JSON.stringify(t.title||'')})" title="Comments">💬</button>
-            <button class="btn btn-xs btn-ghost" onclick="openAttachments('task','${t.id}',${JSON.stringify(t.title||'')})" title="Attachments">📎</button>
+            <button class="btn btn-xs btn-ghost" onclick="openTaskComments('${t.id}',this.dataset.title)" data-title="${esc(t.title||'')}" title="Comments">💬</button>
+            <button class="btn btn-xs btn-ghost" onclick="openAttachments('task','${t.id}',this.dataset.title)" data-title="${esc(t.title||'')}" title="Attachments">📎</button>
             <button class="btn btn-xs btn-danger" onclick="deleteTask('${t.id}')">✕</button>
           </div></td>
         </tr>`;
@@ -6457,6 +6460,14 @@ async function deletePlan(pid, name) {
 
 function initSettingsPage() {
   if (!ME) return;
+  // P1: load sessions and populate MCA dropdown
+  setTimeout(() => {
+    loadSessionsUI();
+    const sel = document.getElementById('mca-cid');
+    if (sel && COMPANIES && !sel.options.length) {
+      sel.innerHTML = '<option value="">All Companies</option>' + COMPANIES.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    }
+  }, 100);
   const nameEl = document.getElementById('s-name');
   const emailEl = document.getElementById('s-email');
   const roleEl  = document.getElementById('s-role-display');
@@ -6779,10 +6790,55 @@ async function deleteRecurringTemplate(tid) {
   toast('Deleted','ok'); loadRecurringTemplates();
 }
 async function spawnTemplateTasks(tid, title) {
-  const due = prompt(`Spawn tasks from "${title}"
-Enter due date (YYYY-MM-DD) or leave blank for auto:`, '');
-  if (due === null) return;
-  const r = await api('/api/recurring-templates/'+tid+'/spawn', { method:'POST', body: due ? { due_date: due } : {} });
+  // Load users for assignment dropdowns
+  const users = await api('/api/users') || [];
+  const activeUsers = users.filter(u => u.is_active !== 0);
+  const unassigned = '<option value="">— Unassigned —</option>';
+  const userOpts = unassigned + activeUsers.map(u =>
+    `<option value="${u.id}">${esc(u.name)} (${u.role})</option>`
+  ).join('');
+
+  openModal(
+    `▶ Spawn Tasks — ${esc(title)}`,
+    `<p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+      Creates one task per active company. Assign roles now or leave blank to assign later.
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fg" style="grid-column:1/-1">
+        <label class="fl">Due Date <span style="color:var(--text3);font-weight:400">(leave blank for auto from template)</span></label>
+        <input class="fc" id="spawn-due" type="date">
+      </div>
+      <div class="fg">
+        <label class="fl">👑 Task Leader</label>
+        <select class="fc" id="spawn-leader">${userOpts}</select>
+      </div>
+      <div class="fg">
+        <label class="fl">🔧 Task Manager</label>
+        <select class="fc" id="spawn-manager">${userOpts}</select>
+      </div>
+      <div class="fg" style="grid-column:1/-1">
+        <label class="fl">📋 Assignee</label>
+        <select class="fc" id="spawn-assignee">${userOpts}</select>
+      </div>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="confirmSpawn('${tid}')">▶ Spawn Tasks</button>`,
+    'md'
+  );
+}
+
+async function confirmSpawn(tid) {
+  const due      = document.getElementById('spawn-due')?.value || null;
+  const leader   = document.getElementById('spawn-leader')?.value || null;
+  const manager  = document.getElementById('spawn-manager')?.value || null;
+  const assignee = document.getElementById('spawn-assignee')?.value || null;
+  closeModal();
+  const body = {};
+  if (due)      body.due_date     = due;
+  if (leader)   body.task_leader  = leader;
+  if (manager)  body.task_manager = manager;
+  if (assignee) body.assigned_to  = assignee;
+  const r = await api('/api/recurring-templates/' + tid + '/spawn', { method:'POST', body });
   if (r) toast(`✓ Created ${r.tasks_created} tasks across all companies`, 'ok');
 }
 
@@ -6975,25 +7031,8 @@ async function showAGMTimeline(cid) {
   document.body.appendChild(overlay);
 }
 
-// ── Hook loadComplianceDashboard to also load charts + health scores ────────
-const _origLoadCompliance = loadComplianceDashboard;
-async function loadComplianceDashboard() {
-  await _origLoadCompliance.apply(this, arguments);
-  loadAnalyticsCharts();
-  loadHealthScores();
-}
-
-// ── Hook initSettingsPage to load sessions ─────────────────────────────────
-const _origInitSettings = initSettingsPage;
-function initSettingsPage() {
-  _origInitSettings.apply(this, arguments);
-  // Populate WA company filter
-  const sel = document.getElementById('mca-cid');
-  if (sel && COMPANIES && !sel.options.length) {
-    sel.innerHTML = '<option value="">All Companies</option>' + COMPANIES.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  }
-  loadSessionsUI();
-}
+// ── P1: Charts and health scores are called directly from loadComplianceDashboard
+//        (hooks removed to avoid hoisting-caused infinite recursion)
 
 // ── Hook loadTasks to add checkboxes for bulk select ──────────────────────
 const _origRenderTasks = window.renderTaskRow;  // may or may not exist
