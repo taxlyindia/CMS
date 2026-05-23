@@ -2920,9 +2920,11 @@ const PAGE_META = {
 async function api(path, opts = {}) {
   const h = { 'Content-Type': 'application/json' };
   if (TOKEN) h['Authorization'] = `Bearer ${TOKEN}`;
-  // Attach CSRF token for state-changing requests
-  if (opts.method && opts.method !== 'GET' && _CSRF_TOKEN) {
-    h['X-CSRF-Token'] = _CSRF_TOKEN;
+  // Attach CSRF token for state-changing requests.
+  // Always re-read from cookie in case server rotated it.
+  if (opts.method && opts.method !== 'GET') {
+    var _latest = _readCsrfCookie() || _CSRF_TOKEN;
+    if (_latest) { _CSRF_TOKEN = _latest; h['X-CSRF-Token'] = _latest; }
   }
   try {
     const r = await fetch(path, { ...opts, headers: h, body: opts.body ? JSON.stringify(opts.body) : undefined });
@@ -3115,7 +3117,7 @@ function _hideLogin() {
     if (mn) mn.style.display = 'flex';
     restoreSidebarState();
     initDarkMode();
-    initCSRF();
+    initCSRF();   // re-sync token after login
     // Show onboarding wizard for new tenants
     setTimeout(function(){
       var cos = COMPANIES || [];
@@ -10874,21 +10876,39 @@ async function uploadDirectorFile(did, fileType) {
 // CSRF — auto-attach token to all non-GET api() calls
 // ═══════════════════════════════════════════════════════════════════════════════
 var _CSRF_TOKEN = '';
+
+function _readCsrfCookie() {
+  // Read csrf_token from document.cookie (cookie is set by every server response)
+  var cookies = document.cookie.split(';');
+  for (var i = 0; i < cookies.length; i++) {
+    var pair = cookies[i].trim().split('=');
+    if (pair[0] === 'csrf_token' && pair[1]) {
+      return decodeURIComponent(pair[1]);
+    }
+  }
+  return '';
+}
+
 async function initCSRF() {
+  // First try: read whatever cookie the server already set
+  _CSRF_TOKEN = _readCsrfCookie();
+  if (_CSRF_TOKEN) return;   // already have a token — done
+
+  // Second try: ask the server to issue one (sets cookie + returns value)
   try {
-    var r = await fetch('/api/auth/csrf-token');
+    var r = await fetch('/api/auth/csrf-token', { credentials: 'include' });
     if (r.ok) {
       var d = await r.json();
-      _CSRF_TOKEN = d.csrf_token || '';
+      _CSRF_TOKEN = d.csrf_token || _readCsrfCookie();
     }
-    // Also read from cookie
-    var cookies = document.cookie.split(';');
-    cookies.forEach(function(ck){
-      var pair = ck.trim().split('=');
-      if (pair[0]==='csrf_token') _CSRF_TOKEN = decodeURIComponent(pair[1]||'');
-    });
-  } catch(e){}
+  } catch(e) {
+    // Totally fine — JWT auth makes CSRF optional for our SPA
+  }
 }
+
+// Call initCSRF eagerly on script load (before any user interaction)
+// so the token is ready for the very first POST (even login sync calls).
+initCSRF();
 
 // ── Sidebar group-wise collapse/expand ───────────────────────────────────
 function toggleNavGroup(groupId) {
