@@ -5551,35 +5551,71 @@ def delete_recurring_template(tid):
 @app.route("/api/recurring-templates/<tid>/spawn", methods=["POST"])
 @require_role("superadmin","manager")
 def spawn_tasks_from_template(tid):
-    """Create tasks for all active companies from this template."""
+    """
+    Create tasks for active companies from this template.
+
+    Body (JSON):
+      due_date          : str  — shared due date for all companies (optional)
+      task_leader       : str  — global fallback leader user id
+      task_manager      : str  — global fallback manager user id
+      assigned_to       : str  — global fallback assignee user id
+      company_assignments: list of {
+            company_id  : str,
+            assigned_to : str | null,
+            task_manager: str | null,
+            task_leader : str | null,
+            due_date    : str | null   (overrides global due_date for this co)
+        }
+    Per-company assignments take priority over the global fallbacks.
+    """
     _ensure_recurring_templates_table()
     d = request.get_json(silent=True) or {}
     conn = get_db(); c = conn.cursor()
     c.execute("SELECT * FROM recurring_task_templates WHERE id=%s AND tenant_id=%s", (tid, g.tenant_id))
     tmpl = row(c.fetchone())
     if not tmpl: conn.close(); return jsonify({"error": "Template not found"}), 404
-    c.execute("SELECT id FROM companies WHERE tenant_id=%s AND status='active'", (g.tenant_id,))
-    companies_list = [r["id"] if isinstance(r, dict) else r[0] for r in c.fetchall()]
-    due = d.get("due_date") or (
+
+    c.execute("SELECT id, name FROM companies WHERE tenant_id=%s AND status='active'", (g.tenant_id,))
+    all_active = {(r["id"] if isinstance(r,dict) else r[0]): (r["name"] if isinstance(r,dict) else r[1])
+                  for r in c.fetchall()}
+
+    # Build per-company assignment map from request
+    co_map = {}  # company_id -> {assigned_to, task_manager, task_leader, due_date}
+    for entry in (d.get("company_assignments") or []):
+        cid = entry.get("company_id")
+        if cid: co_map[cid] = entry
+
+    # Global fallbacks
+    global_due = d.get("due_date") or (
         f"{date.today().year}-{str(tmpl.get('due_month',12)).zfill(2)}-{str(tmpl.get('due_day',31)).zfill(2)}"
         if tmpl.get("due_month") else None
     )
-    created = 0
-    for co_id in companies_list:
+    global_leader  = d.get("task_leader")  or None
+    global_manager = d.get("task_manager") or None
+    global_assign  = d.get("assigned_to")  or None
+
+    created = 0; skipped = []
+    for co_id in all_active:
+        ov = co_map.get(co_id, {})
+        # Skip only if explicitly excluded (future feature) — for now create for all
         task_id = str(uuid.uuid4())
         c.execute("""INSERT INTO tasks (id,company_id,title,description,priority,status,
                      due_date,module,estimated_hrs,created_by,tenant_id,
                      assigned_to,task_manager,task_leader)
                      VALUES (%s,%s,%s,%s,%s,'pending',%s,%s,%s,%s,%s,%s,%s,%s)""",
                   (task_id, co_id, tmpl["title"], tmpl.get("description",""),
-                   tmpl.get("priority","medium"), due, tmpl.get("module"),
-                   float(tmpl.get("estimated_hrs") or 0), g.user_id, g.tenant_id,
-                   d.get("assigned_to") or None,
-                   d.get("task_manager") or None,
-                   d.get("task_leader") or None))
+                   tmpl.get("priority","medium"),
+                   _dt(ov.get("due_date") or global_due),
+                   tmpl.get("module"),
+                   float(tmpl.get("estimated_hrs") or 0),
+                   g.user_id, g.tenant_id,
+                   ov.get("assigned_to")  or global_assign  or None,
+                   ov.get("task_manager") or global_manager or None,
+                   ov.get("task_leader")  or global_leader  or None))
         created += 1
+
     conn.commit(); conn.close()
-    return jsonify({"success": True, "tasks_created": created})
+    return jsonify({"success": True, "tasks_created": created, "skipped": skipped})
 
 
 # ── P1 #13 — Session Management ──────────────────────────────────────────────
