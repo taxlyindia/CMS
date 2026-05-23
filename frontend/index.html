@@ -848,6 +848,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
 /* Modal box */
 .modal { background:var(--bg2); border:1px solid var(--border); border-radius:14px; width:540px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 0 0 1px rgba(0,0,0,.05),0 24px 80px rgba(0,0,0,.12) }
 .modal.modal-lg, .modal.lg { width:720px }
+.modal.modal-xl { width:min(920px, 96vw); max-height:90vh }
 /* New class names */
 .modal-header,.mh { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); flex-shrink:0 }
 .modal-title,.mt { font-size:15px; font-weight:700; color:var(--text); letter-spacing:-.2px }
@@ -6822,57 +6823,160 @@ async function deleteRecurringTemplate(tid) {
   await api('/api/recurring-templates/'+tid, { method:'DELETE' });
   toast('Deleted','ok'); loadRecurringTemplates();
 }
+// ── Spawn recurring tasks — company-wise assignment ─────────────────────────
+let _spawnUsers = [];
+let _spawnCompanies = [];
+
 async function spawnTemplateTasks(tid, title) {
-  // Load users for assignment dropdowns
-  const users = await api('/api/users') || [];
-  const activeUsers = users.filter(u => u.is_active !== 0);
+  // Load users + active companies in parallel
+  const [usersRaw, companiesRaw] = await Promise.all([
+    api('/api/users'),
+    api('/api/companies'),
+  ]);
+  _spawnUsers     = (usersRaw     || []).filter(u => u.is_active !== 0);
+  _spawnCompanies = (companiesRaw || []).filter(c => c.status === 'active');
+
+  if (!_spawnCompanies.length) { toast('No active companies found','err'); return; }
+
   const unassigned = '<option value="">— Unassigned —</option>';
-  const userOpts = unassigned + activeUsers.map(u =>
+  const userOpts = unassigned + _spawnUsers.map(u =>
     `<option value="${u.id}">${esc(u.name)} (${u.role})</option>`
   ).join('');
 
+  // Build per-company table rows
+  const companyRows = _spawnCompanies.map((co, i) => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 10px;font-size:12px;font-weight:600;min-width:140px;max-width:180px;
+                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(co.name)}">
+        ${esc(co.name)}
+      </td>
+      <td style="padding:6px 4px">
+        <input class="fc spawn-due-co" data-cid="${co.id}" type="date"
+               style="font-size:11px;padding:5px 8px;min-width:120px" title="Due date for this company">
+      </td>
+      <td style="padding:6px 4px">
+        <select class="fc spawn-leader-co" data-cid="${co.id}"
+                style="font-size:11px;padding:5px 6px;min-width:130px">${userOpts}</select>
+      </td>
+      <td style="padding:6px 4px">
+        <select class="fc spawn-manager-co" data-cid="${co.id}"
+                style="font-size:11px;padding:5px 6px;min-width:130px">${userOpts}</select>
+      </td>
+      <td style="padding:6px 4px">
+        <select class="fc spawn-assignee-co" data-cid="${co.id}"
+                style="font-size:11px;padding:5px 6px;min-width:130px">${userOpts}</select>
+      </td>
+    </tr>`).join('');
+
+  // "Apply to all" row at top
+  const applyAllRow = `
+    <tr style="background:var(--accent-soft);border-bottom:2px solid var(--accent)">
+      <td style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--accent)">
+        Apply to All ↓
+      </td>
+      <td style="padding:6px 4px">
+        <input class="fc" id="spawn-global-due" type="date"
+               style="font-size:11px;padding:5px 8px;min-width:120px"
+               onchange="applySpawnGlobal('due',this.value)"
+               title="Set for all companies">
+      </td>
+      <td style="padding:6px 4px">
+        <select class="fc" id="spawn-global-leader"
+                style="font-size:11px;padding:5px 6px;min-width:130px"
+                onchange="applySpawnGlobal('leader',this.value)">${userOpts}</select>
+      </td>
+      <td style="padding:6px 4px">
+        <select class="fc" id="spawn-global-manager"
+                style="font-size:11px;padding:5px 6px;min-width:130px"
+                onchange="applySpawnGlobal('manager',this.value)">${userOpts}</select>
+      </td>
+      <td style="padding:6px 4px">
+        <select class="fc" id="spawn-global-assignee"
+                style="font-size:11px;padding:5px 6px;min-width:130px"
+                onchange="applySpawnGlobal('assignee',this.value)">${userOpts}</select>
+      </td>
+    </tr>`;
+
   openModal(
     `▶ Spawn Tasks — ${esc(title)}`,
-    `<p style="font-size:13px;color:var(--text2);margin-bottom:16px">
-      Creates one task per active company. Assign roles now or leave blank to assign later.
-    </p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="fg" style="grid-column:1/-1">
-        <label class="fl">Due Date <span style="color:var(--text3);font-weight:400">(leave blank for auto from template)</span></label>
-        <input class="fc" id="spawn-due" type="date">
-      </div>
-      <div class="fg">
-        <label class="fl">👑 Task Leader</label>
-        <select class="fc" id="spawn-leader">${userOpts}</select>
-      </div>
-      <div class="fg">
-        <label class="fl">🔧 Task Manager</label>
-        <select class="fc" id="spawn-manager">${userOpts}</select>
-      </div>
-      <div class="fg" style="grid-column:1/-1">
-        <label class="fl">📋 Assignee</label>
-        <select class="fc" id="spawn-assignee">${userOpts}</select>
-      </div>
-    </div>`,
+    `<div style="margin-bottom:10px">
+       <div style="font-size:12.5px;color:var(--text2)">
+         Creates <strong>${_spawnCompanies.length} task(s)</strong> — one per active company.
+         Use the <strong style="color:var(--accent)">Apply to All</strong> row to fill everyone at once,
+         or set each company individually.
+       </div>
+     </div>
+     <div style="overflow-x:auto;max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+       <table style="width:100%;border-collapse:collapse;min-width:680px">
+         <thead>
+           <tr style="background:var(--surface3);position:sticky;top:0;z-index:1">
+             <th style="padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--text2)">COMPANY</th>
+             <th style="padding:8px 6px;text-align:left;font-size:11px;font-weight:700;color:var(--text2)">DUE DATE</th>
+             <th style="padding:8px 6px;text-align:left;font-size:11px;font-weight:700;color:#92400e">👑 LEADER</th>
+             <th style="padding:8px 6px;text-align:left;font-size:11px;font-weight:700;color:#3730a3">🔧 MANAGER</th>
+             <th style="padding:8px 6px;text-align:left;font-size:11px;font-weight:700;color:#065f46">📋 ASSIGNEE</th>
+           </tr>
+           ${applyAllRow}
+         </thead>
+         <tbody id="spawn-companies-tbody">
+           ${companyRows}
+         </tbody>
+       </table>
+     </div>`,
     `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-primary" onclick="confirmSpawn('${tid}')">▶ Spawn Tasks</button>`,
-    'md'
+     <button class="btn btn-primary" onclick="confirmSpawn('${tid}')">▶ Spawn ${_spawnCompanies.length} Tasks</button>`,
+    'xl'
   );
 }
 
+function applySpawnGlobal(field, value) {
+  // Apply the global row value to all per-company rows
+  const classMap = {
+    due:      'spawn-due-co',
+    leader:   'spawn-leader-co',
+    manager:  'spawn-manager-co',
+    assignee: 'spawn-assignee-co',
+  };
+  const cls = classMap[field];
+  if (!cls) return;
+  document.querySelectorAll('.' + cls).forEach(el => {
+    el.value = value;
+  });
+}
+
 async function confirmSpawn(tid) {
-  const due      = document.getElementById('spawn-due')?.value || null;
-  const leader   = document.getElementById('spawn-leader')?.value || null;
-  const manager  = document.getElementById('spawn-manager')?.value || null;
-  const assignee = document.getElementById('spawn-assignee')?.value || null;
+  // Collect per-company assignments
+  const companyAssignments = [];
+  const processed = new Set();
+
+  document.querySelectorAll('.spawn-assignee-co').forEach(sel => {
+    const cid = sel.dataset.cid;
+    if (!cid || processed.has(cid)) return;
+    processed.add(cid);
+
+    const dueEl     = document.querySelector(`.spawn-due-co[data-cid="${cid}"]`);
+    const leaderEl  = document.querySelector(`.spawn-leader-co[data-cid="${cid}"]`);
+    const managerEl = document.querySelector(`.spawn-manager-co[data-cid="${cid}"]`);
+
+    companyAssignments.push({
+      company_id:   cid,
+      due_date:     dueEl?.value     || null,
+      task_leader:  leaderEl?.value  || null,
+      task_manager: managerEl?.value || null,
+      assigned_to:  sel.value        || null,
+    });
+  });
+
   closeModal();
-  const body = {};
-  if (due)      body.due_date     = due;
-  if (leader)   body.task_leader  = leader;
-  if (manager)  body.task_manager = manager;
-  if (assignee) body.assigned_to  = assignee;
-  const r = await api('/api/recurring-templates/' + tid + '/spawn', { method:'POST', body });
-  if (r) toast(`✓ Created ${r.tasks_created} tasks across all companies`, 'ok');
+
+  const r = await api('/api/recurring-templates/' + tid + '/spawn', {
+    method: 'POST',
+    body: { company_assignments: companyAssignments }
+  });
+
+  if (r?.success) {
+    toast(`✓ Created ${r.tasks_created} task(s) across ${companyAssignments.length} companies`, 'ok');
+  }
 }
 
 // ── Audit Trail ────────────────────────────────────────────────────────────
