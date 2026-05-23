@@ -6085,7 +6085,14 @@ def annual_timeline(cid):
 @app.route("/api/companies/<cid>/annual-timeline-pdf")
 @login_required
 def annual_timeline_pdf(cid):
-    """Board-ready Annual Compliance Timeline PDF."""
+    """
+    Annual Compliance Calendar PDF.
+
+    Query params:
+      view      : 'full' (default) | 'month'
+      month     : 'YYYY-MM'  — required when view=month
+      category  : optional filter (e.g. 'GST', 'TDS', 'MCA') — applies to both views
+    """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import inch, mm
     from reportlab.lib import colors
@@ -6163,15 +6170,37 @@ def annual_timeline_pdf(cid):
     _ev_pdf("MSME Form-1 (Apr–Sep)",     date(fy_start_year,10,31),  "msme","MSME")
     _ev_pdf("MSME Form-1 (Oct–Mar)",     date(fy_end_year,4,30),     "msme","MSME")
 
-    # Filter & sort
+    # ── Read query params ────────────────────────────────────────────────────
+    view_mode  = request.args.get("view",     "full").strip().lower()   # full | month
+    month_str  = request.args.get("month",    "").strip()               # YYYY-MM
+    cat_filter = request.args.get("category", "").strip()               # MCA | GST | …
+
+    # ── Filter & sort ─────────────────────────────────────────────────────────
     seen = set()
     events_clean = []
     for ev in events:
-        k = (ev["event"], ev["date"].isoformat() if hasattr(ev["date"],"isoformat") else str(ev["date"]))
+        ev_date_key = ev["date"].isoformat() if hasattr(ev["date"],"isoformat") else str(ev["date"])
+        k = (ev["event"], ev_date_key)
         if k not in seen and ev["days_left"] >= -30 and ev["days_left"] <= 395:
             seen.add(k); events_clean.append(ev)
     events_clean.sort(key=lambda e: e["date"])
     events = events_clean
+
+    # ── Apply category filter if requested ────────────────────────────────────
+    if cat_filter:
+        events = [e for e in events if e.get("category","").lower() == cat_filter.lower()]
+
+    # ── Month filter ──────────────────────────────────────────────────────────
+    month_label = ""
+    if view_mode == "month" and month_str:
+        try:
+            _ym = date.fromisoformat(month_str + "-01")
+            month_label = _ym.strftime("%B %Y")
+            events = [e for e in events
+                      if (e["date"].strftime("%Y-%m") if hasattr(e["date"],"strftime")
+                          else str(e["date"])[:7]) == month_str]
+        except ValueError:
+            pass
 
     # ── PDF colours ──────────────────────────────────────────────────────────
     NAVY  = colors.HexColor("#0f2d5c")
@@ -6213,10 +6242,13 @@ def annual_timeline_pdf(cid):
 
     story = []
     # Header
+    cal_title  = f"COMPLIANCE CALENDAR — {month_label.upper()}" if month_label else "ANNUAL COMPLIANCE CALENDAR"
+    cal_sub    = f"Month: {month_label}  |  FY {fy_label}" if month_label else f"Financial Year: {fy_label}"
+    cat_note   = f"  |  Category: {cat_filter}" if cat_filter else ""
     story.append(Paragraph(co["name"].upper(), sty("h1", 15, True, NAVY, TA_CENTER)))
-    story.append(Paragraph("ANNUAL COMPLIANCE CALENDAR", sty("sub", 11, True, BLUE, TA_CENTER)))
+    story.append(Paragraph(cal_title, sty("sub", 11, True, BLUE, TA_CENTER)))
     story.append(Paragraph(
-        f"Financial Year: {fy_label}  |  Generated: {today.strftime('%d %B %Y')}  |  CIN: {co.get('cin','—')}",
+        f"{cal_sub}{cat_note}  |  Generated: {today.strftime('%d %B %Y')}  |  CIN: {co.get('cin','—')}",
         sty("dt", 8, False, GREY, TA_CENTER)))
     story.append(HRFlowable(width="100%", thickness=1.5, color=BLUE, spaceAfter=14))
 
@@ -6329,7 +6361,12 @@ def annual_timeline_pdf(cid):
 
     doc.build(story)
     buf.seek(0)
-    fname = f"{co['name'].replace(' ','_')}_Annual_Timeline_{fy_label.replace('-','_')}.pdf"
+    if month_label:
+        fname = f"{co['name'].replace(' ','_')}_Timeline_{month_label.replace(' ','_')}.pdf"
+    elif cat_filter:
+        fname = f"{co['name'].replace(' ','_')}_Timeline_{cat_filter}_{fy_label.replace('-','_')}.pdf"
+    else:
+        fname = f"{co['name'].replace(' ','_')}_Annual_Timeline_{fy_label.replace('-','_')}.pdf"
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=fname)
 
 
