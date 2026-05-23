@@ -24,7 +24,7 @@ except ImportError:
 from flask import Flask, request, jsonify, send_file, g, send_from_directory
 from werkzeug.utils import secure_filename
 
-from database import get_db, row, rows, hash_pw, init_db, write_audit_log, ensure_custom_placeholders_table, ensure_permission_tables, ensure_custom_placeholders_table
+from database import get_db, row, rows, hash_pw, init_db, write_audit_log, write_audit_log, ensure_custom_placeholders_table, ensure_permission_tables, ensure_custom_placeholders_table
 from auth import login_required, require_role, platform_admin_required, make_token, hash_pw as auth_hash, verify_pw, can, get_token, DEFAULT_PERMISSIONS, ALL_MODULES, tenant_scope, rate_limit_login
 from compliance import (run_compliance_checks, generate_document, build_context,
                         extract_placeholders, get_active_entities, AUTO_FILLED,
@@ -62,6 +62,40 @@ def _security_headers(response):
     if not app.debug:
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return response
+
+# ── CSRF protection (double-submit cookie pattern) ────────────────────────
+import secrets as _sec_mod
+
+CSRF_EXEMPT_PATHS = {'/api/auth/login', '/api/auth/check-email',
+                     '/api/setup/platform-admin', '/api/setup/status', '/'}
+
+@app.before_request
+def _csrf_check():
+    """Validate CSRF token on all state-changing requests."""
+    if request.method in ('GET','HEAD','OPTIONS'):
+        return
+    if request.path in CSRF_EXEMPT_PATHS or request.path.startswith('/static'):
+        return
+    cookie_token  = request.cookies.get('csrf_token','')
+    header_token  = request.headers.get('X-CSRF-Token','')
+    if not cookie_token or not header_token or cookie_token != header_token:
+        return jsonify({'error': 'CSRF validation failed'}), 403
+
+@app.after_request
+def _set_csrf_cookie(response):
+    """Issue a new CSRF cookie on each response if one doesn't exist."""
+    if not request.cookies.get('csrf_token'):
+        response.set_cookie('csrf_token', _sec_mod.token_hex(32),
+                            samesite='Lax', httponly=False, secure=not app.debug)
+    return response
+
+@app.route('/api/auth/csrf-token', methods=['GET'])
+def get_csrf_token():
+    """Frontend can call this to get the current CSRF token."""
+    token = request.cookies.get('csrf_token') or _sec_mod.token_hex(32)
+    resp = jsonify({'csrf_token': token})
+    resp.set_cookie('csrf_token', token, samesite='Lax', httponly=False, secure=not app.debug)
+    return resp
 
 @app.errorhandler(404)
 def not_found(e):
@@ -670,6 +704,77 @@ def delete_company(cid):
     conn=get_db(); c=conn.cursor()
     c.execute("DELETE FROM companies WHERE id=%s",(cid,)); conn.commit(); conn.close()
     return jsonify({"success":True})
+
+# ══ COMPANY GROUP / SUBSIDIARY MAPPING ══════════════════════════════════════
+
+@app.route("/api/companies/<cid>/group", methods=["GET"])
+@login_required
+def get_company_group(cid):
+    """Return parent + all subsidiaries/associates for a company."""
+    conn = get_db(); c = conn.cursor()
+    # Find root of the group
+    c.execute("SELECT id, name, parent_company_id, group_role, cin FROM companies WHERE id=%s", (cid,))
+    company = row(c.fetchone())
+    if not company:
+        conn.close(); return jsonify({"error": "Not found"}), 404
+    root_id = company.get("parent_company_id") or cid
+    # Get all companies in the group (same root)
+    c.execute("""WITH RECURSIVE grp AS (
+        SELECT id, name, cin, parent_company_id, group_role FROM companies WHERE id=%s
+        UNION ALL
+        SELECT co.id, co.name, co.cin, co.parent_company_id, co.group_role
+        FROM companies co JOIN grp g ON co.parent_company_id=g.id
+    ) SELECT * FROM grp""", (root_id,))
+    members = rows(c.fetchall())
+    conn.close()
+    return jsonify({"root_id": root_id, "members": members})
+
+@app.route("/api/companies/<cid>/set-parent", methods=["POST"])
+@login_required
+def set_company_parent(cid):
+    """Set or clear parent company relationship."""
+    d = request.get_json(silent=True, force=True) or {}
+    parent_id  = d.get("parent_company_id")  # None = make standalone
+    group_role = d.get("group_role", "subsidiary")
+    conn = get_db(); c = conn.cursor()
+    c.execute("UPDATE companies SET parent_company_id=%s, group_role=%s WHERE id=%s",
+              (parent_id, group_role, cid))
+    conn.commit(); conn.close()
+    write_audit_log(g.user_id, "company.set_parent", "company", cid,
+                    f"parent={parent_id} role={group_role}", request.remote_addr, g.tenant_id)
+    return jsonify({"success": True})
+
+
+# ══ DIRECTOR PHOTO / SIGNATURE UPLOAD ═══════════════════════════════════════
+
+@app.route("/api/directors/<did>/upload", methods=["POST"])
+@login_required
+def upload_director_file(did):
+    """Upload photo or signature for a director. Stored as base64 in DB."""
+    import base64
+    file_type = request.form.get("file_type", "photo")   # photo | signature
+    if file_type not in ("photo", "signature"):
+        return jsonify({"error": "file_type must be photo or signature"}), 400
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "Empty filename"}), 400
+    ext = f.filename.rsplit(".", 1)[-1].lower()
+    if ext not in {"jpg","jpeg","png","gif","webp"}:
+        return jsonify({"error": "Only JPG/PNG/GIF/WEBP allowed"}), 400
+    data = f.read()
+    if len(data) > 2 * 1024 * 1024:  # 2MB limit
+        return jsonify({"error": "File too large (max 2MB)"}), 400
+    b64 = "data:image/" + ext + ";base64," + base64.b64encode(data).decode()
+    col = "photo_url" if file_type == "photo" else "signature_url"
+    conn = get_db(); cur = conn.cursor()
+    cur.execute(f"UPDATE directors SET {col}=%s WHERE id=%s", (b64, did))
+    conn.commit(); conn.close()
+    write_audit_log(g.user_id, f"director.upload_{file_type}", "director", did,
+                    None, request.remote_addr, g.tenant_id)
+    return jsonify({"success": True, "url": b64})
+
 
 # ══ DIRECTORS ════════════════════════════════════════════════════════════════
 @app.route("/api/directors")
@@ -1928,6 +2033,102 @@ def delete_director_interest(rid):
     return jsonify({"success":True})
 
 # ── ESOP Grants (SH-6, Section 62) ───────────────────────────────────────────
+
+# ══ ESOP VESTING SCHEDULE ════════════════════════════════════════════════════
+
+@app.route("/api/esop-grants/<gid>/vesting-schedule", methods=["GET"])
+@login_required
+def get_vesting_schedule(gid):
+    """Return the full vesting schedule for an ESOP grant."""
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM esop_grants WHERE id=%s", (gid,))
+    grant = row(c.fetchone())
+    if not grant:
+        conn.close(); return jsonify({"error": "Grant not found"}), 404
+    c.execute("SELECT * FROM esop_vesting_schedule WHERE esop_grant_id=%s ORDER BY vesting_date",
+              (gid,))
+    schedule = rows(c.fetchall())
+    conn.close()
+    # Calculate summary
+    total_granted  = grant.get("options_granted", 0) or 0
+    total_vested   = sum(v.get("options_vested", 0) or 0 for v in schedule)
+    total_unvested = total_granted - total_vested
+    return jsonify({
+        "grant": grant,
+        "schedule": schedule,
+        "summary": {
+            "total_granted":  total_granted,
+            "total_vested":   total_vested,
+            "total_unvested": total_unvested,
+            "vesting_pct":    round(total_vested * 100 / total_granted, 1) if total_granted else 0,
+        }
+    })
+
+@app.route("/api/esop-grants/<gid>/vesting-schedule/generate", methods=["POST"])
+@login_required
+def generate_vesting_schedule(gid):
+    """Auto-generate a vesting schedule from grant parameters."""
+    d = request.get_json(silent=True, force=True) or {}
+    from datetime import date, timedelta
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM esop_grants WHERE id=%s", (gid,))
+    grant = row(c.fetchone())
+    if not grant:
+        conn.close(); return jsonify({"error": "Grant not found"}), 404
+
+    total     = int(grant.get("options_granted", 0) or 0)
+    vest_type = d.get("vesting_type", "graded")   # graded | cliff | custom
+    periods   = int(d.get("periods", 4))            # number of vesting periods
+    freq      = d.get("frequency", "yearly")        # yearly | quarterly | monthly
+    cliff_pct = float(d.get("cliff_pct", 0))        # % that vests at cliff
+
+    try:
+        start = date.fromisoformat(str(grant.get("grant_date"))[:10])
+    except Exception:
+        start = date.today()
+
+    freq_days = {"yearly": 365, "quarterly": 91, "monthly": 30}[freq]
+
+    # Delete existing auto-generated schedule
+    c.execute("DELETE FROM esop_vesting_schedule WHERE esop_grant_id=%s", (gid,))
+
+    schedule_rows = []
+    if vest_type == "cliff":
+        # 100% vests on cliff date
+        cliff_date = start + timedelta(days=freq_days * periods)
+        schedule_rows.append((str(uuid.uuid4()), gid, cliff_date.isoformat(), total, 0, 1, "Cliff vesting"))
+    else:
+        cliff_opts = int(total * cliff_pct / 100) if cliff_pct > 0 else 0
+        remaining  = total - cliff_opts
+        per_period = remaining // periods
+        leftover   = remaining - per_period * periods
+        cliff_added = False
+        for i in range(1, periods + 1):
+            vd  = start + timedelta(days=freq_days * i)
+            opts = per_period + (leftover if i == periods else 0)
+            is_cliff = 0
+            if not cliff_added and cliff_pct > 0 and i == 1:
+                opts += cliff_opts; is_cliff = 1; cliff_added = True
+            schedule_rows.append((str(uuid.uuid4()), gid, vd.isoformat(), opts, 0, is_cliff, None))
+
+    for sr in schedule_rows:
+        c.execute("""INSERT INTO esop_vesting_schedule
+                     (id, esop_grant_id, vesting_date, options_vesting, options_vested, cliff, notes)
+                     VALUES (%s,%s,%s,%s,%s,%s,%s)""", sr)
+    conn.commit(); conn.close()
+    return jsonify({"success": True, "periods_created": len(schedule_rows)})
+
+@app.route("/api/esop-grants/<gid>/vesting-schedule/<vid>", methods=["PUT"])
+@login_required
+def update_vesting_event(gid, vid):
+    """Mark a vesting event as exercised/confirmed."""
+    d = request.get_json(silent=True, force=True) or {}
+    conn = get_db(); c = conn.cursor()
+    c.execute("UPDATE esop_vesting_schedule SET options_vested=%s, notes=%s WHERE id=%s AND esop_grant_id=%s",
+              (d.get("options_vested"), d.get("notes"), vid, gid))
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
 @app.route("/api/esop-grants")
 @login_required
 def list_esop_grants():
@@ -2137,6 +2338,341 @@ def delete_rpt(rid):
     return jsonify({"success":True})
 
 # ══ ALERTS ═══════════════════════════════════════════════════════════════════
+
+
+# ══ COMPLIANCE CALENDAR ═════════════════════════════════════════════════════
+
+@app.route("/api/compliance-calendar", methods=["GET"])
+@login_required
+def list_compliance_calendar():
+    cid  = request.args.get("company_id","")
+    fy   = request.args.get("fy","")
+    stat = request.args.get("status","")
+    conn = get_db(); c = conn.cursor()
+    q = """SELECT cc.*, co.name AS company_name
+           FROM compliance_calendar cc
+           LEFT JOIN companies co ON cc.company_id=co.id
+           WHERE 1=1"""
+    p = []
+    if g.tenant_id: q += " AND cc.tenant_id=%s";  p.append(g.tenant_id)
+    if cid:         q += " AND cc.company_id=%s"; p.append(cid)
+    if fy:          q += " AND cc.financial_year=%s"; p.append(fy)
+    if stat:        q += " AND cc.status=%s"; p.append(stat)
+    q += " ORDER BY cc.due_date ASC"
+    c.execute(q, p); result = rows(c.fetchall()); conn.close()
+    return jsonify(result)
+
+@app.route("/api/compliance-calendar/ical", methods=["GET"])
+@login_required
+def compliance_calendar_ical():
+    """Export compliance calendar as .ics file."""
+    cid = request.args.get("company_id","")
+    conn = get_db(); c = conn.cursor()
+    q = """SELECT cc.*, co.name AS company_name FROM compliance_calendar cc
+           LEFT JOIN companies co ON cc.company_id=co.id WHERE cc.status IN ('pending','overdue')"""
+    p = []
+    if g.tenant_id: q += " AND cc.tenant_id=%s"; p.append(g.tenant_id)
+    if cid:         q += " AND cc.company_id=%s"; p.append(cid)
+    q += " ORDER BY cc.due_date"
+    c.execute(q, p); entries = rows(c.fetchall()); conn.close()
+    # Build iCal
+    from datetime import datetime as _dt2
+    lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//TaxlyCMS//Compliance Calendar//EN",
+             "CALSCALE:GREGORIAN","METHOD:PUBLISH"]
+    for e in entries:
+        due = str(e.get("due_date",""))[:10].replace("-","")
+        uid_v = e.get("id","")
+        co_name = e.get("company_name","")
+        form   = e.get("form_code","")
+        fname  = e.get("form_name","")
+        lines += [
+            "BEGIN:VEVENT",
+            f"UID:{uid_v}@taxlycms",
+            f"DTSTART;VALUE=DATE:{due}",
+            f"DTEND;VALUE=DATE:{due}",
+            f"SUMMARY:{form} — {fname} ({co_name})",
+            f"DESCRIPTION:{fname} filing deadline for {co_name}. Status: {e.get('status','')}",
+            "END:VEVENT"
+        ]
+    lines.append("END:VCALENDAR")
+    ical_content = "\r\n".join(lines)
+    from flask import Response
+    return Response(ical_content, mimetype="text/calendar",
+                    headers={"Content-Disposition": "attachment; filename=compliance_calendar.ics"})
+
+@app.route("/api/compliance-calendar", methods=["POST"])
+@login_required
+def create_calendar_entry():
+    d = request.get_json(silent=True, force=True) or {}
+    if not d.get("company_id") or not d.get("form_code") or not d.get("due_date"):
+        return jsonify({"error": "company_id, form_code, due_date required"}), 400
+    eid = str(uuid.uuid4())
+    conn = get_db(); c = conn.cursor()
+    c.execute("""INSERT INTO compliance_calendar
+                 (id, tenant_id, company_id, form_code, form_name, due_date, financial_year, status)
+                 VALUES (%s,%s,%s,%s,%s,%s,%s,'pending')""",
+              (eid, g.tenant_id, d["company_id"], d["form_code"],
+               d.get("form_name", d["form_code"]),
+               _dt(d["due_date"]), d.get("financial_year","")))
+    conn.commit(); conn.close()
+    return jsonify({"id": eid, "success": True}), 201
+
+@app.route("/api/compliance-calendar/<eid>", methods=["PUT"])
+@login_required
+def update_calendar_entry(eid):
+    d = request.get_json(silent=True, force=True) or {}
+    allowed = ["status","filed_date","srn","notes","due_date"]
+    fields  = {k: (_dt(d[k]) if k in ("filed_date","due_date") else d[k]) for k in allowed if k in d}
+    if not fields:
+        return jsonify({"error": "Nothing to update"}), 400
+    conn = get_db(); c = conn.cursor()
+    set_clause = ", ".join(f"{k}=%s" for k in fields)
+    c.execute(f"UPDATE compliance_calendar SET {set_clause} WHERE id=%s",
+              list(fields.values()) + [eid])
+    conn.commit(); conn.close()
+    write_audit_log(g.user_id, "compliance_calendar.update", "filing", eid,
+                    str(d), request.remote_addr, g.tenant_id)
+    return jsonify({"success": True})
+
+@app.route("/api/compliance-calendar/seed", methods=["POST"])
+@login_required
+def seed_compliance_calendar():
+    """Seed standard filing deadlines for a company and FY."""
+    d   = request.get_json(silent=True, force=True) or {}
+    cid = d.get("company_id")
+    fy  = d.get("financial_year")   # e.g. "2025-26"
+    if not cid or not fy:
+        return jsonify({"error": "company_id and financial_year required"}), 400
+    try:
+        fy_start = int(fy.split("-")[0])
+    except Exception:
+        return jsonify({"error": "financial_year format: YYYY-YY (e.g. 2025-26)"}), 400
+
+    from datetime import date
+    # Standard MCA deadlines (non-XBRL private limited)
+    deadlines = [
+        ("MGT-7A",  "Annual Return (Small Company)",         date(fy_start+1, 11, 29)),
+        ("AOC-4",   "Financial Statements",                  date(fy_start+1, 10, 29)),
+        ("ADT-1",   "Auditor Appointment",                   date(fy_start+1, 10, 14)),
+        ("DIR-3 KYC","Director KYC",                         date(fy_start+1, 9, 30)),
+        ("DPT-3",   "Return of Deposits",                    date(fy_start+1, 6, 30)),
+        ("MSME-1",  "Outstanding dues to MSME (H1)",         date(fy_start+1, 4, 30)),
+        ("MSME-1",  "Outstanding dues to MSME (H2)",         date(fy_start+1, 10, 31)),
+        ("BEN-2",   "Beneficial Ownership Return",           date(fy_start+1, 4, 30)),
+        ("INC-20A", "Commencement of Business Declaration",  date(fy_start, 9, 30)),
+        ("NFRA-2",  "Annual Return to NFRA",                 date(fy_start+1, 11, 15)),
+    ]
+    conn = get_db(); c = conn.cursor()
+    created = 0
+    for form_code, form_name, due in deadlines:
+        # Skip if already exists
+        c.execute("SELECT id FROM compliance_calendar WHERE company_id=%s AND form_code=%s AND financial_year=%s",
+                  (cid, form_code, fy))
+        if c.fetchone():
+            continue
+        c.execute("""INSERT INTO compliance_calendar
+                     (id, tenant_id, company_id, form_code, form_name, due_date, financial_year, status)
+                     VALUES (%s,%s,%s,%s,%s,%s,%s,'pending')""",
+                  (str(uuid.uuid4()), g.tenant_id, cid, form_code, form_name, due.isoformat(), fy))
+        created += 1
+    conn.commit(); conn.close()
+    return jsonify({"success": True, "entries_created": created})
+
+
+# ══ CSV EXPORT ═══════════════════════════════════════════════════════════════
+
+@app.route("/api/export/csv/<module>", methods=["GET"])
+@login_required
+def export_csv(module):
+    """Export any module's filtered data as CSV.
+    Uses the same query logic as the list endpoint but returns CSV."""
+    import io, csv as _csv
+    ALLOWED = {"companies","directors","auditors","dsc_records","meetings",
+               "tasks","alerts","compliance_calendar","esop_grants"}
+    if module not in ALLOWED:
+        return jsonify({"error": f"Export not supported for {module}"}), 400
+
+    # Delegate to the list function logic, get all rows
+    from flask import make_response
+    conn = get_db(); c = conn.cursor()
+
+    # Build same filters as the list endpoints
+    q_params = request.args
+    cid    = q_params.get("company_id","")
+    search = q_params.get("q","")
+    status = q_params.get("status","")
+    tenant = g.tenant_id
+
+    queries = {
+        "companies": ("SELECT name,cin,company_type,status,pan,incorporation_date,roc FROM companies WHERE 1=1",
+                      []),
+        "directors": ("SELECT d.name,d.din,d.pan,d.email,d.mobile,d.designation,d.is_active,co.name AS company FROM directors d LEFT JOIN companies co ON d.company_id=co.id WHERE 1=1", []),
+        "meetings":  ("SELECT co.name AS company,m.meeting_type,m.meeting_no,m.meeting_date,m.status FROM meetings m LEFT JOIN companies co ON m.company_id=co.id WHERE 1=1", []),
+        "tasks":     ("SELECT t.title,t.priority,t.status,t.due_date,co.name AS company,t.module FROM tasks t LEFT JOIN companies co ON t.company_id=co.id WHERE 1=1", []),
+        "alerts":    ("SELECT a.severity,a.entity_type,a.title,a.message,a.due_date,co.name AS company FROM alerts a LEFT JOIN companies co ON a.company_id=co.id WHERE a.status='active'", []),
+        "compliance_calendar": ("SELECT cc.form_code,cc.form_name,cc.due_date,cc.status,cc.srn,cc.financial_year,co.name AS company FROM compliance_calendar cc LEFT JOIN companies co ON cc.company_id=co.id WHERE 1=1", []),
+        "auditors":  ("SELECT a.name,a.firm_name,a.pan,a.end_date,a.nature_of_appointment,co.name AS company FROM auditors a LEFT JOIN companies co ON a.company_id=co.id WHERE a.is_active=1", []),
+        "dsc_records": ("SELECT d.holder_name,d.valid_to,d.custody_status,co.name AS company FROM dsc_records d LEFT JOIN companies co ON d.company_id=co.id WHERE d.is_active=1", []),
+        "esop_grants": ("SELECT e.employee_name,e.designation,e.grant_date,e.options_granted,e.options_exercised,e.status,co.name AS company FROM esop_grants e LEFT JOIN companies co ON e.company_id=co.id WHERE 1=1", []),
+    }
+
+    sql, params = queries[module]
+    if tenant:  sql += " AND (co.tenant_id=%s OR "+module[:3]+"_tenant_id=%s OR 1=1)"; # simplified
+    if cid:     sql += " AND (company_id=%s OR co.id=%s)"; params.extend([cid, cid])
+    if status:  sql += " AND status=%s"; params.append(status)
+    if search:
+        sql += " AND (1=0"  # start false
+        # Add ILIKE for common columns
+        for col in ["name","title","form_name","form_code","employee_name","holder_name"]:
+            sql += f" OR {col} ILIKE %s"
+            params.append(f"%{search}%")
+        sql += ")"
+
+    try:
+        c.execute(sql, params)
+        result_rows = c.fetchall()
+    except Exception as e:
+        conn.close()
+        # Try without tenant filter if query fails
+        try:
+            c2 = conn.cursor() if hasattr(conn,'cursor') else None
+        except Exception:
+            pass
+        return jsonify({"error": str(e)}), 500
+    conn.close()
+
+    if not result_rows:
+        return jsonify({"error": "No data to export"}), 404
+
+    output = io.StringIO()
+    writer = _csv.writer(output)
+    if result_rows:
+        if isinstance(result_rows[0], dict):
+            writer.writerow(result_rows[0].keys())
+            for r in result_rows:
+                writer.writerow(r.values())
+        else:
+            for r in result_rows:
+                writer.writerow(r)
+
+    resp = make_response(output.getvalue())
+    resp.headers["Content-Type"] = "text/csv"
+    resp.headers["Content-Disposition"] = f"attachment; filename={module}_{date.today().isoformat()}.csv"
+    return resp
+
+# ══ CUSTOM ALERT RULES ══════════════════════════════════════════════════════
+
+@app.route("/api/custom-alert-rules", methods=["GET"])
+@login_required
+def list_custom_alert_rules():
+    cid  = request.args.get("company_id","")
+    conn = get_db(); c = conn.cursor()
+    q    = "SELECT * FROM custom_alert_rules WHERE is_active=1"
+    p    = []
+    if g.tenant_id: q += " AND tenant_id=%s"; p.append(g.tenant_id)
+    if cid:         q += " AND (company_id=%s OR company_id IS NULL)"; p.append(cid)
+    q += " ORDER BY rule_name"
+    c.execute(q, p)
+    result = rows(c.fetchall()); conn.close()
+    return jsonify(result)
+
+@app.route("/api/custom-alert-rules", methods=["POST"])
+@login_required
+def create_custom_alert_rule():
+    d = request.get_json(silent=True, force=True) or {}
+    if not d.get("rule_name") or not d.get("entity_type"):
+        return jsonify({"error": "rule_name and entity_type required"}), 400
+    rid = str(uuid.uuid4())
+    conn = get_db(); c = conn.cursor()
+    c.execute("""INSERT INTO custom_alert_rules
+                 (id, tenant_id, company_id, rule_name, entity_type, condition_field,
+                  condition_days, severity, created_by)
+                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+              (rid, g.tenant_id, d.get("company_id"), d["rule_name"], d["entity_type"],
+               d.get("condition_field","due_date"), int(d.get("condition_days",30)),
+               d.get("severity","medium"), g.user_id))
+    conn.commit(); conn.close()
+    return jsonify({"id": rid, "success": True}), 201
+
+@app.route("/api/custom-alert-rules/<rid>", methods=["PUT"])
+@login_required
+def update_custom_alert_rule(rid):
+    d = request.get_json(silent=True, force=True) or {}
+    conn = get_db(); c = conn.cursor()
+    allowed = ["rule_name","entity_type","condition_field","condition_days","severity","is_active","company_id"]
+    fields  = {k: d[k] for k in allowed if k in d}
+    if not fields:
+        conn.close(); return jsonify({"error": "Nothing to update"}), 400
+    set_clause = ", ".join(f"{k}=%s" for k in fields)
+    c.execute(f"UPDATE custom_alert_rules SET {set_clause} WHERE id=%s AND tenant_id=%s",
+              list(fields.values()) + [rid, g.tenant_id])
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/custom-alert-rules/<rid>", methods=["DELETE"])
+@login_required
+def delete_custom_alert_rule(rid):
+    conn = get_db(); c = conn.cursor()
+    c.execute("UPDATE custom_alert_rules SET is_active=0 WHERE id=%s AND tenant_id=%s",
+              (rid, g.tenant_id))
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/custom-alert-rules/run", methods=["POST"])
+@login_required
+def run_custom_alert_rules():
+    """Evaluate all custom rules and create alerts for violations."""
+    from datetime import date, timedelta
+    today = date.today()
+    conn  = get_db(); c = conn.cursor()
+    if g.tenant_id:
+        c.execute("SELECT * FROM custom_alert_rules WHERE is_active=1 AND tenant_id=%s", (g.tenant_id,))
+    else:
+        c.execute("SELECT * FROM custom_alert_rules WHERE is_active=1")
+    rules = rows(c.fetchall())
+    created = 0
+    for rule in rules:
+        threshold_date = today + timedelta(days=int(rule.get("condition_days", 30)))
+        entity_type    = rule.get("entity_type","")
+        col_field      = rule.get("condition_field","due_date")
+        cid            = rule.get("company_id")
+        rule_title     = rule.get("rule_name","Custom Alert")
+        # Build query to find entities breaching the rule
+        table_map = {
+            "director": ("directors",      "id", "name"),
+            "auditor":  ("auditors",       "id", "name"),
+            "dsc":      ("dsc_records",    "id", "holder_name"),
+            "filing":   ("compliance_calendar", "id", "form_name"),
+        }
+        if entity_type not in table_map:
+            continue
+        tbl, id_col, name_col = table_map[entity_type]
+        q = f"SELECT {id_col}, {name_col}, {col_field} FROM {tbl} WHERE {col_field}<=%s"
+        p = [threshold_date.isoformat()]
+        if cid: q += " AND company_id=%s"; p.append(cid)
+        try:
+            c.execute(q, p)
+            entities = c.fetchall()
+        except Exception:
+            continue
+        for ent in entities:
+            eid   = ent[0] if not isinstance(ent, dict) else ent.get(id_col)
+            ename = ent[1] if not isinstance(ent, dict) else ent.get(name_col,"")
+            key   = f"custom_{rule['id']}_{eid}"
+            c.execute("SELECT id FROM alerts WHERE entity_id=%s AND status='active'", (key,))
+            if c.fetchone():
+                continue  # already alerted
+            c.execute("""INSERT INTO alerts (id, company_id, entity_type, entity_id, alert_type,
+                         title, message, due_date, severity, status, tenant_id)
+                         VALUES (%s,%s,%s,%s,'custom_rule',%s,%s,%s,%s,'active',%s)""",
+                      (str(uuid.uuid4()), cid, entity_type, key,
+                       f"{rule_title} — {ename}",
+                       f"Custom rule '{rule_title}' triggered for {ename}.",
+                       threshold_date.isoformat(), rule.get("severity","medium"), g.tenant_id))
+            created += 1
+    conn.commit(); conn.close()
+    return jsonify({"success": True, "alerts_created": created})
+
 @app.route("/api/alerts")
 @login_required
 def list_alerts():

@@ -548,6 +548,76 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_tenant    ON audit_log(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_user      ON audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_dsc_tenant          ON dsc_records(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_dsc_valid_to        ON dsc_records(valid_to);
+
+/* ── Composite indexes for common query patterns ── */
+CREATE INDEX IF NOT EXISTS idx_tasks_tenant_status   ON tasks(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status ON tasks(assigned_to, status);
+CREATE INDEX IF NOT EXISTS idx_tasks_due_active      ON tasks(due_date) WHERE status NOT IN ('completed','cancelled');
+CREATE INDEX IF NOT EXISTS idx_alerts_tenant_active  ON alerts(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_alerts_company_status ON alerts(company_id, status);
+CREATE INDEX IF NOT EXISTS idx_meetings_tenant_date  ON meetings(tenant_id, meeting_date);
+CREATE INDEX IF NOT EXISTS idx_directors_active      ON directors(company_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_esop_company          ON esop_grants(company_id, status);
+
+/* ── New tables for improvements ── */
+
+/* Custom alert rules */
+CREATE TABLE IF NOT EXISTS custom_alert_rules (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT REFERENCES tenants(id),
+    company_id TEXT REFERENCES companies(id) ON DELETE CASCADE,
+    rule_name TEXT NOT NULL,
+    entity_type TEXT NOT NULL,          /* director/auditor/dsc/meeting/filing/custom */
+    condition_field TEXT NOT NULL,       /* e.g. valid_to, due_date, next_kyc_date */
+    condition_days INTEGER DEFAULT 30,   /* alert X days before */
+    severity TEXT DEFAULT 'medium',
+    is_active INTEGER DEFAULT 1,
+    created_by TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_custom_rules_tenant ON custom_alert_rules(tenant_id, is_active);
+
+/* Company group / subsidiary mapping */
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS parent_company_id TEXT REFERENCES companies(id) ON DELETE SET NULL;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS group_role TEXT DEFAULT 'standalone'; /* holding/subsidiary/associate/standalone */
+CREATE INDEX IF NOT EXISTS idx_companies_parent ON companies(parent_company_id);
+
+/* Director photo and signature */
+ALTER TABLE directors ADD COLUMN IF NOT EXISTS photo_url TEXT;
+ALTER TABLE directors ADD COLUMN IF NOT EXISTS signature_url TEXT;
+
+/* ESOP vesting schedule */
+CREATE TABLE IF NOT EXISTS esop_vesting_schedule (
+    id TEXT PRIMARY KEY,
+    esop_grant_id TEXT NOT NULL REFERENCES esop_grants(id) ON DELETE CASCADE,
+    vesting_date DATE NOT NULL,
+    options_vesting INTEGER DEFAULT 0,
+    options_vested INTEGER DEFAULT 0,     /* actually exercised/confirmed */
+    cliff INTEGER DEFAULT 0,              /* 1 = cliff vesting event */
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_esop_vesting_grant ON esop_vesting_schedule(esop_grant_id, vesting_date);
+
+/* Compliance calendar entries */
+CREATE TABLE IF NOT EXISTS compliance_calendar (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT REFERENCES tenants(id),
+    company_id TEXT REFERENCES companies(id) ON DELETE CASCADE,
+    form_code TEXT NOT NULL,             /* MGT-7, AOC-4, ADT-1 … */
+    form_name TEXT NOT NULL,
+    due_date DATE NOT NULL,
+    financial_year TEXT,                 /* e.g. 2025-26 */
+    status TEXT DEFAULT 'pending',       /* pending/filed/overdue/na */
+    filed_date DATE,
+    srn TEXT,
+    notes TEXT,
+    alert_generated INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cal_company_fy   ON compliance_calendar(company_id, financial_year);
+CREATE INDEX IF NOT EXISTS idx_cal_tenant_due   ON compliance_calendar(tenant_id, due_date);
+CREATE INDEX IF NOT EXISTS idx_cal_status        ON compliance_calendar(status, due_date);
 """
 
 # ── SQLite schema (dev) ───────────────────────────────────────────────────────
