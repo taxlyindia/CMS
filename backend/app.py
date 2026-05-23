@@ -5892,7 +5892,16 @@ def global_search():
 @app.route("/api/companies/<cid>/annual-timeline")
 @login_required
 def annual_timeline(cid):
-    """Returns upcoming key annual events for the company."""
+    """
+    Returns the full annual compliance calendar for a company.
+    Covers: Board Meetings, AGM, MCA filings, GST (GSTR-1 & GSTR-3B monthly),
+    MSME Form-1, TDS Returns (quarterly), Tax Audit, Income Tax Return,
+    DIR-3 KYC, DPT-3.
+
+    Indian Financial Year: April 1 → March 31.
+    All dates computed relative to the CURRENT running FY so they always
+    show the next upcoming deadline, never one that's already > 12 months past.
+    """
     conn = get_db(); c = conn.cursor()
     c.execute("SELECT * FROM companies WHERE id=%s AND tenant_id=%s", (cid, g.tenant_id))
     co = row(c.fetchone())
@@ -5900,65 +5909,176 @@ def annual_timeline(cid):
     conn.close()
 
     today = date.today()
-    year  = today.year
+    # Indian FY starts April 1. If today is Jan–Mar we're in the tail of last FY.
+    fy_start_year  = today.year if today.month >= 4 else today.year - 1
+    fy_end_year    = fy_start_year + 1            # e.g. 2026 → 2027
+    fy_label       = f"{fy_start_year}-{str(fy_end_year)[-2:]}"
+    cy             = today.year                   # calendar year shorthand
+
     events = []
 
-    # Board meetings (quarterly)
-    for q_n, (m, d_) in enumerate([(4,1),(7,1),(10,1),(1,1)], 1):
-        y = year if m >= 4 else year + 1
+    def _add(ev_name, ev_date, ev_type, ev_icon, category=""):
+        """Append one event, rolling to next occurrence if already > 90 days past."""
+        days = (ev_date - today).days
+        events.append({
+            "event":    ev_name,
+            "date":     ev_date.isoformat(),
+            "days_left": days,
+            "type":     ev_type,
+            "icon":     ev_icon,
+            "category": category,
+        })
+
+    def _next_month_date(mo, dy, roll_year=None):
+        """Return date(year, mo, dy) advancing year if that date is already > 60 days past."""
+        y = roll_year or cy
         try:
-            ev_date = date(y, m, d_)
-            events.append({"event": f"Q{q_n} Board Meeting",
-                           "date": ev_date.isoformat(),
-                           "days_left": (ev_date - today).days,
-                           "type": "meeting", "icon": "🗓️"})
-        except ValueError: pass
+            d_ = date(y, mo, dy)
+            if (d_ - today).days < -60:
+                d_ = date(y + 1, mo, dy)
+            return d_
+        except ValueError:
+            # Handle month-end overflow (e.g. Feb 30 → Feb 28)
+            import calendar
+            last = calendar.monthrange(y, mo)[1]
+            return date(y, mo, min(dy, last))
 
-    # AGM — within 6 months of financial year end (March 31)
-    fy_end = date(year, 3, 31)
-    agm_deadline = date(year, 9, 30)  # 6 months after FY end = Sep 30
-    events.append({"event": "AGM Deadline",
-                   "date": agm_deadline.isoformat(),
-                   "days_left": (agm_deadline - today).days,
-                   "type": "agm", "icon": "🏛️"})
+    # ─────────────────────────────────────────────────────────────────────────
+    # 1. BOARD MEETINGS (quarterly — due within 45 days of quarter end)
+    #    Q1: Apr–Jun  → by Aug 14  | Q2: Jul–Sep  → by Nov 14
+    #    Q3: Oct–Dec  → by Feb 14  | Q4: Jan–Mar  → by May 14
+    # ─────────────────────────────────────────────────────────────────────────
+    board_qtrs = [
+        (f"Q1 Board Meeting (Apr–Jun)", date(fy_start_year, 8, 14)),
+        (f"Q2 Board Meeting (Jul–Sep)", date(fy_start_year, 11, 14)),
+        (f"Q3 Board Meeting (Oct–Dec)", date(fy_end_year,   2, 14)),
+        (f"Q4 Board Meeting (Jan–Mar)", date(fy_end_year,   5, 14)),
+    ]
+    for label, d_ in board_qtrs:
+        _add(label, d_, "meeting", "🗓️", "MCA")
 
-    # DIR-3 KYC — Sep 30
-    kyc_deadline = date(year if today.month <= 9 else year+1, 9, 30)
-    events.append({"event": "DIR-3 KYC Deadline",
-                   "date": kyc_deadline.isoformat(),
-                   "days_left": (kyc_deadline - today).days,
-                   "type": "kyc", "icon": "🪪"})
+    # ─────────────────────────────────────────────────────────────────────────
+    # 2. AGM — within 6 months of FY end (Sep 30)
+    # ─────────────────────────────────────────────────────────────────────────
+    _add("AGM Deadline", date(fy_end_year, 9, 30), "agm", "🏛️", "MCA")
 
-    # MGT-7 / AOC-4 — within 60/30 days of AGM assumed Sep 30
-    mgt7 = date(year if today.month <= 11 else year+1, 11, 29)
-    events.append({"event": "MGT-7 Filing",
-                   "date": mgt7.isoformat(),
-                   "days_left": (mgt7 - today).days,
-                   "type": "filing", "icon": "📋"})
-    aoc4 = date(year if today.month <= 10 else year+1, 10, 29)
-    events.append({"event": "AOC-4 Filing",
-                   "date": aoc4.isoformat(),
-                   "days_left": (aoc4 - today).days,
-                   "type": "filing", "icon": "📄"})
+    # ─────────────────────────────────────────────────────────────────────────
+    # 3. MCA ANNUAL FILINGS
+    # ─────────────────────────────────────────────────────────────────────────
+    _add("AOC-4 Filing (Annual Accounts)",  date(fy_end_year, 10, 29), "filing", "📄", "MCA")
+    _add("MGT-7 / MGT-7A (Annual Return)", date(fy_end_year, 11, 29), "filing", "📋", "MCA")
+    _add("DPT-3 (Deposits Return)",         date(fy_end_year,  6, 30), "filing", "📋", "MCA")
+    _add("DIR-3 KYC (Director KYC)",        date(fy_end_year,  9, 30), "kyc",    "🪪", "MCA")
+    _add("BEN-2 (Beneficial Ownership)",    date(fy_end_year,  4, 30), "filing", "📋", "MCA")
 
-    # DPT-3 — Jun 30
-    dpt3 = date(year if today.month <= 6 else year+1, 6, 30)
-    events.append({"event": "DPT-3 Filing",
-                   "date": dpt3.isoformat(),
-                   "days_left": (dpt3 - today).days,
-                   "type": "filing", "icon": "📋"})
+    # ─────────────────────────────────────────────────────────────────────────
+    # 4. GST — GSTR-3B Monthly (20th of next month for regular taxpayers)
+    #    and GSTR-1 Monthly (11th of next month)
+    #    Show next 6 months of each
+    # ─────────────────────────────────────────────────────────────────────────
+    gst_months = []
+    for i in range(6):
+        # compute the period month = today's month + i
+        base = date(today.year, today.month, 1)
+        # advance i months
+        mo = today.month + i
+        yr = today.year + (mo - 1) // 12
+        mo = ((mo - 1) % 12) + 1
+        period = date(yr, mo, 1)
 
-    # IT Return — Oct 31
-    itr = date(year if today.month <= 10 else year+1, 10, 31)
-    events.append({"event": "Income Tax Return",
-                   "date": itr.isoformat(),
-                   "days_left": (itr - today).days,
-                   "type": "tax", "icon": "🏛️"})
+        # GSTR-1 due: 11th of month following period
+        gstr1_mo = mo + 1; gstr1_yr = yr
+        if gstr1_mo > 12: gstr1_mo -= 12; gstr1_yr += 1
+        gstr1_due = date(gstr1_yr, gstr1_mo, 11)
 
-    events.sort(key=lambda e: e["date"])
-    return jsonify({"company_id": cid, "company_name": co["name"],
-                    "financial_year": f"{year if today.month >= 4 else year-1}-{str(year if today.month < 4 else year+1)[-2:]}",
-                    "events": events})
+        # GSTR-3B due: 20th of month following period
+        gstr3b_mo = mo + 1; gstr3b_yr = yr
+        if gstr3b_mo > 12: gstr3b_mo -= 12; gstr3b_yr += 1
+        gstr3b_due = date(gstr3b_yr, gstr3b_mo, 20)
+
+        period_str = period.strftime("%b %Y")
+        if (gstr1_due - today).days > -15:   # only show if not too far past
+            _add(f"GSTR-1 — {period_str}", gstr1_due,  "gst", "📊", "GST")
+        if (gstr3b_due - today).days > -15:
+            _add(f"GSTR-3B — {period_str}", gstr3b_due, "gst", "📊", "GST")
+
+    # GSTR-9 (Annual GST Return) — Dec 31
+    _add("GSTR-9 (Annual GST Return)",    date(fy_end_year, 12, 31), "gst", "📊", "GST")
+    _add("GSTR-9C (GST Reconciliation)",  date(fy_end_year, 12, 31), "gst", "📊", "GST")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 5. TDS RETURNS (quarterly — Form 24Q / 26Q / 27Q / 27EQ)
+    #    Q1 Apr–Jun → Jul 31  | Q2 Jul–Sep → Oct 31
+    #    Q3 Oct–Dec → Jan 31  | Q4 Jan–Mar → May 31
+    # ─────────────────────────────────────────────────────────────────────────
+    tds_qtrs = [
+        ("TDS Return Q1 (Apr–Jun) — 26Q/24Q", date(fy_start_year, 7,  31)),
+        ("TDS Return Q2 (Jul–Sep) — 26Q/24Q", date(fy_start_year, 10, 31)),
+        ("TDS Return Q3 (Oct–Dec) — 26Q/24Q", date(fy_end_year,   1,  31)),
+        ("TDS Return Q4 (Jan–Mar) — 26Q/24Q", date(fy_end_year,   5,  31)),
+    ]
+    for label, d_ in tds_qtrs:
+        _add(label, d_, "tds", "💰", "TDS")
+
+    # TDS Certificate issuance deadlines (Form 16 / 16A)
+    _add("Form 16 Issue (Salary TDS Cert)",   date(fy_end_year, 6, 15), "tds", "💰", "TDS")
+    _add("Form 16A Issue (Non-Salary Cert) Q1", date(fy_start_year, 8, 15), "tds", "💰", "TDS")
+    _add("Form 16A Issue (Non-Salary Cert) Q2", date(fy_start_year, 11, 15), "tds", "💰", "TDS")
+    _add("Form 16A Issue (Non-Salary Cert) Q3", date(fy_end_year, 2, 15), "tds", "💰", "TDS")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 6. INCOME TAX
+    # ─────────────────────────────────────────────────────────────────────────
+    _add("Tax Audit (Form 3CA/3CB/3CD)",  date(fy_end_year, 9,  30), "tax", "🏛️", "Income Tax")
+    _add("Income Tax Return (Companies)", date(fy_end_year, 10, 31), "tax", "🏛️", "Income Tax")
+    _add("ITR with Transfer Pricing",     date(fy_end_year, 11, 30), "tax", "🏛️", "Income Tax")
+    # Advance Tax instalments
+    _add("Advance Tax — 1st Instalment (15%)",  date(fy_start_year, 6, 15), "tax", "💸", "Income Tax")
+    _add("Advance Tax — 2nd Instalment (45%)",  date(fy_start_year, 9, 15), "tax", "💸", "Income Tax")
+    _add("Advance Tax — 3rd Instalment (75%)",  date(fy_start_year, 12, 15), "tax", "💸", "Income Tax")
+    _add("Advance Tax — 4th Instalment (100%)", date(fy_end_year,   3, 15), "tax", "💸", "Income Tax")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 7. MSME FILINGS
+    #    MSME Form-1: Half-yearly — Apr 30 (Oct–Mar period) & Oct 31 (Apr–Sep period)
+    #    MSME Udyam Registration renewal: annually
+    # ─────────────────────────────────────────────────────────────────────────
+    _add("MSME Form-1 (Apr–Sep period)",      date(fy_start_year, 10, 31), "msme", "🏭", "MSME")
+    _add("MSME Form-1 (Oct–Mar period)",      date(fy_end_year,    4, 30), "msme", "🏭", "MSME")
+    _add("MSME Samadhaan (Payment delayed?)", date(fy_start_year, 10, 15), "msme", "🏭", "MSME")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 8. ESI / PF (monthly — 15th)
+    # ─────────────────────────────────────────────────────────────────────────
+    for i in range(3):   # next 3 months
+        mo = today.month + i + 1
+        yr = today.year + (mo - 1) // 12
+        mo = ((mo - 1) % 12) + 1
+        d_ = date(yr, mo, 15)
+        period = d_.strftime("%b %Y")
+        if (d_ - today).days >= -5:
+            _add(f"PF/ESI Challan — {period}", d_, "payroll", "👷", "Payroll")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Filter: remove events > 13 months out and deduplicate
+    # Sort chronologically
+    # ─────────────────────────────────────────────────────────────────────────
+    seen = set()
+    filtered = []
+    for ev in events:
+        key = (ev["event"], ev["date"])
+        if key not in seen and ev["days_left"] >= -30 and ev["days_left"] <= 395:
+            seen.add(key)
+            filtered.append(ev)
+    filtered.sort(key=lambda e: e["date"])
+
+    return jsonify({
+        "company_id":    cid,
+        "company_name":  co["name"],
+        "financial_year": fy_label,
+        "events":        filtered,
+        "categories":    ["MCA", "GST", "TDS", "Income Tax", "MSME", "Payroll"],
+    })
 
 
 # ── P1 #12b — Annual Timeline PDF download ───────────────────────────────────
@@ -5984,29 +6104,74 @@ def annual_timeline_pdf(cid):
     today = date.today()
     year  = today.year
 
-    # ── Build events (same logic as annual_timeline JSON endpoint) ───────────
+    # ── Build events: call the JSON route logic directly ─────────────────────
+    fy_start_year = today.year if today.month >= 4 else today.year - 1
+    fy_end_year   = fy_start_year + 1
+    fy_label      = f"{fy_start_year}-{str(fy_end_year)[-2:]}"
+
+    def _ev_pdf(name, ev_date, ev_type, category=""):
+        events.append({"event": name, "date": ev_date,
+                       "days_left": (ev_date - today).days,
+                       "type": ev_type, "category": category})
+
     events = []
-    for q_n, (m, d_) in enumerate([(4,1),(7,1),(10,1),(1,1)], 1):
-        y = year if m >= 4 else year + 1
-        try:
-            ev_date = date(y, m, d_)
-            events.append({"event": f"Q{q_n} Board Meeting", "date": ev_date,
-                           "days_left": (ev_date - today).days, "type": "meeting"})
-        except ValueError: pass
+    board = [("Q1 Board Meeting (Apr–Jun)", date(fy_start_year, 8,14)),
+             ("Q2 Board Meeting (Jul–Sep)", date(fy_start_year,11,14)),
+             ("Q3 Board Meeting (Oct–Dec)", date(fy_end_year,   2,14)),
+             ("Q4 Board Meeting (Jan–Mar)", date(fy_end_year,   5,14))]
+    for nm, dt in board:
+        _ev_pdf(nm, dt, "meeting", "MCA")
 
-    def _ev(ev_name, ev_date, ev_type):
-        events.append({"event": ev_name, "date": ev_date,
-                       "days_left": (ev_date - today).days, "type": ev_type})
+    # MCA filings
+    _ev_pdf("AGM Deadline",                  date(fy_end_year, 9,30),  "agm",     "MCA")
+    _ev_pdf("AOC-4 (Annual Accounts)",       date(fy_end_year,10,29),  "filing",  "MCA")
+    _ev_pdf("MGT-7 / MGT-7A (Annual Return)",date(fy_end_year,11,29),  "filing",  "MCA")
+    _ev_pdf("DPT-3 (Deposits Return)",       date(fy_end_year, 6,30),  "filing",  "MCA")
+    _ev_pdf("DIR-3 KYC",                     date(fy_end_year, 9,30),  "kyc",     "MCA")
+    _ev_pdf("BEN-2 (Beneficial Ownership)",  date(fy_end_year, 4,30),  "filing",  "MCA")
 
-    _ev("AGM Deadline",        date(year, 9, 30), "agm")
-    _ev("DIR-3 KYC Deadline",  date(year if today.month <= 9 else year+1, 9, 30), "kyc")
-    _ev("MGT-7 Filing",        date(year if today.month <= 11 else year+1, 11, 29), "filing")
-    _ev("AOC-4 Filing",        date(year if today.month <= 10 else year+1, 10, 29), "filing")
-    _ev("DPT-3 Filing",        date(year if today.month <= 6 else year+1, 6, 30), "filing")
-    _ev("Income Tax Return",   date(year if today.month <= 10 else year+1, 10, 31), "tax")
-    events.sort(key=lambda e: e["date"])
+    # GST — next 6 monthly GSTR-1 and GSTR-3B
+    for i in range(6):
+        mo = today.month + i;  yr = today.year + (mo-1)//12;  mo = ((mo-1)%12)+1
+        g1mo = mo+1; g1yr = yr;  g3mo = mo+1; g3yr = yr
+        if g1mo>12: g1mo-=12; g1yr+=1
+        if g3mo>12: g3mo-=12; g3yr+=1
+        ps = date(yr,mo,1).strftime("%b %Y")
+        g1d = date(g1yr,g1mo,11); g3d = date(g3yr,g3mo,20)
+        if (g1d-today).days > -15: _ev_pdf(f"GSTR-1 — {ps}", g1d,  "gst","GST")
+        if (g3d-today).days > -15: _ev_pdf(f"GSTR-3B — {ps}",g3d,  "gst","GST")
+    _ev_pdf("GSTR-9 (Annual GST Return)",    date(fy_end_year,12,31), "gst","GST")
+    _ev_pdf("GSTR-9C (GST Reconciliation)",  date(fy_end_year,12,31), "gst","GST")
 
-    fy_label = f"{year if today.month >= 4 else year-1}-{str(year if today.month < 4 else year+1)[-2:]}"
+    # TDS Returns
+    tds = [("TDS Return Q1 (Apr–Jun)",date(fy_start_year,7,31)),
+           ("TDS Return Q2 (Jul–Sep)",date(fy_start_year,10,31)),
+           ("TDS Return Q3 (Oct–Dec)",date(fy_end_year,  1,31)),
+           ("TDS Return Q4 (Jan–Mar)",date(fy_end_year,  5,31))]
+    for nm,dt in tds: _ev_pdf(nm, dt, "tds","TDS")
+    _ev_pdf("Form 16 Issue Deadline",    date(fy_end_year,6,15),     "tds","TDS")
+
+    # Income Tax
+    _ev_pdf("Tax Audit (Form 3CA/3CB)",  date(fy_end_year,9,30),     "tax","Income Tax")
+    _ev_pdf("Income Tax Return",         date(fy_end_year,10,31),    "tax","Income Tax")
+    _ev_pdf("Advance Tax — 1st (15%)",   date(fy_start_year,6,15),   "tax","Income Tax")
+    _ev_pdf("Advance Tax — 2nd (45%)",   date(fy_start_year,9,15),   "tax","Income Tax")
+    _ev_pdf("Advance Tax — 3rd (75%)",   date(fy_start_year,12,15),  "tax","Income Tax")
+    _ev_pdf("Advance Tax — 4th (100%)",  date(fy_end_year,3,15),     "tax","Income Tax")
+
+    # MSME
+    _ev_pdf("MSME Form-1 (Apr–Sep)",     date(fy_start_year,10,31),  "msme","MSME")
+    _ev_pdf("MSME Form-1 (Oct–Mar)",     date(fy_end_year,4,30),     "msme","MSME")
+
+    # Filter & sort
+    seen = set()
+    events_clean = []
+    for ev in events:
+        k = (ev["event"], ev["date"].isoformat() if hasattr(ev["date"],"isoformat") else str(ev["date"]))
+        if k not in seen and ev["days_left"] >= -30 and ev["days_left"] <= 395:
+            seen.add(k); events_clean.append(ev)
+    events_clean.sort(key=lambda e: e["date"])
+    events = events_clean
 
     # ── PDF colours ──────────────────────────────────────────────────────────
     NAVY  = colors.HexColor("#0f2d5c")
@@ -6022,6 +6187,18 @@ def annual_timeline_pdf(cid):
         "kyc":     colors.HexColor("#0891b2"),
         "filing":  colors.HexColor("#2563eb"),
         "tax":     colors.HexColor("#d97706"),
+        "gst":     colors.HexColor("#059669"),
+        "tds":     colors.HexColor("#dc2626"),
+        "msme":    colors.HexColor("#7c3aed"),
+        "payroll": colors.HexColor("#0891b2"),
+    }
+    cat_colors = {
+        "MCA":        colors.HexColor("#1a56db"),
+        "GST":        colors.HexColor("#059669"),
+        "TDS":        colors.HexColor("#dc2626"),
+        "Income Tax": colors.HexColor("#d97706"),
+        "MSME":       colors.HexColor("#7c3aed"),
+        "Payroll":    colors.HexColor("#0891b2"),
     }
 
     buf = _io.BytesIO()
@@ -6075,48 +6252,71 @@ def annual_timeline_pdf(cid):
     story.append(Paragraph("Compliance Events — Chronological", sty("s2", 10, True, NAVY)))
     story.append(Spacer(1, 6))
 
-    ev_rows = [[Paragraph(h, sty("eh"+str(i), 8, True, WHITE))
-                for i, h in enumerate(["Event","Date","Days Left","Status","Type"])]]
+    # Group events by category for PDF sections
+    from collections import OrderedDict as _OD
+    cat_order = ["MCA", "GST", "TDS", "Income Tax", "MSME", "Payroll"]
+    grouped = _OD()
+    for cat in cat_order: grouped[cat] = []
     for ev in events:
-        dl   = ev["days_left"]
-        if dl < 0:
-            status_txt = f"OVERDUE {-dl}d";  status_col = RED
-        elif dl == 0:
-            status_txt = "TODAY!";           status_col = RED
-        elif dl <= 30:
-            status_txt = f"{dl} days";       status_col = AMBER
-        elif dl <= 90:
-            status_txt = f"{dl} days";       status_col = colors.HexColor("#2563eb")
-        else:
-            status_txt = f"{dl} days";       status_col = GREEN
-        type_col = type_colors.get(ev["type"], BLUE)
-        row_idx  = len(ev_rows)
-        ev_rows.append([
-            Paragraph(ev["event"], sty(f"en{row_idx}", 9, True)),
-            Paragraph(ev["date"].strftime("%d %b %Y"), sty(f"ed{row_idx}", 9)),
-            Paragraph(status_txt, sty(f"el{row_idx}", 9, True, status_col)),
-            Paragraph("⚠ Overdue" if dl < 0 else ("✓ Upcoming" if dl <= 90 else "◷ Scheduled"),
-                      sty(f"es{row_idx}", 8, col=status_col)),
-            Paragraph(ev["type"].upper(), sty(f"et{row_idx}", 8, True, type_col)),
+        cat = ev.get("category","Other")
+        if cat not in grouped: grouped[cat] = []
+        grouped[cat].append(ev)
+
+    for cat, cat_events in grouped.items():
+        if not cat_events: continue
+        cat_col = cat_colors.get(cat, BLUE)
+        story.append(Spacer(1, 8))
+        story.append(Paragraph(f"{cat} Deadlines", sty(f"cat_{cat}", 10, True, cat_col)))
+        story.append(Spacer(1, 4))
+
+        ev_rows = [[Paragraph(h, sty(f"ch_{cat}_{i}", 8, True, WHITE))
+                    for i, h in enumerate(["Event / Filing","Due Date","Days Left","Status"])]]
+        for j, ev in enumerate(cat_events):
+            dl = ev["days_left"]
+            if dl < 0:
+                status_txt = f"OVERDUE {-dl}d"; status_col = RED
+            elif dl == 0:
+                status_txt = "TODAY!";           status_col = RED
+            elif dl <= 30:
+                status_txt = f"Due in {dl}d";   status_col = AMBER
+            elif dl <= 90:
+                status_txt = f"{dl} days";       status_col = colors.HexColor("#2563eb")
+            else:
+                status_txt = f"{dl} days";       status_col = GREEN
+
+            ev_date = ev["date"]
+            if hasattr(ev_date, "strftime"):
+                date_str = ev_date.strftime("%d %b %Y")
+            else:
+                try: date_str = date.fromisoformat(str(ev_date)[:10]).strftime("%d %b %Y")
+                except: date_str = str(ev_date)[:10]
+
+            row_bg = colors.HexColor("#fef2f2") if dl < 0 else (
+                     colors.HexColor("#fffbeb") if dl <= 30 else
+                     (colors.HexColor("#f8fafc") if j%2==0 else WHITE))
+            ev_rows.append([
+                Paragraph(ev["event"], sty(f"en_{cat}_{j}", 9, True)),
+                Paragraph(date_str,    sty(f"ed_{cat}_{j}", 9)),
+                Paragraph(status_txt,  sty(f"el_{cat}_{j}", 9, True, status_col)),
+                Paragraph("⚠ Overdue" if dl < 0 else ("⏳ Soon" if dl<=30 else "◷ Scheduled"),
+                          sty(f"es_{cat}_{j}", 8, col=status_col)),
+            ])
+
+        ev_ts = TableStyle([
+            ("BACKGROUND",(0,0),(-1,0),cat_col), ("TEXTCOLOR",(0,0),(-1,0),WHITE),
+            ("GRID",(0,0),(-1,-1),0.25,colors.HexColor("#e2e8f0")),
+            ("ROWPADDING",(0,0),(-1,-1),6), ("FONTSIZE",(0,0),(-1,-1),8.5),
+            ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
         ])
-
-    ev_ts = TableStyle([
-        ("BACKGROUND",(0,0),(-1,0),NAVY), ("TEXTCOLOR",(0,0),(-1,0),WHITE),
-        ("GRID",(0,0),(-1,-1),0.25,colors.HexColor("#e2e8f0")),
-        ("ROWPADDING",(0,0),(-1,-1),8), ("FONTSIZE",(0,0),(-1,-1),9),
-        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
-    ])
-    for i in range(1, len(ev_rows)):
-        if i % 2 == 0:
-            ev_ts.add("BACKGROUND",(0,i),(-1,i),colors.HexColor("#f8fafc"))
-        if ev_rows[i][0].text and events[i-1]["days_left"] < 0:
-            ev_ts.add("BACKGROUND",(0,i),(-1,i),colors.HexColor("#fef2f2"))
-
-    ev_table = Table(ev_rows,
-                     colWidths=[doc.width*0.28, doc.width*0.15, doc.width*0.15,
-                                 doc.width*0.22, doc.width*0.2],
-                     style=ev_ts)
-    story.append(ev_table)
+        for i in range(1, len(ev_rows)):
+            ev_ts.add("BACKGROUND",(0,i),(-1,i),
+                colors.HexColor("#fef2f2") if cat_events[i-1]["days_left"] < 0 else
+                (colors.HexColor("#fffbeb") if cat_events[i-1]["days_left"]<=30 else
+                 (colors.HexColor("#f8fafc") if i%2==0 else WHITE)))
+        story.append(Table(ev_rows,
+                           colWidths=[doc.width*0.42, doc.width*0.18,
+                                       doc.width*0.18, doc.width*0.22],
+                           style=ev_ts))
     story.append(Spacer(1, 14))
 
     # Footer
