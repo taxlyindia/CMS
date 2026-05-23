@@ -7157,7 +7157,29 @@ async function bulkAction(action) {
 }
 
 // ── AGM Timeline widget (used in company detail) ───────────────────────────
-// ── Annual Timeline — inline loader ──────────────────────────────────────────
+// ── Annual Timeline — inline loader with category tabs + filter ───────────────
+const _TIMELINE_CAT_CFG = {
+  'MCA':        { color:'#1a56db', bg:'#eff6ff',  icon:'🏢' },
+  'GST':        { color:'#059669', bg:'#ecfdf5',  icon:'📊' },
+  'TDS':        { color:'#dc2626', bg:'#fef2f2',  icon:'💰' },
+  'Income Tax': { color:'#d97706', bg:'#fffbeb',  icon:'🏛️' },
+  'MSME':       { color:'#7c3aed', bg:'#f5f3ff',  icon:'🏭' },
+  'Payroll':    { color:'#0891b2', bg:'#ecfeff',  icon:'👷' },
+};
+const _TYPE_CFG = {
+  meeting: { color:'#3b82f6', label:'Meeting' },
+  agm:     { color:'#7c3aed', label:'AGM' },
+  kyc:     { color:'#0891b2', label:'KYC' },
+  filing:  { color:'#2563eb', label:'Filing' },
+  gst:     { color:'#059669', label:'GST' },
+  tds:     { color:'#dc2626', label:'TDS' },
+  tax:     { color:'#d97706', label:'Tax' },
+  msme:    { color:'#7c3aed', label:'MSME' },
+  payroll: { color:'#0891b2', label:'Payroll' },
+};
+
+let _timelineData = {};   // cid → api response
+
 async function loadInlineTimeline(cid) {
   const body = document.getElementById('cm-timeline-body-' + cid);
   if (!body) return;
@@ -7166,66 +7188,89 @@ async function loadInlineTimeline(cid) {
     body.innerHTML = '<div style="padding:12px;color:var(--text3);font-size:12px">Could not load timeline</div>';
     return;
   }
+  _timelineData[cid] = d;
+  renderTimeline(cid, 'All');
+}
 
-  const typeConfig = {
-    meeting: { color:'#3b82f6', bg:'#eff6ff', label:'Board Meeting' },
-    agm:     { color:'#7c3aed', bg:'#f5f3ff', label:'AGM' },
-    kyc:     { color:'#0891b2', bg:'#ecfeff', label:'KYC' },
-    filing:  { color:'#2563eb', bg:'#eff6ff', label:'Filing' },
-    tax:     { color:'#d97706', bg:'#fffbeb', label:'Tax' },
-  };
-
-  const rows = d.events.map(ev => {
-    const dl  = ev.days_left;
-    const cfg = typeConfig[ev.type] || { color:'#64748b', bg:'#f8fafc', label:ev.type };
-
-    let statusCol, statusText, statusBg;
-    if (dl < 0) {
-      statusCol = '#dc2626'; statusBg = '#fef2f2';
-      statusText = `<span style="font-weight:700">⚠ Overdue ${-dl}d</span>`;
-    } else if (dl === 0) {
-      statusCol = '#dc2626'; statusBg = '#fef2f2';
-      statusText = `<span style="font-weight:700">🔴 Today!</span>`;
-    } else if (dl <= 30) {
-      statusCol = '#d97706'; statusBg = '#fffbeb';
-      statusText = `<span style="font-weight:600">⏳ ${dl} days</span>`;
-    } else if (dl <= 90) {
-      statusCol = '#2563eb'; statusBg = '#eff6ff';
-      statusText = `${dl} days`;
-    } else {
-      statusCol = '#16a34a'; statusBg = '#f0fdf4';
-      statusText = `${dl} days`;
-    }
-
-    return `<div style="display:grid;grid-template-columns:28px 1fr auto auto;align-items:center;gap:10px;
-                         padding:9px 12px;border-radius:8px;margin-bottom:4px;
-                         background:${dl < 0 ? '#fef2f2' : 'var(--surface3)'};
-                         border-left:3px solid ${cfg.color}">
-      <span style="font-size:16px;text-align:center">${ev.icon}</span>
-      <div>
-        <div style="font-size:12.5px;font-weight:600;color:var(--text)">${ev.event}</div>
-        <div style="font-size:10.5px;color:var(--text3);margin-top:1px">${ev.date}</div>
-      </div>
-      <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:12px;
-                   background:${cfg.bg};color:${cfg.color};white-space:nowrap">${cfg.label.toUpperCase()}</span>
-      <span style="font-size:11px;color:${statusCol};text-align:right;min-width:80px;white-space:nowrap">${statusText}</span>
-    </div>`;
-  }).join('');
+function renderTimeline(cid, activeCategory) {
+  const body = document.getElementById('cm-timeline-body-' + cid);
+  if (!body) return;
+  const d = _timelineData[cid];
+  if (!d) return;
 
   const overdue  = d.events.filter(e => e.days_left < 0).length;
   const imminent = d.events.filter(e => e.days_left >= 0 && e.days_left <= 30).length;
+  const cats = d.categories || [...new Set(d.events.map(e => e.category).filter(Boolean))];
 
+  // ── Category filter tabs ──────────────────────────────────────────────────
+  const tabHtml = ['All', ...cats].map(cat => {
+    const cfg = _TIMELINE_CAT_CFG[cat] || {};
+    const active = cat === activeCategory;
+    const cnt = cat === 'All' ? d.events.length : d.events.filter(e=>e.category===cat).length;
+    return `<button onclick="renderTimeline('${cid}','${cat}')"
+      style="font-size:10.5px;font-weight:${active?'700':'500'};padding:4px 10px;border-radius:16px;
+             border:1.5px solid ${active ? (cfg.color||'var(--accent)') : 'var(--border)'};
+             background:${active ? (cfg.bg||'var(--accent-soft)') : 'transparent'};
+             color:${active ? (cfg.color||'var(--accent)') : 'var(--text2)'};cursor:pointer;
+             white-space:nowrap">
+      ${cfg.icon||''} ${cat} <span style="opacity:.7">(${cnt})</span>
+    </button>`;
+  }).join('');
+
+  // ── Summary bar ───────────────────────────────────────────────────────────
   const summaryBar = `
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <span style="font-size:11px;color:var(--text3)">FY ${d.financial_year}</span>
-      <span style="margin-left:auto"></span>
-      ${overdue  ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#fef2f2;color:#dc2626">⚠ ${overdue} Overdue</span>` : ''}
-      ${imminent ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#fffbeb;color:#d97706">⏳ ${imminent} Due Soon</span>` : ''}
-      ${!overdue && !imminent ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#f0fdf4;color:#16a34a">✓ All on Track</span>` : ''}
-      <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--surface3);color:var(--text2)">${d.events.length} events</span>
-    </div>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <span style="font-size:11px;font-weight:600;color:var(--text2)">FY ${d.financial_year}</span>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:4px">
+        ${overdue  ? `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:10px;background:#fef2f2;color:#dc2626">⚠ ${overdue} Overdue</span>` : ''}
+        ${imminent ? `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:10px;background:#fffbeb;color:#d97706">⏳ ${imminent} Due in 30d</span>` : ''}
+        ${!overdue && !imminent ? `<span style="font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:10px;background:#f0fdf4;color:#16a34a">✓ All on Track</span>` : ''}
+      </div>
+      <span style="margin-left:auto;font-size:10.5px;color:var(--text3)">${d.events.length} total events</span>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;
+                border-bottom:1px solid var(--border)">${tabHtml}</div>`;
 
-  body.innerHTML = summaryBar + rows;
+  // ── Filtered event rows ───────────────────────────────────────────────────
+  const filtered = activeCategory === 'All'
+    ? d.events
+    : d.events.filter(e => e.category === activeCategory);
+
+  const rows = filtered.map(ev => {
+    const dl   = ev.days_left;
+    const tCfg = _TYPE_CFG[ev.type]   || { color:'#64748b', label: ev.type };
+    const cCfg = _TIMELINE_CAT_CFG[ev.category] || { color:'#64748b', bg:'#f8fafc' };
+    const icon = ev.icon || cCfg.icon || '📌';
+
+    let statusCol, statusText, rowBg;
+    if      (dl < 0)   { statusCol='#dc2626'; statusText=`⚠ Overdue ${-dl}d`; rowBg='#fef2f2'; }
+    else if (dl === 0) { statusCol='#dc2626'; statusText='🔴 Today!';          rowBg='#fef2f2'; }
+    else if (dl <= 30) { statusCol='#d97706'; statusText=`⏳ ${dl} days`;     rowBg='#fffbeb'; }
+    else if (dl <= 90) { statusCol='#2563eb'; statusText=`${dl} days`;        rowBg='var(--surface3)'; }
+    else               { statusCol='#16a34a'; statusText=`${dl} days`;        rowBg='var(--surface3)'; }
+
+    // format date nicely
+    let dStr = ev.date;
+    try { dStr = new Date(ev.date + 'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); } catch{}
+
+    return `<div style="display:grid;grid-template-columns:26px 1fr auto auto;align-items:center;gap:10px;
+                         padding:8px 12px;border-radius:7px;margin-bottom:3px;
+                         background:${rowBg};border-left:3px solid ${cCfg.color}">
+      <span style="font-size:15px;text-align:center">${icon}</span>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text)">${ev.event}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:1px">${dStr}</div>
+      </div>
+      <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;
+                   background:${cCfg.bg};color:${cCfg.color};white-space:nowrap;flex-shrink:0">
+        ${(ev.category||tCfg.label).toUpperCase()}
+      </span>
+      <span style="font-size:11px;font-weight:600;color:${statusCol};text-align:right;
+                   white-space:nowrap;min-width:82px">${statusText}</span>
+    </div>`;
+  }).join('');
+
+  body.innerHTML = summaryBar + (rows || '<div style="padding:14px;color:var(--text3);font-size:12px;text-align:center">No events in this category</div>');
 }
 
 // Keep showAGMTimeline as alias for backward compatibility (AGM button in company table row)
