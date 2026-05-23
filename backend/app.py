@@ -5570,11 +5570,15 @@ def spawn_tasks_from_template(tid):
     for co_id in companies_list:
         task_id = str(uuid.uuid4())
         c.execute("""INSERT INTO tasks (id,company_id,title,description,priority,status,
-                     due_date,module,estimated_hrs,created_by,tenant_id)
-                     VALUES (%s,%s,%s,%s,%s,'pending',%s,%s,%s,%s,%s)""",
+                     due_date,module,estimated_hrs,created_by,tenant_id,
+                     assigned_to,task_manager,task_leader)
+                     VALUES (%s,%s,%s,%s,%s,'pending',%s,%s,%s,%s,%s,%s,%s,%s)""",
                   (task_id, co_id, tmpl["title"], tmpl.get("description",""),
                    tmpl.get("priority","medium"), due, tmpl.get("module"),
-                   float(tmpl.get("estimated_hrs") or 0), g.user_id, g.tenant_id))
+                   float(tmpl.get("estimated_hrs") or 0), g.user_id, g.tenant_id,
+                   d.get("assigned_to") or None,
+                   d.get("task_manager") or None,
+                   d.get("task_leader") or None))
         created += 1
     conn.commit(); conn.close()
     return jsonify({"success": True, "tasks_created": created})
