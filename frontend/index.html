@@ -4026,7 +4026,7 @@ async function showCompanyMaster(id) {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-primary btn-sm" onclick="downloadMasterPDF('${co.id}','${esc(co.name)}')">⬇️ Download Master PDF</button>
         <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="downloadCompliancePDF('${co.id}','${esc(co.name)}')">📋 Compliance PDF</button>
-        <button class="btn btn-outline btn-sm" onclick="showAGMTimeline('${co.id}')">📅 Annual Timeline</button>
+        <button class="btn btn-sm" style="background:#7c3aed;color:#fff" onclick="downloadTimelinePDF('${co.id}','${esc(co.name)}')">📅 Timeline PDF</button>
       </div>
     </div>
 
@@ -4111,6 +4111,23 @@ async function showCompanyMaster(id) {
       <div class="cm-sec-title" style="color:var(--red)">🔔 Active Alerts (${alts.length})</div>
       ${alts.map(a => `<div class="alert-row ${a.severity}"><div><div class="alert-title">${a.title}</div><div class="alert-msg">${a.message}</div></div></div>`).join('')}
     </div>` : ''}
+
+    <!-- Annual Timeline Section — loaded async after modal opens -->
+    <div class="cm-section" id="cm-timeline-section-${co.id}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">
+        <div class="cm-sec-title" style="margin-bottom:0">📅 Annual Compliance Timeline</div>
+        <button class="btn btn-xs btn-outline" style="border-color:#7c3aed;color:#7c3aed"
+                onclick="downloadTimelinePDF('${co.id}','${esc(co.name)}')">
+          ⬇️ Download Timeline PDF
+        </button>
+      </div>
+      <div id="cm-timeline-body-${co.id}" style="display:flex;flex-direction:column;gap:4px">
+        <div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">
+          <div class="spin" style="display:inline-block;width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:6px;vertical-align:middle"></div>
+          Loading timeline…
+        </div>
+      </div>
+    </div>
   `;
 
   openModal(`📊 ${co.name} — Company Master Data`, html,
@@ -4118,6 +4135,9 @@ async function showCompanyMaster(id) {
      <button class="btn btn-ghost" onclick="closeModal();openCoModal('${id}')">Edit Company</button>
      <button class="btn btn-primary" onclick="downloadMasterPDF('${id}','${esc(co.name)}')">⬇️ Download PDF</button>`,
     'xl');
+
+  // Load timeline inline after modal renders
+  loadInlineTimeline('${co.id}');
 }
 
 async function downloadMasterPDF(id, name) {
@@ -7137,35 +7157,90 @@ async function bulkAction(action) {
 }
 
 // ── AGM Timeline widget (used in company detail) ───────────────────────────
-async function showAGMTimeline(cid) {
-  const d = await api('/api/companies/'+cid+'/annual-timeline');
-  if (!d || !d.events) return;
-  const today = new Date();
-  const events = d.events;
-  let html = `<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:12px">
-    📅 Annual Timeline — FY ${d.financial_year}</div>
-    <div style="display:flex;flex-direction:column;gap:6px">`;
-  events.forEach(ev => {
-    const dl = ev.days_left;
-    const urgency = dl < 0 ? '#dc2626' : dl < 30 ? '#f59e0b' : '#3b82f6';
-    const label = dl < 0 ? `Overdue ${-dl}d` : dl === 0 ? 'Today!' : `${dl} days`;
-    html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--surface3);border-radius:8px;border-left:3px solid ${urgency}">
-      <span>${ev.icon}</span>
-      <div style="flex:1"><div style="font-size:12px;font-weight:600">${ev.event}</div>
-      <div style="font-size:10.5px;color:var(--text3)">${ev.date}</div></div>
-      <span style="font-size:10.5px;font-weight:600;color:${urgency}">${label}</span>
+// ── Annual Timeline — inline loader ──────────────────────────────────────────
+async function loadInlineTimeline(cid) {
+  const body = document.getElementById('cm-timeline-body-' + cid);
+  if (!body) return;
+  const d = await api('/api/companies/' + cid + '/annual-timeline');
+  if (!d || !d.events) {
+    body.innerHTML = '<div style="padding:12px;color:var(--text3);font-size:12px">Could not load timeline</div>';
+    return;
+  }
+
+  const typeConfig = {
+    meeting: { color:'#3b82f6', bg:'#eff6ff', label:'Board Meeting' },
+    agm:     { color:'#7c3aed', bg:'#f5f3ff', label:'AGM' },
+    kyc:     { color:'#0891b2', bg:'#ecfeff', label:'KYC' },
+    filing:  { color:'#2563eb', bg:'#eff6ff', label:'Filing' },
+    tax:     { color:'#d97706', bg:'#fffbeb', label:'Tax' },
+  };
+
+  const rows = d.events.map(ev => {
+    const dl  = ev.days_left;
+    const cfg = typeConfig[ev.type] || { color:'#64748b', bg:'#f8fafc', label:ev.type };
+
+    let statusCol, statusText, statusBg;
+    if (dl < 0) {
+      statusCol = '#dc2626'; statusBg = '#fef2f2';
+      statusText = `<span style="font-weight:700">⚠ Overdue ${-dl}d</span>`;
+    } else if (dl === 0) {
+      statusCol = '#dc2626'; statusBg = '#fef2f2';
+      statusText = `<span style="font-weight:700">🔴 Today!</span>`;
+    } else if (dl <= 30) {
+      statusCol = '#d97706'; statusBg = '#fffbeb';
+      statusText = `<span style="font-weight:600">⏳ ${dl} days</span>`;
+    } else if (dl <= 90) {
+      statusCol = '#2563eb'; statusBg = '#eff6ff';
+      statusText = `${dl} days`;
+    } else {
+      statusCol = '#16a34a'; statusBg = '#f0fdf4';
+      statusText = `${dl} days`;
+    }
+
+    return `<div style="display:grid;grid-template-columns:28px 1fr auto auto;align-items:center;gap:10px;
+                         padding:9px 12px;border-radius:8px;margin-bottom:4px;
+                         background:${dl < 0 ? '#fef2f2' : 'var(--surface3)'};
+                         border-left:3px solid ${cfg.color}">
+      <span style="font-size:16px;text-align:center">${ev.icon}</span>
+      <div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--text)">${ev.event}</div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:1px">${ev.date}</div>
+      </div>
+      <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:12px;
+                   background:${cfg.bg};color:${cfg.color};white-space:nowrap">${cfg.label.toUpperCase()}</span>
+      <span style="font-size:11px;color:${statusCol};text-align:right;min-width:80px;white-space:nowrap">${statusText}</span>
     </div>`;
-  });
-  html += '</div>';
-  // Show in a toast-modal
-  const overlay = document.createElement('div');
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;display:flex;align-items:center;justify-content:center';
-  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
-  overlay.innerHTML = `<div style="background:var(--surface2);border-radius:14px;padding:20px;width:min(460px,95vw);max-height:80vh;overflow-y:auto">
-    ${html}
-    <button class="btn btn-ghost" style="margin-top:14px;width:100%" onclick="this.closest('[style]').remove()">Close</button>
-  </div>`;
-  document.body.appendChild(overlay);
+  }).join('');
+
+  const overdue  = d.events.filter(e => e.days_left < 0).length;
+  const imminent = d.events.filter(e => e.days_left >= 0 && e.days_left <= 30).length;
+
+  const summaryBar = `
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--text3)">FY ${d.financial_year}</span>
+      <span style="margin-left:auto"></span>
+      ${overdue  ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#fef2f2;color:#dc2626">⚠ ${overdue} Overdue</span>` : ''}
+      ${imminent ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#fffbeb;color:#d97706">⏳ ${imminent} Due Soon</span>` : ''}
+      ${!overdue && !imminent ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#f0fdf4;color:#16a34a">✓ All on Track</span>` : ''}
+      <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--surface3);color:var(--text2)">${d.events.length} events</span>
+    </div>`;
+
+  body.innerHTML = summaryBar + rows;
+}
+
+// Keep showAGMTimeline as alias for backward compatibility (AGM button in company table row)
+async function showAGMTimeline(cid) {
+  await showCompanyMaster(cid);  // open master which auto-loads timeline inline
+}
+
+// ── Timeline PDF download ──────────────────────────────────────────────────
+async function downloadTimelinePDF(id, name) {
+  const fname = `${(name||id).replace(/[^a-zA-Z0-9]/g,'_')}_Annual_Timeline.pdf`;
+  try {
+    toast('Generating timeline PDF…');
+    await fetchAndDownload(`/api/companies/${id}/annual-timeline-pdf`, 'GET', null, fname);
+    toast('Timeline PDF downloaded ✓', 'ok');
+  } catch(e) { toast('PDF generation failed: ' + e.message, 'err'); }
 }
 
 // ── P1: Charts and health scores are called directly from loadComplianceDashboard
