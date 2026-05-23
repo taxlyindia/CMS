@@ -5961,6 +5961,178 @@ def annual_timeline(cid):
                     "events": events})
 
 
+# ── P1 #12b — Annual Timeline PDF download ───────────────────────────────────
+@app.route("/api/companies/<cid>/annual-timeline-pdf")
+@login_required
+def annual_timeline_pdf(cid):
+    """Board-ready Annual Compliance Timeline PDF."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import inch, mm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
+                                     TableStyle, HRFlowable)
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    import io as _io
+
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM companies WHERE id=%s AND tenant_id=%s", (cid, g.tenant_id))
+    co = row(c.fetchone())
+    if not co: conn.close(); return jsonify({"error": "Company not found"}), 404
+    conn.close()
+
+    today = date.today()
+    year  = today.year
+
+    # ── Build events (same logic as annual_timeline JSON endpoint) ───────────
+    events = []
+    for q_n, (m, d_) in enumerate([(4,1),(7,1),(10,1),(1,1)], 1):
+        y = year if m >= 4 else year + 1
+        try:
+            ev_date = date(y, m, d_)
+            events.append({"event": f"Q{q_n} Board Meeting", "date": ev_date,
+                           "days_left": (ev_date - today).days, "type": "meeting"})
+        except ValueError: pass
+
+    def _ev(ev_name, ev_date, ev_type):
+        events.append({"event": ev_name, "date": ev_date,
+                       "days_left": (ev_date - today).days, "type": ev_type})
+
+    _ev("AGM Deadline",        date(year, 9, 30), "agm")
+    _ev("DIR-3 KYC Deadline",  date(year if today.month <= 9 else year+1, 9, 30), "kyc")
+    _ev("MGT-7 Filing",        date(year if today.month <= 11 else year+1, 11, 29), "filing")
+    _ev("AOC-4 Filing",        date(year if today.month <= 10 else year+1, 10, 29), "filing")
+    _ev("DPT-3 Filing",        date(year if today.month <= 6 else year+1, 6, 30), "filing")
+    _ev("Income Tax Return",   date(year if today.month <= 10 else year+1, 10, 31), "tax")
+    events.sort(key=lambda e: e["date"])
+
+    fy_label = f"{year if today.month >= 4 else year-1}-{str(year if today.month < 4 else year+1)[-2:]}"
+
+    # ── PDF colours ──────────────────────────────────────────────────────────
+    NAVY  = colors.HexColor("#0f2d5c")
+    BLUE  = colors.HexColor("#1a56db")
+    GREY  = colors.HexColor("#64748b")
+    WHITE = colors.white
+    RED   = colors.HexColor("#dc2626")
+    AMBER = colors.HexColor("#f59e0b")
+    GREEN = colors.HexColor("#16a34a")
+    type_colors = {
+        "meeting": colors.HexColor("#3b82f6"),
+        "agm":     colors.HexColor("#7c3aed"),
+        "kyc":     colors.HexColor("#0891b2"),
+        "filing":  colors.HexColor("#2563eb"),
+        "tax":     colors.HexColor("#d97706"),
+    }
+
+    buf = _io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            topMargin=0.6*inch, bottomMargin=0.6*inch,
+                            leftMargin=0.85*inch, rightMargin=0.85*inch)
+
+    def sty(name, sz=9, bold=False, col=None, align=TA_LEFT):
+        return ParagraphStyle(name, fontName="Helvetica-Bold" if bold else "Helvetica",
+                               fontSize=sz, textColor=col or colors.HexColor("#1e293b"),
+                               alignment=align, leading=sz*1.5, spaceAfter=0)
+
+    story = []
+    # Header
+    story.append(Paragraph(co["name"].upper(), sty("h1", 15, True, NAVY, TA_CENTER)))
+    story.append(Paragraph("ANNUAL COMPLIANCE CALENDAR", sty("sub", 11, True, BLUE, TA_CENTER)))
+    story.append(Paragraph(
+        f"Financial Year: {fy_label}  |  Generated: {today.strftime('%d %B %Y')}  |  CIN: {co.get('cin','—')}",
+        sty("dt", 8, False, GREY, TA_CENTER)))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=BLUE, spaceAfter=14))
+
+    # Summary counts
+    overdue  = sum(1 for e in events if e["days_left"] < 0)
+    upcoming = sum(1 for e in events if 0 <= e["days_left"] <= 30)
+    total    = len(events)
+    summary_rows = [
+        [Paragraph("Metric", sty("sh", 9, True, WHITE)),
+         Paragraph("Count", sty("sh", 9, True, WHITE)),
+         Paragraph("Status", sty("sh", 9, True, WHITE))],
+        [Paragraph("Total Compliance Events", sty("td", 9)),
+         Paragraph(str(total), sty("v", 10, True, BLUE)),
+         Paragraph(f"FY {fy_label}", sty("d", 9, col=GREY))],
+        [Paragraph("Overdue / Missed", sty("td", 9)),
+         Paragraph(str(overdue), sty("v", 10, True, RED if overdue else GREEN)),
+         Paragraph("Requires immediate attention" if overdue else "None overdue", sty("d", 9, col=RED if overdue else GREEN))],
+        [Paragraph("Due in Next 30 Days", sty("td", 9)),
+         Paragraph(str(upcoming), sty("v", 10, True, AMBER if upcoming else GREEN)),
+         Paragraph("Action required soon" if upcoming else "None imminent", sty("d", 9, col=AMBER if upcoming else GREEN))],
+    ]
+    sum_ts = TableStyle([
+        ("BACKGROUND",(0,0),(-1,0),BLUE), ("TEXTCOLOR",(0,0),(-1,0),WHITE),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#cbd5e1")),
+        ("ROWPADDING",(0,0),(-1,-1),7), ("FONTSIZE",(0,0),(-1,-1),9),
+        ("BACKGROUND",(0,2),(-1,2),colors.HexColor("#f8fafc")),
+    ])
+    story.append(Table(summary_rows, colWidths=[doc.width*0.45, doc.width*0.15, doc.width*0.4],
+                       style=sum_ts))
+    story.append(Spacer(1, 14))
+
+    # Events table
+    story.append(Paragraph("Compliance Events — Chronological", sty("s2", 10, True, NAVY)))
+    story.append(Spacer(1, 6))
+
+    ev_rows = [[Paragraph(h, sty("eh"+str(i), 8, True, WHITE))
+                for i, h in enumerate(["Event","Date","Days Left","Status","Type"])]]
+    for ev in events:
+        dl   = ev["days_left"]
+        if dl < 0:
+            status_txt = f"OVERDUE {-dl}d";  status_col = RED
+        elif dl == 0:
+            status_txt = "TODAY!";           status_col = RED
+        elif dl <= 30:
+            status_txt = f"{dl} days";       status_col = AMBER
+        elif dl <= 90:
+            status_txt = f"{dl} days";       status_col = colors.HexColor("#2563eb")
+        else:
+            status_txt = f"{dl} days";       status_col = GREEN
+        type_col = type_colors.get(ev["type"], BLUE)
+        row_idx  = len(ev_rows)
+        ev_rows.append([
+            Paragraph(ev["event"], sty(f"en{row_idx}", 9, True)),
+            Paragraph(ev["date"].strftime("%d %b %Y"), sty(f"ed{row_idx}", 9)),
+            Paragraph(status_txt, sty(f"el{row_idx}", 9, True, status_col)),
+            Paragraph("⚠ Overdue" if dl < 0 else ("✓ Upcoming" if dl <= 90 else "◷ Scheduled"),
+                      sty(f"es{row_idx}", 8, col=status_col)),
+            Paragraph(ev["type"].upper(), sty(f"et{row_idx}", 8, True, type_col)),
+        ])
+
+    ev_ts = TableStyle([
+        ("BACKGROUND",(0,0),(-1,0),NAVY), ("TEXTCOLOR",(0,0),(-1,0),WHITE),
+        ("GRID",(0,0),(-1,-1),0.25,colors.HexColor("#e2e8f0")),
+        ("ROWPADDING",(0,0),(-1,-1),8), ("FONTSIZE",(0,0),(-1,-1),9),
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+    ])
+    for i in range(1, len(ev_rows)):
+        if i % 2 == 0:
+            ev_ts.add("BACKGROUND",(0,i),(-1,i),colors.HexColor("#f8fafc"))
+        if ev_rows[i][0].text and events[i-1]["days_left"] < 0:
+            ev_ts.add("BACKGROUND",(0,i),(-1,i),colors.HexColor("#fef2f2"))
+
+    ev_table = Table(ev_rows,
+                     colWidths=[doc.width*0.28, doc.width*0.15, doc.width*0.15,
+                                 doc.width*0.22, doc.width*0.2],
+                     style=ev_ts)
+    story.append(ev_table)
+    story.append(Spacer(1, 14))
+
+    # Footer
+    story.append(HRFlowable(width="100%", thickness=0.5, color=GREY))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "CONFIDENTIAL — Generated by Taxly-CMS | This calendar is for planning purposes only. "
+        "Verify actual due dates with MCA/IT notifications.",
+        sty("foot", 7, False, GREY, TA_CENTER)))
+
+    doc.build(story)
+    buf.seek(0)
+    fname = f"{co['name'].replace(' ','_')}_Annual_Timeline_{fy_label.replace('-','_')}.pdf"
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=fname)
+
+
 # ── P1 #9 — Company Compliance Report PDF ─────────────────────────────────────
 @app.route("/api/companies/<cid>/compliance-report-pdf")
 @login_required
