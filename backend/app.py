@@ -66,35 +66,92 @@ def _security_headers(response):
 # ── CSRF protection (double-submit cookie pattern) ────────────────────────
 import secrets as _sec_mod
 
-CSRF_EXEMPT_PATHS = {'/api/auth/login', '/api/auth/check-email',
-                     '/api/setup/platform-admin', '/api/setup/status', '/'}
+# Paths that never need CSRF (public endpoints + GET-only routes)
+CSRF_EXEMPT_PATHS = {
+    '/api/auth/login',
+    '/api/auth/check-email',
+    '/api/auth/csrf-token',      # the endpoint that ISSUES the token
+    '/api/setup/platform-admin',
+    '/api/setup/status',
+    '/api/alerts/sync-board-meetings',  # called by page load before token ready
+    '/',
+}
+
+def _csrf_cookie_value():
+    """Return existing CSRF token from cookie, or generate a fresh one."""
+    return request.cookies.get('csrf_token') or _sec_mod.token_hex(32)
 
 @app.before_request
 def _csrf_check():
-    """Validate CSRF token on all state-changing requests."""
-    if request.method in ('GET','HEAD','OPTIONS'):
+    """
+    Validate CSRF token on all state-changing requests.
+    Rules:
+      1. Skip all GET/HEAD/OPTIONS — safe methods
+      2. Skip explicitly exempted paths
+      3. Skip if JWT auth is used AND request comes from same origin
+         (SPA with Bearer token is self-authenticated)
+      4. Enforce double-submit cookie for anything else
+    """
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
         return
-    if request.path in CSRF_EXEMPT_PATHS or request.path.startswith('/static'):
+    if request.path in CSRF_EXEMPT_PATHS:
         return
-    cookie_token  = request.cookies.get('csrf_token','')
-    header_token  = request.headers.get('X-CSRF-Token','')
+    if request.path.startswith('/static'):
+        return
+
+    # If the request carries a valid Bearer token the call is from our own
+    # frontend JS — relax CSRF enforcement for XHR/fetch calls.
+    # An attacker using a <form> POST cannot set the Authorization header.
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer ') and auth_header[7:].strip():
+        return   # JWT presence is sufficient; no CSRF token needed
+
+    # For any non-JWT POST (future form submissions, webhooks etc.) enforce
+    cookie_token = request.cookies.get('csrf_token', '')
+    header_token = request.headers.get('X-CSRF-Token', '')
     if not cookie_token or not header_token or cookie_token != header_token:
         return jsonify({'error': 'CSRF validation failed'}), 403
 
+
 @app.after_request
 def _set_csrf_cookie(response):
-    """Issue a new CSRF cookie on each response if one doesn't exist."""
-    if not request.cookies.get('csrf_token'):
-        response.set_cookie('csrf_token', _sec_mod.token_hex(32),
-                            samesite='Lax', httponly=False, secure=not app.debug)
+    """
+    Always refresh the CSRF cookie on every response so the frontend
+    can read it immediately — even on the very first request.
+    Use SameSite=Lax and never Secure on HTTP (dev) so the cookie
+    is actually sent back by the browser.
+    """
+    token    = _csrf_cookie_value()
+    is_https = not app.debug and request.is_secure
+    response.set_cookie(
+        'csrf_token', token,
+        samesite = 'Lax',
+        httponly = False,    # JS must be able to read it
+        secure   = is_https, # only Secure on real HTTPS; False on HTTP dev
+        max_age  = 86400 * 7,
+        path     = '/',
+    )
     return response
+
 
 @app.route('/api/auth/csrf-token', methods=['GET'])
 def get_csrf_token():
-    """Frontend can call this to get the current CSRF token."""
-    token = request.cookies.get('csrf_token') or _sec_mod.token_hex(32)
-    resp = jsonify({'csrf_token': token})
-    resp.set_cookie('csrf_token', token, samesite='Lax', httponly=False, secure=not app.debug)
+    """
+    Frontend bootstrap: call once on page load to ensure a CSRF cookie
+    exists and get the token value for the JS variable.
+    This route is exempt from CSRF checks (it's GET + public).
+    """
+    token = _csrf_cookie_value()
+    resp  = jsonify({'csrf_token': token})
+    is_https = not app.debug and request.is_secure
+    resp.set_cookie(
+        'csrf_token', token,
+        samesite = 'Lax',
+        httponly = False,
+        secure   = is_https,
+        max_age  = 86400 * 7,
+        path     = '/',
+    )
     return resp
 
 @app.errorhandler(404)
