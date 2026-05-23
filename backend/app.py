@@ -3661,17 +3661,17 @@ def my_dashboard():
 
     c.execute(f"""SELECT COUNT(*) FROM tasks WHERE {my_col}=%s
                   AND due_date=%s AND status NOT IN ('completed','cancelled')""",
-              (uid, str(today)))
+              (uid, today))
     due_today = _count(c)
 
     c.execute(f"""SELECT COUNT(*) FROM tasks WHERE {my_col}=%s
                   AND due_date BETWEEN %s AND %s AND status NOT IN ('completed','cancelled')""",
-              (uid, str(today), str(week)))
+              (uid, today, week))
     due_week = _count(c)
 
     c.execute(f"""SELECT COUNT(*) FROM tasks WHERE {my_col}=%s
                   AND due_date < %s AND status NOT IN ('completed','cancelled')""",
-              (uid, str(today)))
+              (uid, today))
     overdue = _count(c)
 
     # Full task list — only tasks where I play MY role
@@ -5120,8 +5120,6 @@ def company_health_score(cid):
 
     # ── KYC (25 pts) — director KYC filed & not overdue ─────────────────────
     c.execute("SELECT COUNT(*) FROM directors WHERE company_id=%s AND is_active=1", (cid,))
-    total_dirs = int(list(c.fetchone().values())[0] if isinstance(c.fetchone() or {}, dict) else 0) if False else 0
-    c.execute("SELECT COUNT(*) FROM directors WHERE company_id=%s AND is_active=1", (cid,))
     r = c.fetchone(); total_dirs = int(list(r.values())[0] if isinstance(r, dict) else r[0]) if r else 0
     c.execute("""SELECT COUNT(*) FROM directors d JOIN director_kyc k ON d.id=k.director_id
                  WHERE d.company_id=%s AND d.is_active=1 AND k.kyc_status='filed'""", (cid,))
@@ -5131,7 +5129,7 @@ def company_health_score(cid):
     # ── Filings (25 pts) — tasks tagged as filings completed in last 365 days ─
     c.execute("""SELECT COUNT(*) FROM tasks WHERE company_id=%s AND module='filing'
                  AND status='completed' AND completed_at >= %s""",
-              (cid, (today - timedelta(days=365)).isoformat()))
+              (cid, today - timedelta(days=365)))
     r = c.fetchone(); completed_filings = int(list(r.values())[0] if isinstance(r, dict) else r[0]) if r else 0
     c.execute("SELECT COUNT(*) FROM tasks WHERE company_id=%s AND module='filing'", (cid,))
     r = c.fetchone(); total_filings = int(list(r.values())[0] if isinstance(r, dict) else r[0]) if r else 0
@@ -5140,7 +5138,7 @@ def company_health_score(cid):
     # ── Meetings (20 pts) — meetings held in last 12 months ─────────────────
     c.execute("""SELECT COUNT(*) FROM meetings WHERE company_id=%s
                  AND meeting_date BETWEEN %s AND %s AND status != 'cancelled'""",
-              (cid, (today - timedelta(days=365)).isoformat(), today.isoformat()))
+              (cid, today - timedelta(days=365), today))
     r = c.fetchone(); meetings_held = int(list(r.values())[0] if isinstance(r, dict) else r[0]) if r else 0
     # Min 4 board meetings per year recommended
     meeting_score = min(20, int((meetings_held / 4) * 20))
@@ -5149,7 +5147,7 @@ def company_health_score(cid):
     c.execute("SELECT COUNT(*) FROM dsc_records WHERE company_id=%s AND is_active=1", (cid,))
     r = c.fetchone(); total_dsc = int(list(r.values())[0] if isinstance(r, dict) else r[0]) if r else 0
     c.execute("""SELECT COUNT(*) FROM dsc_records WHERE company_id=%s AND is_active=1
-                 AND valid_to < %s""", (cid, today.isoformat()))
+                 AND valid_to < %s""", (cid, today))
     r = c.fetchone(); expired_dsc = int(list(r.values())[0] if isinstance(r, dict) else r[0]) if r else 0
     dsc_score = 15 if total_dsc == 0 else max(0, int(((total_dsc - expired_dsc) / total_dsc) * 15))
 
@@ -5157,7 +5155,7 @@ def company_health_score(cid):
     c.execute("SELECT COUNT(*) FROM tasks WHERE company_id=%s AND status NOT IN ('completed','cancelled')", (cid,))
     r = c.fetchone(); open_t = int(list(r.values())[0] if isinstance(r, dict) else r[0]) if r else 0
     c.execute("""SELECT COUNT(*) FROM tasks WHERE company_id=%s AND status NOT IN ('completed','cancelled')
-                 AND due_date < %s""", (cid, today.isoformat()))
+                 AND due_date < %s""", (cid, today))
     r = c.fetchone(); overdue_t = int(list(r.values())[0] if isinstance(r, dict) else r[0]) if r else 0
     task_score = 15 if open_t == 0 else max(0, int(((open_t - overdue_t) / open_t) * 15))
 
@@ -5789,8 +5787,13 @@ def analytics():
     monthly_completed = {}
     for m in months:
         y, mo = m.split("-")
-        c.execute("""SELECT COUNT(*) FROM tasks WHERE tenant_id=%s AND status='completed'
-                     AND completed_at LIKE %s""", (tid, f"{m}%"))
+        if USE_POSTGRES:
+            c.execute("""SELECT COUNT(*) FROM tasks WHERE tenant_id=%s AND status='completed'
+                         AND DATE_TRUNC('month', completed_at) = make_date(%s::int, %s::int, 1)""",
+                      (tid, int(y), int(mo)))
+        else:
+            c.execute("""SELECT COUNT(*) FROM tasks WHERE tenant_id=%s AND status='completed'
+                         AND strftime('%Y-%m', completed_at) = %s""", (tid, m))
         r = c.fetchone()
         monthly_completed[m] = int(list(r.values())[0] if isinstance(r, dict) else r[0]) if r else 0
 
@@ -6017,38 +6020,48 @@ def compliance_report_pdf(cid):
          Paragraph(f"{sum(1 for d_ in dscs_data if _pd(d_.get('valid_to')) and (_pd(d_.get('valid_to')) - today).days < 0)} expired",
                    sty("d", 9, col=RED))],
     ]
-    ts = TableStyle([("BACKGROUND",(0,0),(-1,0),BLUE),("TEXTCOLOR",(0,0),(-1,0),WHITE),
-                     ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#cbd5e1")),
-                     ("ROWPADDING",(0,0),(-1,-1),6),("FONTSIZE",(0,0),(-1,-1),9)])
-    for i in range(1,len(summary_data)):
-        if i%2==0: ts.add("BACKGROUND",(0,i),(-1,i),colors.HexColor("#f8fafc"))
+    def make_ts(data):
+        """Build a fresh TableStyle for a table with len(data) rows."""
+        _ts = TableStyle([
+            ("BACKGROUND",(0,0),(-1,0),BLUE),
+            ("TEXTCOLOR",(0,0),(-1,0),WHITE),
+            ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#cbd5e1")),
+            ("ROWPADDING",(0,0),(-1,-1),6),
+            ("FONTSIZE",(0,0),(-1,-1),9),
+            ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ])
+        for i in range(1, len(data)):
+            if i % 2 == 0:
+                _ts.add("BACKGROUND",(0,i),(-1,i),colors.HexColor("#f8fafc"))
+        return _ts
+
     t = Table(summary_data, colWidths=[doc.width*0.3, doc.width*0.2, doc.width*0.5])
-    t.setStyle(ts); story.append(t); story.append(Spacer(1, 12))
+    t.setStyle(make_ts(summary_data)); story.append(t); story.append(Spacer(1, 12))
 
     # Alerts section
     if active_alerts_data:
-        story.append(Paragraph("⚠️  Active Compliance Alerts", sty("s2", 10, True, NAVY)))
+        story.append(Paragraph("Active Compliance Alerts", sty("s2", 10, True, NAVY)))
         story.append(Spacer(1, 4))
-        alert_rows = [[Paragraph(h, sty("h", 8, True, WHITE)) for h in ["Alert","Severity","Due Date"]]]
+        alert_rows = [[Paragraph(h, sty("ah"+str(i), 8, True, WHITE)) for i,h in enumerate(["Alert","Severity","Due Date"])]]
         for a in active_alerts_data:
             sc = RED if a.get("severity") == "critical" else colors.HexColor("#d97706")
-            alert_rows.append([Paragraph(a.get("title",""), sty("at", 8)),
-                               Paragraph((a.get("severity") or "").upper(), sty("as", 8, True, sc)),
-                               Paragraph(str(a.get("due_date","—"))[:10], sty("ad", 8))])
+            alert_rows.append([Paragraph(a.get("title","")[:80], sty("at"+str(len(alert_rows)), 8)),
+                               Paragraph((a.get("severity") or "").upper(), sty("as"+str(len(alert_rows)), 8, True, sc)),
+                               Paragraph(str(a.get("due_date","—"))[:10], sty("ad"+str(len(alert_rows)), 8))])
         at = Table(alert_rows, colWidths=[doc.width*0.55, doc.width*0.2, doc.width*0.25])
-        at.setStyle(ts); story.append(at); story.append(Spacer(1, 10))
+        at.setStyle(make_ts(alert_rows)); story.append(at); story.append(Spacer(1, 10))
 
     # Meetings
     if meetings_data:
-        story.append(Paragraph("🗓️  Recent / Upcoming Meetings", sty("s3", 10, True, NAVY)))
+        story.append(Paragraph("Recent / Upcoming Meetings", sty("s3", 10, True, NAVY)))
         story.append(Spacer(1, 4))
-        m_rows = [[Paragraph(h, sty("h", 8, True, WHITE)) for h in ["Type","Date","Status"]]]
+        m_rows = [[Paragraph(h, sty("mh"+str(i), 8, True, WHITE)) for i,h in enumerate(["Type","Date","Status"])]]
         for m_ in meetings_data:
-            m_rows.append([Paragraph(m_.get("meeting_type",""), sty("mt", 8)),
-                           Paragraph(str(m_.get("meeting_date",""))[:10], sty("md", 8)),
-                           Paragraph(m_.get("status",""), sty("ms", 8))])
+            m_rows.append([Paragraph(m_.get("meeting_type",""), sty("mt"+str(len(m_rows)), 8)),
+                           Paragraph(str(m_.get("meeting_date",""))[:10], sty("md"+str(len(m_rows)), 8)),
+                           Paragraph(m_.get("status",""), sty("ms"+str(len(m_rows)), 8))])
         mt = Table(m_rows, colWidths=[doc.width*0.4, doc.width*0.3, doc.width*0.3])
-        mt.setStyle(ts); story.append(mt); story.append(Spacer(1, 10))
+        mt.setStyle(make_ts(m_rows)); story.append(mt); story.append(Spacer(1, 10))
 
     story.append(HRFlowable(width="100%", thickness=0.5, color=GREY))
     story.append(Spacer(1, 4))
