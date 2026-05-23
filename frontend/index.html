@@ -2594,6 +2594,13 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
           <button class="btn btn-xs btn-outline" onclick="revokeAllSessions()">Revoke All</button>
         </div>
         <div id="sessions-list" style="padding:4px 0"><div class="loading"><div class="spin"></div></div></div>
+        <div style="padding:10px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600">🔒 Secure httpOnly Cookie Mode</div>
+            <div style="font-size:11px;color:var(--text3)">Prevents XSS token theft. Re-login required to activate.</div>
+          </div>
+          <button class="btn btn-xs btn-outline" id="cookie-mode-btn" onclick="switchToCookieAuth()">Enable</button>
+        </div>
       </div>
 
       <!-- WhatsApp / SMS Alerts -->
@@ -2895,6 +2902,8 @@ async function doLogin() {
 function logout() {
   TOKEN = null; ME = null;
   localStorage.removeItem('_tok');
+  // Clear httpOnly cookie if set
+  fetch('/api/auth/logout-cookie', { method: 'POST' }).catch(() => {});
   _showLogin();
 }
 
@@ -4013,7 +4022,11 @@ async function showCompanyMaster(id) {
     <!-- Header bar -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:7px;flex-wrap:wrap">${badge(co.status)} ${badge(co.company_type || '')} ${co.roc ? `<span class="badge b-gray">${co.roc}</span>` : ''}</div>
-      <button class="btn btn-primary btn-sm" onclick="downloadMasterPDF('${co.id}','${esc(co.name)}')">⬇️ Download Master PDF</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="downloadMasterPDF('${co.id}','${esc(co.name)}')">⬇️ Download Master PDF</button>
+        <button class="btn btn-sm" style="background:#16a34a;color:#fff" onclick="downloadCompliancePDF('${co.id}','${esc(co.name)}')">📋 Compliance PDF</button>
+        <button class="btn btn-outline btn-sm" onclick="showAGMTimeline('${co.id}')">📅 Annual Timeline</button>
+      </div>
     </div>
 
     <!-- Company particulars -->
@@ -4112,6 +4125,15 @@ async function downloadMasterPDF(id, name) {
     await fetchAndDownload(`/api/companies/${id}/master-pdf`, 'GET', null, fname);
     toast('Master PDF downloaded ✓', 'ok');
   } catch (e) { toast('PDF generation failed', 'err'); }
+}
+
+async function downloadCompliancePDF(id, name) {
+  const fname = `${(name||id).replace(/[^a-zA-Z0-9]/g,'_')}_Compliance_Report.pdf`;
+  try {
+    toast('Generating compliance report…');
+    await fetchAndDownload(`/api/companies/${id}/compliance-report-pdf`, 'GET', null, fname);
+    toast('Compliance PDF downloaded ✓', 'ok');
+  } catch(e) { toast('PDF generation failed: ' + e.message, 'err'); }
 }
 
 function openCoModal(id = null) {
@@ -6606,22 +6628,33 @@ const _scoreColors = { A:'#16a34a', B:'#3b82f6', C:'#f59e0b', D:'#dc2626' };
 async function loadHealthScores() {
   const strip = document.getElementById('health-score-strip');
   if (!strip || !COMPANIES || !COMPANIES.length) return;
-  strip.innerHTML = '';
-  // Load max 8 companies
-  for (const co of COMPANIES.slice(0, 8)) {
-    const d = await api('/api/companies/' + co.id + '/health-score');
-    if (!d) continue;
+  strip.innerHTML = '<span style="font-size:11px;color:var(--text3);padding:4px 8px">Loading scores…</span>';
+  const scores = [];
+  // Load max 8 companies (parallel)
+  const cos = COMPANIES.slice(0, 8);
+  await Promise.all(cos.map(async co => {
+    try {
+      const d = await api('/api/companies/' + co.id + '/health-score');
+      if (d && typeof d.score === 'number') scores.push({ ...d, company_name: co.name });
+    } catch {}
+  }));
+  if (!scores.length) { strip.innerHTML = ''; return; }
+  scores.sort((a,b) => a.score - b.score); // worst first
+  strip.innerHTML = scores.map(d => {
     const col = _scoreColors[d.grade] || '#94a3b8';
-    strip.innerHTML += `
-      <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;min-width:130px;flex-shrink:0;
-                  border-left:3px solid ${col};cursor:pointer" onclick="navigateTo('companies')">
-        <div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">${co.name}</div>
-        <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px">
-          <span style="font-size:22px;font-weight:700;color:${col}">${d.score}</span>
-          <span style="font-size:11px;font-weight:600;background:${col};color:#fff;padding:1px 5px;border-radius:4px">${d.grade}</span>
-        </div>
-      </div>`;
-  }
+    return `<div style="background:var(--surface2);border-radius:10px;padding:10px 14px;min-width:130px;flex-shrink:0;
+                border-left:3px solid ${col};cursor:pointer" title="Click to view ${esc(d.company_name)}"
+                onclick="showCompanyMaster('${d.company_id}')">
+      <div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">${esc(d.company_name||'')}</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px">
+        <span style="font-size:22px;font-weight:700;color:${col}">${d.score}</span>
+        <span style="font-size:11px;font-weight:600;background:${col};color:#fff;padding:1px 5px;border-radius:4px">${d.grade}</span>
+      </div>
+      <div style="font-size:9px;color:var(--text3);margin-top:3px">
+        KYC:${d.breakdown?.kyc?.score||0} Fil:${d.breakdown?.filings?.score||0} Mtg:${d.breakdown?.meetings?.score||0}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── MCA Form Tracker ───────────────────────────────────────────────────────
@@ -7058,6 +7091,57 @@ document.addEventListener('DOMContentLoaded', () => {
     topbar.insertBefore(btn, topbar.firstChild);
   }
 });
+
+// ── Cookie auth switch ────────────────────────────────────────────────────
+async function switchToCookieAuth() {
+  if (!confirm('This will log you out and re-login using a secure httpOnly cookie. Proceed?')) return;
+  const r = await fetch('/api/auth/login-cookie', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: ME?.email, password: '' })
+  });
+  if (r.ok) {
+    // Cookie is now set; clear localStorage token and reload
+    TOKEN = null; ME = null;
+    localStorage.removeItem('_tok');
+    toast('Cookie auth enabled — please re-login', 'ok');
+    setTimeout(() => location.reload(), 1200);
+  } else {
+    toast('Enter your password in the Password section first, then try again', 'err');
+  }
+}
+
+// ── Document version history viewer ───────────────────────────────────────
+async function showDocVersions(docId, docName) {
+  const data = await api(`/api/documents/doc/${docId}/versions`);
+  if (!data) return;
+  if (!data.length) { toast('No saved versions yet','err'); return; }
+  openModal(
+    `📜 Version History — ${esc(docName||'Document')}`,
+    `<div style="max-height:380px;overflow-y:auto">
+      <table><thead><tr><th>Version</th><th>Snapshot</th><th>Saved By</th><th>Date</th><th>Action</th></tr></thead>
+      <tbody>${data.map(v => `<tr>
+        <td><span class="badge b-blue">v${v.version_no}</span></td>
+        <td style="font-size:11.5px;max-width:180px">${esc(v.snapshot_name||'')}</td>
+        <td style="font-size:11px">${esc(v.created_by_name||'—')}</td>
+        <td style="font-size:11px">${fd(v.created_at)}</td>
+        <td><button class="btn btn-xs btn-outline" onclick="restoreDocVersion('${docId}','${v.id}',${v.version_no})">Restore</button></td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Close</button>`,
+    'lg'
+  );
+}
+
+async function restoreDocVersion(docId, versionId, vno) {
+  if (!confirm(`Restore to version v${vno}? Current content will be overwritten.`)) return;
+  const r = await api(`/api/documents/doc/${docId}/versions/${versionId}/restore`, { method:'POST' });
+  if (r?.success) {
+    toast(`✓ Restored to v${vno}`,'ok');
+    closeModal();
+  }
+}
 
 async function changePw() {
   const old = document.getElementById('s-old').value;
@@ -9530,6 +9614,7 @@ async function loadDocHistory() {
             </div>
             <div style="display:flex;gap:4px;flex-shrink:0">
               <button class="btn btn-xs btn-primary" onclick="amendDocument('${d.id}')" title="Edit this saved document">✏️ Amend</button>
+              <button class="btn btn-xs btn-ghost" onclick="showDocVersions('${d.id}','${esc(d.doc_name||'')}')" title="Version history">📜</button>
               <button class="btn btn-xs btn-ghost" onclick="reDraftDoc('${d.template_id}','${d.company_id}')" title="Re-generate from template">↗ Reuse</button>
               <button class="btn btn-xs btn-danger" onclick="deleteDocument('${d.id}')" title="Delete this saved document">🗑</button>
             </div>
