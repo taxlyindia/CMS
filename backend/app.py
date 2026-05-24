@@ -2420,9 +2420,22 @@ def list_compliance_calendar():
     return jsonify(result)
 
 @app.route("/api/compliance-calendar/ical", methods=["GET"])
-@login_required
 def compliance_calendar_ical():
-    """Export compliance calendar as .ics file."""
+    """Export compliance calendar as .ics file.
+    Supports ?token= query param so direct <a href> downloads work (can't set headers on anchor).
+    """
+    from auth import decode_token as _dec_tok
+    _bearer = request.headers.get("Authorization","").replace("Bearer ","").strip()
+    _qtok   = request.args.get("token","").strip()
+    _tok    = _bearer or _qtok
+    if not _tok:
+        return jsonify({"error": "Authentication required"}), 401
+    payload = _dec_tok(_tok)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    g.user_id   = payload.get("sub","")
+    g.role      = payload.get("role","")
+    g.tenant_id = payload.get("tenant_id")
     cid = request.args.get("company_id","")
     conn = get_db(); c = conn.cursor()
     q = """SELECT cc.*, co.name AS company_name FROM compliance_calendar cc
@@ -2574,7 +2587,9 @@ def export_csv(module):
     }
 
     sql, params = queries[module]
-    if tenant:  sql += " AND (co.tenant_id=%s OR "+module[:3]+"_tenant_id=%s OR 1=1)"; # simplified
+    # Tenant filter: all queries join to companies co, filter by co.tenant_id
+    if tenant and module not in ('compliance_calendar',):
+        sql += " AND co.tenant_id=%s"; params.append(tenant)
     if cid:     sql += " AND (company_id=%s OR co.id=%s)"; params.extend([cid, cid])
     if status:  sql += " AND status=%s"; params.append(status)
     if search:
