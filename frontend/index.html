@@ -2930,7 +2930,16 @@ async function api(path, opts = {}) {
     }
     return r.json();
   } catch (e) {
-    if (e.message && !e.message.includes('401')) toast(e.message || 'Network error', 'err');
+    // Only show toast for non-background calls (suppress for silent=true)
+    if (e.message && !e.message.includes('401') && !opts.silent) {
+      const msg = e.message || 'Network error';
+      // Avoid showing raw "Failed to fetch" — show friendlier message
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ERR_')) {
+        toast('Network error — check your connection', 'err');
+      } else {
+        toast(msg, 'err');
+      }
+    }
     return null;
   }
 }
@@ -3067,7 +3076,10 @@ async function doLogin() {
     if (btn) { btn.innerHTML = 'Sign In →'; btn.disabled = false; }
     await startApp();
   } catch (err) {
-    toast('Could not connect to server. Is it running?', 'err');
+    const errMsg = err && err.message && !err.message.includes('Failed to fetch')
+      ? err.message
+      : 'Cannot reach the server. Please check your connection and try again.';
+    toast(errMsg, 'err');
     if (btn) { btn.innerHTML = 'Sign In →'; btn.disabled = false; }
     _loginInProgress = false;
   }
@@ -5068,7 +5080,7 @@ async function deleteSh(id) { await deactivateSh(id); }
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadMeetings() {
   // Sync board-meeting compliance alerts
-  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:{}}); } catch(e){}
+  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:{},silent:true}); } catch(e){}
   const cid    = PB.company_id || document.getElementById('mtg-co-f')?.value   || '';
   const mtype  = document.getElementById('mtg-type-f')?.value   || '';
   const mstat  = document.getElementById('mtg-status-f')?.value || '';
@@ -5138,7 +5150,7 @@ async function deleteMtg(id) { if (!confirm('Delete meeting?')) return; await ap
 // ═══════════════════════════════════════════════════════════════════════════
 async function loadAlerts() {
   // Sync board-meeting compliance alerts first
-  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:{}}); } catch(e){}
+  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:{},silent:true}); } catch(e){}
   // Show scope badge based on role
   const scopeBadge = document.getElementById('alt-scope-badge');
   if (scopeBadge && ME) {
@@ -10125,7 +10137,7 @@ async function loadBMCWidget() {
   body.innerHTML = '<div style="text-align:center;padding:28px;color:var(--text3)"><div class="spin" style="margin:0 auto 8px"></div>Syncing…</div>';
 
   // Trigger sync first
-  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:{}}); } catch(e){}
+  try { await api('/api/alerts/sync-board-meetings',{method:'POST',body:{},silent:true}); } catch(e){}
 
   // Fetch board_meeting_compliance alerts
   const alerts = await api('/api/alerts?type=meeting') || [];
@@ -11130,6 +11142,14 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('amend-doc-modal')?.addEventListener('click', function(e) {
     if (e.target === this) closeAmendModal();
   });
+});
+
+
+// ═══ APP BOOTSTRAP ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', function() {
+  initDarkMode();
+  initCSRF();
+  tryAutoLogin();
 });
 
 </script>
