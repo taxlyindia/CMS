@@ -2042,6 +2042,70 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
         </div>
 
       <!-- ═══ COMPLIANCE CALENDAR TAB ═══ -->
+<!-- Alert panels -->
+        <div id="dash-alert-cols" style="display:none;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
+          <div class="card">
+            <div class="card-header"><div class="card-title">🔴 Auditor Expiry</div><button class="btn btn-xs btn-outline" onclick="navigateTo('auditors')">View All</button></div>
+            <div class="card-body" id="da-aud" style="padding:0;max-height:220px;overflow-y:auto"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">🟡 DIN KYC Due</div><button class="btn btn-xs btn-outline" onclick="navigateTo('directors')">View All</button></div>
+            <div class="card-body" id="da-kyc" style="padding:0;max-height:220px;overflow-y:auto"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">📅 Upcoming Meetings</div><button class="btn btn-xs btn-outline" onclick="navigateTo('meetings')">View All</button></div>
+            <div id="da-mtg" style="max-height:220px;overflow-y:auto"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="card">
+            <div class="card-header"><div class="card-title">✅ Pending Tasks</div><button class="btn btn-xs btn-outline" onclick="navigateTo('tasks')">View All</button></div>
+            <div id="da-tasks" style="max-height:280px;overflow-y:auto"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">🏢 Company Summary</div><button class="btn btn-xs btn-outline" onclick="navigateTo('companies')">View All</button></div>
+            <div id="da-cos" style="max-height:280px;overflow-y:auto"></div>
+          </div>
+        </div>
+
+        <!-- ── ANALYTICS CHARTS ─────────────────────────────────────────── -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px" id="analytics-charts">
+          <div class="card" style="padding:16px">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">Tasks by Status</div>
+            <canvas id="chart-task-status" height="180"></canvas>
+          </div>
+          <div class="card" style="padding:16px">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">Completed Tasks (6mo)</div>
+            <canvas id="chart-monthly" height="180"></canvas>
+          </div>
+          <div class="card" style="padding:16px">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">Alerts by Severity</div>
+            <canvas id="chart-alerts" height="180"></canvas>
+          </div>
+        </div>
+
+        <!-- Board Meeting Compliance Widget -->
+<!-- ── BOARD MEETING COMPLIANCE WIDGET (Dashboard) ── -->
+    <div id="bmc-widget-wrap" style="display:none;padding:0 20px 20px">
+      <div class="card" style="border:1.5px solid var(--border2)">
+        <div class="card-header" style="background:linear-gradient(90deg,#0f1829,#1a2744);border-radius:10px 10px 0 0;padding:14px 18px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:18px">📅</span>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:.2px">BOARD MEETING COMPLIANCE</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:2px">Quarterly compliance & 120-day gap tracking. Alert raised 15 days before deadline.</div>
+            </div>
+            <button class="btn btn-xs" onclick="loadBMCWidget()" style="margin-left:auto;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:11px">↺ Refresh</button>
+          </div>
+        </div>
+        <div id="bmc-body" style="padding:12px 0">
+          <div style="text-align:center;padding:28px;color:var(--text3)"><div class="spin" style="margin:0 auto 8px"></div>Loading…</div>
+        </div>
+      </div>
+    </div>
+      </div>
+      </div>
+
       <div id="dash-calendar" style="display:none">
 
         <!-- Filter bar -->
@@ -2090,72 +2154,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
         </div>
 
       </div>
-        <!-- Alert panels -->
-        <div id="dash-alert-cols" style="display:none;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
-          <div class="card">
-            <div class="card-header"><div class="card-title">🔴 Auditor Expiry</div><button class="btn btn-xs btn-outline" onclick="navigateTo('auditors')">View All</button></div>
-            <div class="card-body" id="da-aud" style="padding:0;max-height:220px;overflow-y:auto"></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">🟡 DIN KYC Due</div><button class="btn btn-xs btn-outline" onclick="navigateTo('directors')">View All</button></div>
-            <div class="card-body" id="da-kyc" style="padding:0;max-height:220px;overflow-y:auto"></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">📅 Upcoming Meetings</div><button class="btn btn-xs btn-outline" onclick="navigateTo('meetings')">View All</button></div>
-            <div id="da-mtg" style="max-height:220px;overflow-y:auto"></div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-          <div class="card">
-            <div class="card-header"><div class="card-title">✅ Pending Tasks</div><button class="btn btn-xs btn-outline" onclick="navigateTo('tasks')">View All</button></div>
-            <div id="da-tasks" style="max-height:280px;overflow-y:auto"></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">🏢 Company Summary</div><button class="btn btn-xs btn-outline" onclick="navigateTo('companies')">View All</button></div>
-            <div id="da-cos" style="max-height:280px;overflow-y:auto"></div>
-          </div>
-        </div>
 
-        <!-- ── ANALYTICS CHARTS ─────────────────────────────────────────── -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px" id="analytics-charts">
-          <div class="card" style="padding:16px">
-            <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">Tasks by Status</div>
-            <canvas id="chart-task-status" height="180"></canvas>
-          </div>
-          <div class="card" style="padding:16px">
-            <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">Completed Tasks (6mo)</div>
-            <canvas id="chart-monthly" height="180"></canvas>
-          </div>
-          <div class="card" style="padding:16px">
-            <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">Alerts by Severity</div>
-            <canvas id="chart-alerts" height="180"></canvas>
-          </div>
-        </div>
-
-        
-      </div>
-    </div>
-
-    <!-- ── BOARD MEETING COMPLIANCE WIDGET (Dashboard) ── -->
-    <div id="bmc-widget-wrap" style="display:none;padding:0 20px 20px">
-      <div class="card" style="border:1.5px solid var(--border2)">
-        <div class="card-header" style="background:linear-gradient(90deg,#0f1829,#1a2744);border-radius:10px 10px 0 0;padding:14px 18px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:18px">📅</span>
-            <div>
-              <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:.2px">BOARD MEETING COMPLIANCE</div>
-              <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:2px">Quarterly compliance & 120-day gap tracking. Alert raised 15 days before deadline.</div>
-            </div>
-            <button class="btn btn-xs" onclick="loadBMCWidget()" style="margin-left:auto;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:11px">↺ Refresh</button>
-          </div>
-        </div>
-        <div id="bmc-body" style="padding:12px 0">
-          <div style="text-align:center;padding:28px;color:var(--text3)"><div class="spin" style="margin:0 auto 8px"></div>Loading…</div>
-        </div>
-      </div>
-    </div>
-
-    
     <!-- ── COMPANIES ── -->
     <div class="page" id="page-companies">
       <div class="filter-bar" style="margin-bottom:14px">
