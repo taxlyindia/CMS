@@ -1,11 +1,6 @@
 import os
 """auth.py — JWT + RBAC + Multitenant"""
 import jwt, uuid, hashlib, json
-try:
-    import bcrypt as _bcrypt
-    _BCRYPT_AVAILABLE = True
-except ImportError:
-    _BCRYPT_AVAILABLE = False
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import request, jsonify, g
@@ -59,23 +54,26 @@ ALL_MODULES = {
     "user":        {"label":"User Management",     "actions":["read","create","update","delete"]},
 }
 
-def hash_pw(pw: str) -> str:
-    """Hash a password with bcrypt (falls back to sha256 if bcrypt not installed)."""
-    if _BCRYPT_AVAILABLE:
-        return _bcrypt.hashpw(pw.encode(), _bcrypt.gensalt()).decode()
+def hash_pw(pw):
+    """Hash password — SHA-256 for now, bcrypt-ready via verify_pw."""
     return hashlib.sha256(pw.encode()).hexdigest()
 
-def verify_pw(pw: str, stored: str) -> bool:
-    """Verify password against bcrypt hash OR legacy sha256 hash (auto-migration path)."""
-    if stored.startswith("$2b$") or stored.startswith("$2a$"):
-        if not _BCRYPT_AVAILABLE:
-            return False
+def verify_pw(plain: str, stored: str) -> bool:
+    """Verify a password against its stored hash.
+    Supports both SHA-256 (legacy) and bcrypt (if stored starts with $2b$).
+    """
+    if not plain or not stored:
+        return False
+    # bcrypt hash
+    if stored.startswith('$2b$') or stored.startswith('$2a$'):
         try:
-            return _bcrypt.checkpw(pw.encode(), stored.encode())
+            import bcrypt as _bcrypt
+            return _bcrypt.checkpw(plain.encode(), stored.encode())
         except Exception:
             return False
-    # Legacy SHA-256 — accept for now; calling code should re-hash on success
-    return hashlib.sha256(pw.encode()).hexdigest() == stored
+    # SHA-256 hash (current default)
+    import hashlib as _hl
+    return _hl.sha256(plain.encode()).hexdigest() == stored
 
 def make_token(user_id, role, name, tenant_id=None, is_platform_admin=False):
     payload = {

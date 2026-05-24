@@ -13,7 +13,12 @@ UPLOAD_DIR = BASE_DIR / "data" / "uploads"
 
 # ── Detect mode ───────────────────────────────────────────────────────────────
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
-USE_POSTGRES  = bool(DATABASE_URL)
+# Only use PostgreSQL when the URL is actually a Postgres URL
+_url_lower = DATABASE_URL.lower()
+USE_POSTGRES  = bool(DATABASE_URL) and (
+    _url_lower.startswith("postgres") or
+    _url_lower.startswith("postgresql")
+)
 
 try:
     import psycopg2, psycopg2.extras
@@ -664,9 +669,20 @@ CREATE TABLE IF NOT EXISTS directors (
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS director_kyc (
-    id TEXT PRIMARY KEY, director_id TEXT NOT NULL UNIQUE,
-    last_kyc_date TEXT, next_due_date TEXT, kyc_status TEXT DEFAULT 'pending',
-    notes TEXT, tenant_id TEXT, updated_at TEXT DEFAULT (datetime('now'))
+    id TEXT PRIMARY KEY,
+    director_id TEXT NOT NULL REFERENCES directors(id) ON DELETE CASCADE,
+    company_id TEXT REFERENCES companies(id) ON DELETE CASCADE,
+    financial_year TEXT,
+    kyc_date TEXT,
+    last_kyc_date TEXT,
+    next_due_date TEXT,
+    kyc_status TEXT DEFAULT 'pending',
+    mobile TEXT,
+    email TEXT,
+    address TEXT,
+    notes TEXT,
+    tenant_id TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS auditors (
     id TEXT PRIMARY KEY, company_id TEXT NOT NULL, name TEXT NOT NULL,
@@ -808,6 +824,54 @@ CREATE TABLE IF NOT EXISTS audit_log (
     entity_id TEXT, detail TEXT, ip TEXT, tenant_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- ── P2 Feature tables ──────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS compliance_calendar (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT,
+    company_id TEXT REFERENCES companies(id) ON DELETE CASCADE,
+    form_code TEXT NOT NULL,
+    form_name TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    financial_year TEXT,
+    status TEXT DEFAULT 'pending',
+    filed_date TEXT,
+    srn TEXT,
+    notes TEXT,
+    alert_generated INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS custom_alert_rules (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT,
+    company_id TEXT,
+    rule_name TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    condition_field TEXT NOT NULL,
+    condition_days INTEGER DEFAULT 30,
+    severity TEXT DEFAULT 'medium',
+    is_active INTEGER DEFAULT 1,
+    created_by TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS esop_vesting_schedule (
+    id TEXT PRIMARY KEY,
+    esop_grant_id TEXT NOT NULL REFERENCES esop_grants(id) ON DELETE CASCADE,
+    vesting_date TEXT NOT NULL,
+    options_vesting INTEGER DEFAULT 0,
+    options_vested INTEGER DEFAULT 0,
+    cliff INTEGER DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- ── ALTER TABLE equivalents for SQLite (add columns if missing) ─────────────
+-- SQLite doesn't support ALTER TABLE ADD COLUMN IF NOT EXISTS
+-- These are handled by ensure_columns() in app.py
+
 """
 
 
@@ -828,6 +892,8 @@ def init_db():
         raw = _sq3.connect(str(DB_PATH))
         raw.executescript(SCHEMA_SQLITE)
         raw.commit(); raw.close()
+        # Run column migrations for any new columns not in original schema
+        ensure_columns()
         conn.close()
         conn = get_db(); c = conn.cursor()
 
@@ -849,9 +915,82 @@ def init_db():
     print(f"DB initialised ({'PostgreSQL' if USE_POSTGRES else 'SQLite dev mode'})")
 
 
-def ensure_columns(): pass
-def ensure_custom_placeholders_table(): pass
-def ensure_permission_tables(): pass
+def ensure_columns():
+    """
+    Add any new columns that may not exist in older SQLite databases.
+    Safe to run on every startup — skips columns that already exist.
+    PostgreSQL uses ALTER TABLE ADD COLUMN IF NOT EXISTS in the schema string.
+    SQLite does not support IF NOT EXISTS on ALTER TABLE, so we do it here.
+    """
+    if USE_POSTGRES:
+        return  # PG schema handles this with IF NOT EXISTS
+    try:
+        import sqlite3 as _sq3
+        raw = _sq3.connect(str(DB_PATH))
+        cur = raw.cursor()
+        # companies → parent_company_id, group_role
+        existing = {row[1] for row in cur.execute("PRAGMA table_info(companies)")}
+        if "parent_company_id" not in existing:
+            cur.execute("ALTER TABLE companies ADD COLUMN parent_company_id TEXT")
+        if "group_role" not in existing:
+            cur.execute("ALTER TABLE companies ADD COLUMN group_role TEXT DEFAULT 'standalone'")
+        # directors → photo_url, signature_url
+        existing = {row[1] for row in cur.execute("PRAGMA table_info(directors)")}
+        if "photo_url" not in existing:
+            cur.execute("ALTER TABLE directors ADD COLUMN photo_url TEXT")
+        if "signature_url" not in existing:
+            cur.execute("ALTER TABLE directors ADD COLUMN signature_url TEXT")
+        # director_kyc → extra columns
+        existing = {row[1] for row in cur.execute("PRAGMA table_info(director_kyc)")}
+        for col_name, col_type in [("company_id","TEXT"),("financial_year","TEXT"),
+                                    ("kyc_date","TEXT"),("mobile","TEXT"),
+                                    ("email","TEXT"),("address","TEXT")]:
+            if col_name not in existing:
+                try: cur.execute(f"ALTER TABLE director_kyc ADD COLUMN {col_name} {col_type}")
+                except Exception: pass
+        raw.commit(); raw.close()
+    except Exception as _e:
+        import logging; logging.getLogger(__name__).warning(f"ensure_columns: {_e}")
+
+
+def ensure_custom_placeholders_table():
+    """Create the custom_placeholders table if it doesn't exist."""
+    try:
+        conn = get_db(); c = conn.cursor()
+        if USE_POSTGRES:
+            c.execute("""CREATE TABLE IF NOT EXISTS custom_placeholders (
+                id TEXT PRIMARY KEY, tenant_id TEXT, company_id TEXT,
+                placeholder TEXT NOT NULL, value TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW())""")
+        else:
+            c.execute("""CREATE TABLE IF NOT EXISTS custom_placeholders (
+                id TEXT PRIMARY KEY, tenant_id TEXT, company_id TEXT,
+                placeholder TEXT NOT NULL, value TEXT,
+                created_at TEXT DEFAULT (datetime('now')))""")
+        conn.commit(); conn.close()
+    except Exception as _e:
+        import logging; logging.getLogger(__name__).warning(f"ensure_custom_placeholders_table: {_e}")
+
+
+def ensure_permission_tables():
+    """Create the permissions table if it doesn't exist."""
+    try:
+        conn = get_db(); c = conn.cursor()
+        if USE_POSTGRES:
+            c.execute("""CREATE TABLE IF NOT EXISTS user_permissions (
+                id TEXT PRIMARY KEY, user_id TEXT NOT NULL, module TEXT NOT NULL,
+                can_view INTEGER DEFAULT 1, can_create INTEGER DEFAULT 0,
+                can_update INTEGER DEFAULT 0, can_delete INTEGER DEFAULT 0,
+                tenant_id TEXT, UNIQUE(user_id, module))""")
+        else:
+            c.execute("""CREATE TABLE IF NOT EXISTS user_permissions (
+                id TEXT PRIMARY KEY, user_id TEXT NOT NULL, module TEXT NOT NULL,
+                can_view INTEGER DEFAULT 1, can_create INTEGER DEFAULT 0,
+                can_update INTEGER DEFAULT 0, can_delete INTEGER DEFAULT 0,
+                tenant_id TEXT, UNIQUE(user_id, module))""")
+        conn.commit(); conn.close()
+    except Exception as _e:
+        import logging; logging.getLogger(__name__).warning(f"ensure_permission_tables: {_e}")
 
 
 def _seed(c, conn):

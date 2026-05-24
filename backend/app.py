@@ -24,7 +24,7 @@ except ImportError:
 from flask import Flask, request, jsonify, send_file, g, send_from_directory
 from werkzeug.utils import secure_filename
 
-from database import get_db, row, rows, hash_pw, init_db, write_audit_log, write_audit_log, ensure_custom_placeholders_table, ensure_permission_tables, ensure_custom_placeholders_table
+from database import get_db, row, rows, hash_pw, init_db, write_audit_log, ensure_custom_placeholders_table, ensure_permission_tables
 from auth import login_required, require_role, platform_admin_required, make_token, hash_pw as auth_hash, verify_pw, can, get_token, DEFAULT_PERMISSIONS, ALL_MODULES, tenant_scope, rate_limit_login
 from compliance import (run_compliance_checks, generate_document, build_context,
                         extract_placeholders, get_active_entities, AUTO_FILLED,
@@ -861,9 +861,23 @@ def list_directors(cid):
     return jsonify(rows(c.fetchall()))
 
 
-@app.route("/api/dir-kyc")
+@app.route("/api/dir-kyc", methods=["GET","POST"])
 @login_required
 def dir_kyc_list():
+    if request.method == "POST":
+        d = request.get_json(silent=True, force=True) or {}
+        if not d.get("director_id"):
+            return jsonify({"error": "director_id required"}), 400
+        eid = str(uuid.uuid4())
+        conn=get_db(); c=conn.cursor()
+        c.execute("""INSERT INTO director_kyc (id,director_id,company_id,financial_year,
+                      kyc_date,next_due_date,kyc_status,mobile,email,address,tenant_id)
+                      VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                  (eid, d.get("director_id"), d.get("company_id"), d.get("financial_year"),
+                   d.get("kyc_date"), d.get("next_due_date"), d.get("status","filed"),
+                   d.get("mobile"), d.get("email"), d.get("address"), g.tenant_id))
+        conn.commit(); conn.close()
+        return jsonify({"id": eid, "success": True}), 201
     """Return one KYC record per DIN — deduped across companies."""
     conn=get_db(); c=conn.cursor()
     c.execute("""
@@ -871,7 +885,7 @@ def dir_kyc_list():
                MAX(k.last_kyc_date) AS last_kyc_date,
                MIN(k.next_due_date) AS next_due_date,
                k.kyc_status,
-               GROUP_CONCAT(DISTINCT co.name ORDER BY co.name SEPARATOR '|||') AS company_names
+               GROUP_CONCAT(DISTINCT co.name) AS company_names
         FROM directors d
         LEFT JOIN director_kyc k ON d.id=k.director_id
         LEFT JOIN companies co ON d.company_id=co.id
@@ -1110,10 +1124,19 @@ def list_shareholders(cid):
     c.execute("SELECT * FROM shareholders WHERE company_id=%s AND is_active=1 ORDER BY name",(cid,))
     return jsonify(rows(c.fetchall()))
 
-@app.route("/api/shareholders", methods=["POST"])
+@app.route("/api/shareholders", methods=["GET","POST"])
 @login_required
 def create_shareholder():
     if not can("shareholder","create"): return jsonify({"error":"Insufficient permissions"}),403
+    if request.method == "GET":
+        cid = request.args.get("company_id","")
+        conn=get_db(); c=conn.cursor()
+        q="SELECT sh.*,co.name AS company_name FROM shareholders sh LEFT JOIN companies co ON sh.company_id=co.id WHERE sh.is_active=1"
+        p=[]
+        if cid: q+=" AND sh.company_id=%s"; p.append(cid)
+        q+=" ORDER BY sh.name"
+        c.execute(q,p); result=rows(c.fetchall()); conn.close()
+        return jsonify(result)
     d=request.get_json(silent=True, force=True) or {}; sid=str(uuid.uuid4()); conn=get_db(); c=conn.cursor()
     c.execute("""INSERT INTO shareholders
         (id,company_id,name,folio_no,pan,email,mobile,address,share_class,shares_held,face_value,
@@ -2574,7 +2597,7 @@ def export_csv(module):
     tenant = g.tenant_id
 
     queries = {
-        "companies": ("SELECT name,cin,company_type,status,pan,incorporation_date,roc FROM companies WHERE 1=1",
+        "companies": ("SELECT name,cin,company_type,status,pan,incorporation_date,roc FROM companies co WHERE 1=1",
                       []),
         "directors": ("SELECT d.name,d.din,d.pan,d.email,d.mobile,d.designation,d.is_active,co.name AS company FROM directors d LEFT JOIN companies co ON d.company_id=co.id WHERE 1=1", []),
         "meetings":  ("SELECT co.name AS company,m.meeting_type,m.meeting_no,m.meeting_date,m.status FROM meetings m LEFT JOIN companies co ON m.company_id=co.id WHERE 1=1", []),
@@ -2588,7 +2611,7 @@ def export_csv(module):
 
     sql, params = queries[module]
     # Tenant filter: all queries join to companies co, filter by co.tenant_id
-    if tenant and module not in ('compliance_calendar',):
+    if tenant and module not in ('compliance_calendar',) and 'co.' in sql:
         sql += " AND co.tenant_id=%s"; params.append(tenant)
     if cid:     sql += " AND (company_id=%s OR co.id=%s)"; params.extend([cid, cid])
     if status:  sql += " AND status=%s"; params.append(status)
@@ -6466,7 +6489,7 @@ def analytics():
 @login_required
 def global_search():
     q = (request.args.get("q") or "").strip()
-    if len(q) < 2: return jsonify({"results": []})
+    if len(q) < 2: return jsonify({"error": "Query too short — minimum 2 characters", "results": []}), 400
     like = f"%{q}%"
     tid  = g.tenant_id
     conn = get_db(); c = conn.cursor()
