@@ -4258,6 +4258,52 @@ def apply_preset(uid, pid):
 
 # ══ PERSONAL DASHBOARD ════════════════════════════════════════════════════════
 
+@app.route("/api/compliance-dashboard")
+@login_required
+def compliance_dashboard():
+    """Return compliance-focused stats (alerts by severity, recent meetings, DSC expiry)."""
+    conn = get_db(); c = conn.cursor()
+    tid  = g.tenant_id
+
+    # Alert counts
+    c.execute("SELECT severity, COUNT(*) as cnt FROM alerts WHERE status='active'"
+              + (" AND tenant_id=%s" % ("%s",) if tid else ""),
+              ([tid] if tid else []))
+    alert_rows = c.fetchall()
+    alerts_by_sev = {}
+    for r in alert_rows:
+        rv = r if not isinstance(r, dict) else r
+        sev = rv['severity'] if isinstance(rv, dict) else rv[0]
+        cnt = rv['cnt']      if isinstance(rv, dict) else rv[1]
+        alerts_by_sev[sev] = cnt
+
+    # Company compliance health (count active companies)
+    c.execute("SELECT COUNT(*) as cnt FROM companies WHERE status='active'"
+              + (" AND tenant_id=%s" % ("%s",) if tid else ""),
+              ([tid] if tid else []))
+    r2 = c.fetchone()
+    active_cos = (r2['cnt'] if isinstance(r2, dict) else r2[0]) if r2 else 0
+
+    # Meetings this month
+    from datetime import date
+    today = date.today()
+    month_start = today.replace(day=1).isoformat()
+    c.execute("SELECT COUNT(*) as cnt FROM meetings WHERE meeting_date>=%s"
+              + (" AND tenant_id=%s" if tid else ""),
+              ([month_start] + ([tid] if tid else [])))
+    r3 = c.fetchone()
+    meetings_month = (r3['cnt'] if isinstance(r3, dict) else r3[0]) if r3 else 0
+
+    conn.close()
+    return jsonify({
+        "alerts_by_severity": alerts_by_sev,
+        "active_companies": active_cos,
+        "meetings_this_month": meetings_month,
+        "critical_alerts": alerts_by_sev.get("critical", 0),
+        "high_alerts": alerts_by_sev.get("high", 0),
+    })
+
+
 @app.route("/api/my-dashboard")
 @login_required
 def my_dashboard():
