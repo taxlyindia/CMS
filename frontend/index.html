@@ -1646,21 +1646,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
   </div>
 </div>
 
-<!-- GLOBAL SEARCH OVERLAY (Ctrl+K) -->
-<div id="search-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding-top:80px" onclick="if(event.target===this)closeSearch()">
-  <div style="background:var(--surface2);border-radius:14px;width:min(640px,94vw);box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
-    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
-      <span style="font-size:18px">🔍</span>
-      <input id="search-input" class="fc" placeholder="Search companies, directors, tasks, docs…"
-             style="flex:1;background:transparent;border:none;box-shadow:none;font-size:15px;outline:none;padding:0"
-             oninput="doSearch(this.value)" onkeydown="searchKeyNav(event)">
-      <kbd style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--surface3);color:var(--text3);border:1px solid var(--border)">ESC</kbd>
-    </div>
-    <div id="search-results" style="max-height:380px;overflow-y:auto;padding:8px 0">
-      <div style="padding:28px;text-align:center;color:var(--text3);font-size:13px">Type to search across all modules</div>
-    </div>
-  </div>
-</div>
+
 <!-- HAMBURGER (mobile only) -->
 <button id="hamburger-btn" onclick="toggleMobileSidebar()" style="display:none;position:fixed;top:12px;left:12px;z-index:1000;background:var(--accent);border:none;border-radius:8px;padding:8px 10px;cursor:pointer;align-items:center;justify-content:center">
   <span style="font-size:18px;line-height:1">☰</span>
@@ -1757,7 +1743,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
 </nav>
 
 <!-- Global Search Modal -->
-<div id="global-search-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:flex-start;justify-content:center;padding-top:80px">
+<div id="global-search-modal" onclick="if(event.target===this)closeGlobalSearch()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:flex-start;justify-content:center;padding-top:80px">
   <div style="background:var(--bg2);border-radius:14px;width:600px;max-width:95vw;box-shadow:0 24px 80px rgba(0,0,0,.3);overflow:hidden">
     <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
       <span style="font-size:18px">🔍</span>
@@ -1800,7 +1786,10 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
       <button class="btn btn-primary" id="main-cta" onclick="handleCTA()" style="display:none">+ Add</button>
       <button class="btn btn-outline btn-sm" onclick="syncNow()" title="Run compliance checks">🔄 Sync</button>
       <button id="dark-mode-btn" class="btn btn-outline btn-sm" onclick="toggleDarkMode()" title="Toggle dark mode (Ctrl+D)">🌙</button>
-      <button class="btn btn-outline btn-sm" onclick="openGlobalSearch()" title="Global search (Ctrl+K)">🔍</button>
+      <button class="btn btn-outline btn-sm" onclick="openGlobalSearch()" title="Global search (Ctrl+K)"
+              style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 12px">
+        🔍 <span style="opacity:.7;font-size:10px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:1px 5px">Ctrl+K</span>
+      </button>
     </div>
   </div>
 
@@ -2083,6 +2072,35 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
         </div>
         <div id="bmc-body" style="padding:12px 0">
           <div style="text-align:center;padding:28px;color:var(--text3)"><div class="spin" style="margin:0 auto 8px"></div>Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    
+    <!-- ── COMPLIANCE CALENDAR DASHBOARD WIDGET ── -->
+    <div id="dash-cal-wrap" style="padding:0 20px 20px">
+      <div class="card" style="border:1.5px solid var(--border2)">
+        <div class="card-header" style="background:linear-gradient(90deg,#064e3b,#065f46,#059669);border-radius:10px 10px 0 0;padding:14px 18px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:18px">📋</span>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:.2px">MCA COMPLIANCE CALENDAR</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px">Upcoming filing deadlines across all companies</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-xs" onclick="navigateTo('compliance-calendar')"
+                style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;font-size:11px">
+                View All ↗
+              </button>
+              <button class="btn btn-xs" onclick="loadDashCalWidget()"
+                style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:11px">↺ Refresh</button>
+            </div>
+          </div>
+        </div>
+        <div id="dash-cal-body" style="padding:0">
+          <div style="text-align:center;padding:28px;color:var(--text3)">
+            <div class="spin" style="margin:0 auto 8px"></div>Loading…
+          </div>
         </div>
       </div>
     </div>
@@ -3562,6 +3580,7 @@ async function loadMyDashboard() {
     rws.style.display = '';
     loadRWWidget();
   loadBMCWidget();
+  loadDashCalWidget();
   }
 
   // ── Alert badge ───────────────────────────────────────────────────────────
@@ -4028,7 +4047,7 @@ async function loadRWDrilldown() {
 
     return `<div style="display:flex;align-items:flex-start;gap:0;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
                onmouseover="this.style.background='rgba(29,80,224,.025)'"
-               onmouseout="this.style.background=''"
+               onmouseout="this.style.background:transparent"
                onclick="openEditTaskModal('${t.id}')">
       <!-- Priority bar -->
       <div style="width:4px;min-height:52px;border-radius:3px;background:${priColor};flex-shrink:0;margin-right:14px;align-self:stretch"></div>
@@ -6736,55 +6755,10 @@ function toggleMobileSidebar() {
 // ── Global Search (Ctrl+K) ────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
-  if (e.key === 'Escape') closeSearch();
+  // ESC handled in keyboard shortcuts below
 });
 
-function openSearch() {
-  const ov = document.getElementById('search-overlay');
-  ov.style.display = 'flex';
-  setTimeout(() => document.getElementById('search-input').focus(), 50);
-}
-function closeSearch() {
-  document.getElementById('search-overlay').style.display = 'none';
-  document.getElementById('search-input').value = '';
-  document.getElementById('search-results').innerHTML = '<div style="padding:28px;text-align:center;color:var(--text3);font-size:13px">Type to search across all modules</div>';
-}
 
-let _searchTimer;
-const _typeIcons = { company:'🏢', director:'👤', task:'✅', document:'📄', alert:'🔔' };
-function doSearch(q) {
-  clearTimeout(_searchTimer);
-  if (!q || q.length < 2) { closeSearch(); openSearch(); return; }
-  _searchTimer = setTimeout(async () => {
-    const d = await api('/api/search?q=' + encodeURIComponent(q));
-    if (!d) return;
-    const res = document.getElementById('search-results');
-    if (!d.results || d.results.length === 0) {
-      res.innerHTML = '<div style="padding:28px;text-align:center;color:var(--text3)">No results found</div>';
-      return;
-    }
-    res.innerHTML = d.results.map((r, i) => `
-      <div class="search-result-item" data-idx="${i}" onclick="goToSearchResult('${r.type}','${r.id}')"
-           style="padding:10px 18px;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">
-        <span style="font-size:16px;flex-shrink:0">${_typeIcons[r.type]||'📌'}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.title||''}</div>
-          <div style="font-size:11px;color:var(--text3)">${r.type.toUpperCase()} · ${r.subtitle||''}</div>
-        </div>
-      </div>`).join('');
-  }, 280);
-}
-function searchKeyNav(e) {
-  if (e.key === 'Enter') {
-    const first = document.querySelector('.search-result-item');
-    if (first) first.click();
-  }
-}
-function goToSearchResult(type, id) {
-  closeSearch();
-  const pageMap = { company:'companies', director:'directors', task:'tasks', document:'documents', alert:'alerts' };
-  if (pageMap[type]) navigateTo(pageMap[type]);
-}
 
 // ── Analytics Charts ───────────────────────────────────────────────────────
 let _charts = {};
@@ -7591,20 +7565,7 @@ async function loadAuditLogIfNeeded() {
   if (PAGE === 'audit-log') loadAuditLog(1);
 }
 
-// ── Keyboard shortcut label in header ─────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  // Add search icon button to main topbar if it exists
-  const topbar = document.querySelector('.topbar, .header, #topbar');
-  if (topbar && !document.getElementById('search-trigger-btn')) {
-    const btn = document.createElement('button');
-    btn.id = 'search-trigger-btn';
-    btn.className = 'btn btn-ghost';
-    btn.style.cssText = 'font-size:13px;padding:6px 10px;border-radius:8px';
-    btn.innerHTML = '🔍 <kbd style="font-size:10px;padding:1px 5px;border-radius:3px;background:var(--surface3);border:1px solid var(--border)">Ctrl+K</kbd>';
-    btn.onclick = openSearch;
-    topbar.insertBefore(btn, topbar.firstChild);
-  }
-});
+// ── Keyboard shortcut label removed (unified into topbar button) ──
 
 // ── Cookie auth switch ────────────────────────────────────────────────────
 async function switchToCookieAuth() {
@@ -10296,49 +10257,136 @@ function closeGlobalSearch() {
   var modal = document.getElementById('global-search-modal');
   if (modal) modal.style.display = 'none';
 }
+// ─── Type → page mapping for deep navigation ────────────────────────────────
+var _SEARCH_PAGE_MAP = {
+  company:  'companies',
+  director: 'directors',
+  task:     'tasks',
+  document: 'documents',
+  alert:    'alerts',
+  meeting:  'meetings',
+  auditor:  'auditors',
+  dsc:      'dsc',
+};
+var _SEARCH_ICONS = {
+  company:'🏢', director:'👤', task:'✅', document:'📄',
+  alert:'🔔', meeting:'🗓️', auditor:'🎓', dsc:'🔐'
+};
+
 async function runGlobalSearch() {
   var q = document.getElementById('global-search-input')?.value?.trim();
   var res = document.getElementById('global-search-results');
   if (!res) return;
   if (!q || q.length < 2) {
-    res.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);font-size:13px">Type at least 2 characters…</div>';
+    res.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);font-size:13px">Type at least 2 characters to search…</div>';
     return;
   }
-  res.innerHTML = '<div style="text-align:center;padding:20px"><div class="spin" style="margin:0 auto"></div></div>';
+  res.innerHTML = '<div style="text-align:center;padding:24px"><div class="spin" style="margin:0 auto 8px"></div><div style="font-size:12px;color:var(--text3)">Searching…</div></div>';
 
-  // Search all modules in parallel
-  var searches = [
-    { module:'companies',  icon:'🏢', label:'Companies', api:'/api/companies?q='+encodeURIComponent(q) },
-    { module:'directors',  icon:'👤', label:'Directors', api:'/api/directors?q='+encodeURIComponent(q) },
-    { module:'tasks',      icon:'✅', label:'Tasks',     api:'/api/tasks?q='+encodeURIComponent(q)+'&status=' },
-    { module:'meetings',   icon:'🗓️', label:'Meetings',  api:'/api/meetings?q='+encodeURIComponent(q) },
-    { module:'alerts',     icon:'🔔', label:'Alerts',    api:'/api/alerts?q='+encodeURIComponent(q) },
-  ];
+  // Use single /api/search endpoint — faster, single DB call
+  var data = await api('/api/search?q=' + encodeURIComponent(q));
+  if (!data) {
+    res.innerHTML = '<div style="text-align:center;padding:32px;color:var(--red);font-size:13px">Search failed — please try again</div>';
+    return;
+  }
+
+  var results = data.results || [];
+  if (!results.length) {
+    res.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);font-size:13px">No results for <strong>'+esc(q)+'</strong></div>';
+    return;
+  }
+
+  // Group by type
+  var groups = {};
+  results.forEach(function(r) {
+    var t = r.type || 'unknown';
+    if (!groups[t]) groups[t] = [];
+    groups[t].push(r);
+  });
 
   var html = '';
-  for (var i=0; i<searches.length; i++) {
-    try {
-      var data = await api(searches[i].api) || [];
-      var items = Array.isArray(data) ? data.slice(0,4) : [];
-      if (!items.length) continue;
-      html += '<div style="padding:6px 8px 2px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;text-transform:uppercase">'+searches[i].icon+' '+searches[i].label+'</div>';
-      for (var j=0; j<items.length; j++) {
-        var it = items[j];
-        var name = it.name||it.title||it.form_name||it.company_name||'';
-        var sub  = it.cin||it.din||it.status||it.meeting_type||'';
-        var pg   = searches[i].module;
-        html += '<div onclick="closeGlobalSearch();navigateTo(\''+pg+'\')" '
-              + 'style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer" '
-              + 'onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">'
-              + '<span style="font-size:15px">'+searches[i].icon+'</span>'
-              + '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(name)+'</div>'
-              + '<div style="font-size:11px;color:var(--text3)">'+esc(sub)+'</div></div>'
-              + '</div>';
-      }
-    } catch(e) {}
-  }
-  if (!html) html = '<div style="text-align:center;padding:32px;color:var(--text3);font-size:13px">No results found for "'+esc(q)+'"</div>';
+  Object.keys(groups).forEach(function(type) {
+    var icon  = _SEARCH_ICONS[type] || '📌';
+    var label = type.charAt(0).toUpperCase() + type.slice(1) + 's';
+    html += '<div style="padding:8px 12px 4px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.6px;text-transform:uppercase;border-top:1px solid var(--border)">'
+          + icon + '  ' + label + '</div>';
+    groups[type].forEach(function(r) {
+      var name = r.title || r.name || '';
+      var sub  = r.subtitle || '';
+      var id   = r.id   || '';
+      var page = _SEARCH_PAGE_MAP[type] || type + 's';
+      html += '<div onclick="goToResult(&quot;'+type+'&quot;,&quot;'+id+'&quot;)" '
+            + 'style="display:flex;align-items:center;gap:12px;padding:9px 14px;cursor:pointer;border-radius:8px;margin:2px 6px" '
+            + 'onmouseover="this.style.background:#e0e7ff" '
+            + 'onmouseout="this.style.background:transparent">'
+            + '<span style="font-size:18px;flex-shrink:0">'+icon+'</span>'
+            + '<div style="flex:1;min-width:0">'
+            +   '<div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(name)+'</div>'
+            +   '<div style="font-size:11px;color:var(--text3)">'+esc(sub)+'</div>'
+            + '</div>'
+            + '<span style="font-size:11px;color:var(--text3);flex-shrink:0">↗</span>'
+            + '</div>';
+    });
+  });
+
+  html += '<div style="padding:8px 14px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);margin-top:4px">'
+        + results.length + ' result' + (results.length===1?'':'s') + ' — press <kbd class="kbd">Enter</kbd> for first</div>';
   res.innerHTML = html;
+}
+
+function goToResult(type, id) {
+  closeGlobalSearch();
+  var page = _SEARCH_PAGE_MAP[type] || (type + 's');
+  // Navigate to the module
+  navigateTo(page);
+  // After navigation, highlight the specific record
+  setTimeout(function() {
+    highlightSearchResult(type, id);
+  }, 600);
+}
+
+function highlightSearchResult(type, id) {
+  // Try to find and highlight the row in the rendered table
+  // Look for a row with data-id or matching id in the current page
+  var selectors = [
+    '[data-id="'+id+'"]',
+    '[data-company-id="'+id+'"]',
+    '#row-'+id,
+    'tr[onclick*="'+id+'"]',
+    'div[onclick*="'+id+'"]',
+  ];
+  var el = null;
+  for (var i = 0; i < selectors.length; i++) {
+    el = document.querySelector(selectors[i]);
+    if (el) break;
+  }
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Flash highlight
+    var origBg = el.style.background;
+    el.style.background = 'rgba(29,80,224,.18)';
+    el.style.transition = 'background 1s';
+    setTimeout(function() {
+      el.style.background = origBg || '';
+    }, 2000);
+  } else {
+    // Fallback: open the edit modal directly for known types
+    _openRecordById(type, id);
+  }
+}
+
+function _openRecordById(type, id) {
+  // Attempt to open the edit/detail modal for the specific record
+  var fnMap = {
+    company:  function() { if (typeof openCoModal==='function') openCoModal(id); },
+    director: function() { if (typeof openDirModal==='function') openDirModal(id); },
+    task:     function() { if (typeof openTaskModal==='function') openTaskModal(id); },
+    alert:    function() { /* alert table auto-shows */ },
+    meeting:  function() { if (typeof openMtgModal==='function') openMtgModal(id); },
+  };
+  if (fnMap[type]) {
+    try { fnMap[type](); } catch(e) {}
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -10351,11 +10399,21 @@ document.addEventListener('keydown', function(e) {
     var modal = document.getElementById('global-search-modal');
     if (modal && modal.style.display === 'flex') closeGlobalSearch();
     else openGlobalSearch();
+    return;
   }
-  // ESC — close modals
+  // ESC — close modals and search
   if (e.key === 'Escape') {
     closeGlobalSearch();
     closeModal();
+    return;
+  }
+  // Enter inside global search — go to first result
+  if (e.key === 'Enter') {
+    var modal = document.getElementById('global-search-modal');
+    if (modal && modal.style.display === 'flex') {
+      var first = document.querySelector('#global-search-results [onclick]');
+      if (first) { first.click(); return; }
+    }
   }
   // Ctrl+D — dark mode
   if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
@@ -10630,6 +10688,8 @@ async function confirmMarkFiled(id) {
     toast('Marked as filed ✓','ok');
     closeModal();
     loadComplianceCalendar();
+    // Refresh dashboard widget if visible
+    if (typeof loadDashCalWidget === 'function') loadDashCalWidget();
   }
 }
 function openCalEntry(id, formCode, formName) {
@@ -10956,6 +11016,110 @@ async function initCSRF() {
 // Call initCSRF eagerly on script load (before any user interaction)
 // so the token is ready for the very first POST (even login sync calls).
 initCSRF();
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DASHBOARD — COMPLIANCE CALENDAR WIDGET
+// Shows upcoming MCA filing deadlines across all companies
+// ═══════════════════════════════════════════════════════════════════════════════
+async function loadDashCalWidget() {
+  var wrap = document.getElementById('dash-cal-wrap');
+  var body = document.getElementById('dash-cal-body');
+  if (!wrap || !body) return;
+
+  body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text3)"><div class="spin" style="margin:0 auto 8px"></div>Loading calendar…</div>';
+
+  // Fetch upcoming pending/overdue entries (next 90 days)
+  var data = await api('/api/compliance-calendar?status=') || [];
+  
+  // Filter to upcoming (due within 90 days or overdue) and sort by due_date
+  var today = new Date(); today.setHours(0,0,0,0);
+  var cutoff = new Date(today); cutoff.setDate(cutoff.getDate() + 90);
+  
+  var relevant = (data || []).filter(function(e) {
+    if (e.status === 'filed') return false;
+    var d = e.due_date ? new Date(e.due_date.substring(0,10)) : null;
+    return d && d <= cutoff;
+  }).sort(function(a,b) {
+    return new Date(a.due_date) - new Date(b.due_date);
+  });
+
+  if (!relevant.length) {
+    body.innerHTML = '<div style="text-align:center;padding:36px 24px">'
+      + '<div style="font-size:32px;margin-bottom:10px">✅</div>'
+      + '<div style="font-size:14px;font-weight:600;color:var(--green);margin-bottom:6px">No upcoming deadlines</div>'
+      + '<div style="font-size:12px;color:var(--text3)">All filings are current for the next 90 days.</div>'
+      + '<button class="btn btn-sm btn-outline" onclick="openSeedCalendarModal()" style="margin-top:14px">⚡ Seed Filing Deadlines</button>'
+      + '</div>';
+    return;
+  }
+
+  // Summary row
+  var overdue  = relevant.filter(function(e) { return new Date(e.due_date.substring(0,10)) < today; });
+  var dueWeek  = relevant.filter(function(e) { var d=new Date(e.due_date.substring(0,10)); return d>=today && d<=new Date(today.getTime()+7*86400000); });
+  var upcoming = relevant.filter(function(e) { return new Date(e.due_date.substring(0,10)) >= new Date(today.getTime()+7*86400000); });
+
+  var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--border)">';
+  html += _dashCalStat('Overdue', overdue.length, 'var(--red)', '🔴');
+  html += _dashCalStat('Due This Week', dueWeek.length, 'var(--orange)', '🟡');
+  html += _dashCalStat('Next 90 Days', upcoming.length, 'var(--text2)', '🔵');
+  html += '</div>';
+
+  // Table of entries
+  html += '<div style="max-height:320px;overflow-y:auto">';
+  html += '<table style="width:100%;border-collapse:collapse">';
+  html += '<thead><tr style="background:var(--bg3);position:sticky;top:0">'
+        + '<th style="padding:8px 14px;font-size:11px;font-weight:700;color:var(--text2);text-align:left">Company</th>'
+        + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text2)">Form</th>'
+        + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text2)">Due Date</th>'
+        + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text2)">Status</th>'
+        + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text2)"></th>'
+        + '</tr></thead><tbody>';
+
+  relevant.slice(0, 15).forEach(function(e) {
+    var dueDate = e.due_date ? new Date(e.due_date.substring(0,10)) : null;
+    var daysLeft = dueDate ? Math.ceil((dueDate - today) / 86400000) : null;
+    var isOverdue = daysLeft !== null && daysLeft < 0;
+    var isDueWeek = daysLeft !== null && daysLeft >= 0 && daysLeft <= 7;
+    var dateColor = isOverdue ? 'var(--red)' : isDueWeek ? 'var(--orange)' : 'var(--text)';
+    var daysLabel = daysLeft === null ? '' : isOverdue ? Math.abs(daysLeft)+'d overdue' : daysLeft === 0 ? 'Today!' : daysLeft+'d left';
+    var statusBg  = isOverdue ? '#fef2f2' : isDueWeek ? '#fffbeb' : 'var(--bg3)';
+    var statusCol = isOverdue ? 'var(--red)' : isDueWeek ? 'var(--orange)' : 'var(--text2)';
+
+    html += '<tr style="border-bottom:1px solid var(--border);transition:background .1s" '
+          + 'onmouseover="this.style.background:#eef1f8" onmouseout="this.style.background:transparent">'
+          + '<td style="padding:8px 14px;font-size:12px;font-weight:600;color:var(--text)">'+esc(e.company_name||'—')+'</td>'
+          + '<td style="padding:8px 10px"><span class="badge b-blue" style="font-size:10px">'+esc(e.form_code||'')+'</span></td>'
+          + '<td style="padding:8px 10px;font-size:12px;font-weight:700;color:'+dateColor+'">'
+          +   (dueDate ? dueDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—')
+          +   (daysLabel ? '<div style="font-size:10px;opacity:.8">'+daysLabel+'</div>' : '')
+          + '</td>'
+          + '<td style="padding:8px 10px">'
+          +   '<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;background:'+statusBg+';color:'+statusCol+';">'
+          +   (isOverdue ? '⚠️ OVERDUE' : isDueWeek ? '⏰ THIS WEEK' : '📅 UPCOMING')
+          +   '</span></td>'
+          + '<td style="padding:8px 10px;text-align:center">'
+          +   '<button class="btn btn-xs btn-success" onclick="markCalFiled('+e.id+')" style="font-size:10px">✓ Filed</button>'
+          + '</td>'
+          + '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  if (relevant.length > 15) {
+    html += '<div style="padding:8px 14px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);text-align:center">'
+          + 'Showing 15 of '+relevant.length+' entries — '
+          + '<a onclick="navigateTo(&quot;compliance-calendar&quot;)" style="color:var(--accent);cursor:pointer">View all →</a></div>';
+  }
+
+  body.innerHTML = html;
+}
+
+function _dashCalStat(label, count, color, icon) {
+  return '<div style="text-align:center;padding:14px 8px;border-right:1px solid var(--border)">'
+       + '<div style="font-size:22px;font-weight:800;color:'+color+'">'+count+'</div>'
+       + '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+icon+' '+label+'</div>'
+       + '</div>';
+}
 
 // ── Sidebar group-wise collapse/expand ───────────────────────────────────
 function toggleNavGroup(groupId) {
