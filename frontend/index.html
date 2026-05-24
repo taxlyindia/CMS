@@ -1695,7 +1695,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
     <div class="nav-group-items" style="padding:0 6px 4px">
       <div class="nav-item" data-page="dsc">     <span class="nav-icon">🔏</span><span class="nav-label">DSC Records</span></div>
       <div class="nav-item" data-page="meetings"><span class="nav-icon">🗓️</span><span class="nav-label">Meetings</span></div>
-      <div class="nav-item" data-page="compliance-calendar"><span class="nav-icon">📋</span><span class="nav-label">Compliance Cal.</span></div>
+
       <div class="nav-item" data-page="alerts">  <span class="nav-icon">🔔</span><span class="nav-label">Alerts</span></div>
       <div class="nav-item" data-page="tasks">   <span class="nav-icon">✅</span><span class="nav-label">Tasks</span></div>
     </div>
@@ -1832,8 +1832,9 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
     <div class="page active" id="page-dashboard">
       <!-- Dashboard Tabs -->
       <div class="dash-tabs">
-        <button class="dash-tab active" id="dtab-my"     onclick="switchDashTab('my')">👤 My Dashboard</button>
-        <button class="dash-tab"        id="dtab-compliance" onclick="switchDashTab('compliance')">⚖️ Compliance Overview</button>
+        <button class="dash-tab active" id="dtab-my"         onclick="switchDashTab('my')">👤 My Dashboard</button>
+        <button class="dash-tab"        id="dtab-compliance"  onclick="switchDashTab('compliance')">⚖️ Compliance Overview</button>
+        <button class="dash-tab"        id="dtab-calendar"    onclick="switchDashTab('calendar')">📋 Compliance Calendar</button>
       </div>
 
       <!-- ═══ MY PERSONAL DASHBOARD ═══ -->
@@ -2000,6 +2001,56 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
         <div class="stats-grid" id="dash-stats" style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px">
           <div style="grid-column:1/-1" class="loading"><div class="spin"></div>Loading...</div>
         </div>
+
+      <!-- ═══ COMPLIANCE CALENDAR TAB ═══ -->
+      <div id="dash-calendar" style="display:none">
+
+        <!-- Filter bar -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;padding:14px 18px;background:var(--bg2);border:1px solid var(--border);border-radius:10px">
+          <select class="fc" style="width:210px" id="cal-co-f" onchange="loadComplianceCalendar()">
+            <option value="">All Companies</option>
+          </select>
+          <select class="fc" style="width:130px" id="cal-fy-f" onchange="loadComplianceCalendar()">
+            <option value="">All FY</option>
+            <option value="2026-27">FY 2026-27</option>
+            <option value="2025-26">FY 2025-26</option>
+            <option value="2024-25">FY 2024-25</option>
+          </select>
+          <select class="fc" style="width:140px" id="cal-status-f" onchange="loadComplianceCalendar()">
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="filed">Filed</option>
+            <option value="overdue">Overdue</option>
+          </select>
+          <div style="display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap">
+            <button id="cal-btn-grid" class="btn btn-sm" style="background:var(--accent);color:#fff" onclick="setCalView('grid')">📅 Grid</button>
+            <button id="cal-btn-list" class="btn btn-sm btn-outline" onclick="setCalView('list')">☰ List</button>
+            <button class="btn btn-sm btn-outline" onclick="exportCalIcal()" title="Export to Google Calendar / Outlook">📆 iCal</button>
+            <button class="btn btn-sm btn-outline" onclick="exportCSV('compliance_calendar')">📥 CSV</button>
+            <button class="btn btn-sm btn-primary" onclick="openSeedCalendarModal()">⚡ Seed FY Deadlines</button>
+          </div>
+        </div>
+
+        <!-- Grid view -->
+        <div id="cal-grid-view">
+          <div class="cal-nav">
+            <button onclick="calNavMonth(-1)">‹ Prev</button>
+            <div style="font-size:16px;font-weight:700;color:var(--text)" id="cal-month-label">Loading…</div>
+            <button onclick="calNavMonth(1)">Next ›</button>
+            <button onclick="calGoToday()" class="btn btn-xs btn-outline" style="margin-left:8px">Today</button>
+          </div>
+          <div class="cal-grid-header">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          </div>
+          <div id="cal-grid-cells" class="cal-grid"></div>
+        </div>
+
+        <!-- List view -->
+        <div id="cal-list-view" style="display:none">
+          <div class="card"><div id="cal-list-tbl"></div></div>
+        </div>
+
+      </div>
         <!-- Alert panels -->
         <div id="dash-alert-cols" style="display:none;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
           <div class="card">
@@ -2042,18 +2093,7 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
           </div>
         </div>
 
-        <!-- ── ROC COMPLIANCE CALENDAR ─────────────────────────────────── -->
-        <!-- ── ROC COMPLIANCE CALENDAR (inside Dashboard) ── -->
-        <div class="card" style="margin-top:14px">
-          <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
-            <div class="card-title">📅 ROC Compliance Calendar — MCA Filing Deadlines</div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <select id="cc-yr-f" class="fc" style="width:120px;font-size:12px" onchange="loadComplianceCalendar()"></select>
-              <button class="btn btn-xs btn-outline" onclick="loadComplianceCalendar()">🔄</button>
-            </div>
-          </div>
-          <div id="cc-tbl" style="padding:4px 0"><div class="loading"><div class="spin"></div></div></div>
-        </div>
+        
       </div>
     </div>
 
@@ -2077,34 +2117,6 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
     </div>
 
     
-    <!-- ── COMPLIANCE CALENDAR DASHBOARD WIDGET ── -->
-    <div id="dash-cal-wrap" style="padding:0 20px 20px">
-      <div class="card" style="border:1.5px solid var(--border2)">
-        <div class="card-header" style="background:linear-gradient(90deg,#064e3b,#065f46,#059669);border-radius:10px 10px 0 0;padding:14px 18px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:18px">📋</span>
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:700;color:#fff;letter-spacing:.2px">MCA COMPLIANCE CALENDAR</div>
-              <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px">Upcoming filing deadlines across all companies</div>
-            </div>
-            <div style="display:flex;gap:8px">
-              <button class="btn btn-xs" onclick="navigateTo('compliance-calendar')"
-                style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;font-size:11px">
-                View All ↗
-              </button>
-              <button class="btn btn-xs" onclick="loadDashCalWidget()"
-                style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:11px">↺ Refresh</button>
-            </div>
-          </div>
-        </div>
-        <div id="dash-cal-body" style="padding:0">
-          <div style="text-align:center;padding:28px;color:var(--text3)">
-            <div class="spin" style="margin:0 auto 8px"></div>Loading…
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- ── COMPANIES ── -->
     <div class="page" id="page-companies">
       <div class="filter-bar" style="margin-bottom:14px">
@@ -2167,46 +2179,6 @@ select.fc { -webkit-appearance:none; background-image:url("data:image/svg+xml,%3
         <select class="fc" style="width:240px" id="sh-co-f" onchange="loadShareholders()"><option value="">— Select Company —</option></select>
       </div>
       <div class="card"><div id="sh-tbl"><div class="empty-state"><div class="empty-icon">📈</div><div class="empty-title">Select a company</div></div></div></div>
-    </div>
-
-    <!-- ── COMPLIANCE CALENDAR ── -->
-    <div class="page" id="page-compliance-calendar">
-      <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <select class="fc" style="width:200px" id="cal-co-f" onchange="loadComplianceCalendar()"><option value="">All Companies</option></select>
-        <select class="fc" style="width:130px" id="cal-fy-f" onchange="loadComplianceCalendar()">
-          <option value="">All FY</option>
-          <option value="2025-26">FY 2025-26</option>
-          <option value="2024-25">FY 2024-25</option>
-        </select>
-        <select class="fc" style="width:140px" id="cal-status-f" onchange="loadComplianceCalendar()">
-          <option value="">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="filed">Filed</option>
-          <option value="overdue">Overdue</option>
-        </select>
-        <button class="btn btn-sm btn-outline" onclick="setCalView('grid')" id="cal-btn-grid" style="background:var(--accent);color:#fff">📅 Grid</button>
-        <button class="btn btn-sm btn-outline" onclick="setCalView('list')" id="cal-btn-list">☰ List</button>
-        <button class="btn btn-sm btn-outline" onclick="exportCalIcal()" title="Export to Google Calendar / Outlook">📆 iCal Export</button>
-        <button class="btn btn-sm btn-outline btn-csv" onclick="exportCSV('compliance_calendar')">📥 CSV</button>
-        <button class="btn btn-primary btn-sm" onclick="openSeedCalendarModal()" style="margin-left:auto">⚡ Seed FY Deadlines</button>
-      </div>
-      <!-- Grid view -->
-      <div id="cal-grid-view">
-        <div class="cal-nav">
-          <button onclick="calNavMonth(-1)">‹ Prev</button>
-          <div style="font-size:16px;font-weight:700;color:var(--text)" id="cal-month-label">May 2025</div>
-          <button onclick="calNavMonth(1)">Next ›</button>
-          <button onclick="calGoToday()" class="btn btn-xs btn-outline" style="margin-left:8px">Today</button>
-        </div>
-        <div class="cal-grid-header">
-          <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
-        </div>
-        <div id="cal-grid-cells" class="cal-grid"></div>
-      </div>
-      <!-- List view -->
-      <div id="cal-list-view" style="display:none">
-        <div class="card"><div id="cal-list-tbl"></div></div>
-      </div>
     </div>
 
     <!-- ── MEETINGS ── -->
@@ -2926,7 +2898,6 @@ const PAGE_META = {
   'recurring-templates':{ title:'Recurring Templates', sub:'Annual compliance task templates',   cta:null },
   'audit-log':          { title:'Audit Trail',         sub:'System activity log',                cta:null },
   settings:             { title:'Settings',            sub:'Account & preferences',                                   cta:null },
-  'compliance-calendar':{ title:'Compliance Calendar', sub:'MCA filing deadlines — grid view with iCal export',          cta:'+ Add Entry' },
   platform:    { title:'Tenant Management',    sub:'Manage tenants, plans and billing',                         cta:'+ New Tenant' },
   investments: { title:'Investments (MBP-3)', sub:'Loans, investments and guarantees under Section 186',     cta:null },
   loans:       { title:'Loans & Guarantees',  sub:'Inter-company loans and guarantees — Section 186',        cta:null },
@@ -3370,7 +3341,7 @@ function navigateTo(page) {
   ({ dashboard: loadDashboard, companies: loadCompanies, directors: loadDirectors, 'mca-filings': loadMcaFilings, 'recurring-templates': loadRecurringTemplates, 'audit-log': loadAuditLog,
      'dir-kyc': loadDirKYC,
      auditors: loadAuditors, shareholders: loadShareholders, dsc: loadDSC,
-     meetings: loadMeetings, 'compliance-calendar': loadComplianceCalendar, alerts: loadAlerts, tasks: loadTasks,
+     meetings: loadMeetings, alerts: loadAlerts, tasks: loadTasks,
      registers: initRegisters, documents: initDocPage, templates: loadTemplates,
      users: loadUsers, settings: initSettingsPage, platform: loadPlatformPage }[page] || (() => {}))();
 }
@@ -3483,12 +3454,23 @@ let ACTIVE_DASH_TAB = 'my';
 
 function switchDashTab(tab) {
   ACTIVE_DASH_TAB = tab;
-  document.getElementById('dtab-my').classList.toggle('active', tab === 'my');
-  document.getElementById('dtab-compliance').classList.toggle('active', tab === 'compliance');
-  document.getElementById('dash-my').style.display         = tab === 'my' ? '' : 'none';
-  document.getElementById('dash-compliance').style.display = tab === 'compliance' ? '' : 'none';
+  // Update tab buttons
+  ['my','compliance','calendar'].forEach(function(t) {
+    var btn = document.getElementById('dtab-' + t);
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  // Show/hide content divs
+  var divs = { my:'dash-my', compliance:'dash-compliance', calendar:'dash-calendar' };
+  Object.keys(divs).forEach(function(t) {
+    var el = document.getElementById(divs[t]);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  // Lazy-load on first switch
   if (tab === 'compliance' && !document.getElementById('dash-stats').querySelector('.stat-card')) {
     loadComplianceDashboard();
+  }
+  if (tab === 'calendar') {
+    loadComplianceCalendar();
   }
 }
 
@@ -3580,7 +3562,6 @@ async function loadMyDashboard() {
     rws.style.display = '';
     loadRWWidget();
   loadBMCWidget();
-  loadDashCalWidget();
   }
 
   // ── Alert badge ───────────────────────────────────────────────────────────
@@ -10337,42 +10318,51 @@ async function runGlobalSearch() {
 function goToResult(type, id) {
   closeGlobalSearch();
   var page = _SEARCH_PAGE_MAP[type] || (type + 's');
-  // Navigate to the module
+  // Navigate to the module and trigger data load
   navigateTo(page);
-  // After navigation, highlight the specific record
-  setTimeout(function() {
-    highlightSearchResult(type, id);
-  }, 600);
+  // After data loads, highlight/open the specific record
+  // Try 3 times with increasing delays to handle slow API responses
+  var attempts = 0;
+  function tryHighlight() {
+    attempts++;
+    var found = highlightSearchResult(type, id);
+    if (!found && attempts < 4) {
+      setTimeout(tryHighlight, attempts * 400);
+    }
+  }
+  setTimeout(tryHighlight, 700);
 }
 
 function highlightSearchResult(type, id) {
   // Try to find and highlight the row in the rendered table
-  // Look for a row with data-id or matching id in the current page
   var selectors = [
     '[data-id="'+id+'"]',
     '[data-company-id="'+id+'"]',
     '#row-'+id,
-    'tr[onclick*="'+id+'"]',
-    'div[onclick*="'+id+'"]',
   ];
   var el = null;
   for (var i = 0; i < selectors.length; i++) {
-    el = document.querySelector(selectors[i]);
+    try { el = document.querySelector(selectors[i]); }
+    catch(e) { continue; }
     if (el) break;
   }
   if (el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    // Flash highlight
     var origBg = el.style.background;
-    el.style.background = 'rgba(29,80,224,.18)';
-    el.style.transition = 'background 1s';
+    var origOutline = el.style.outline;
+    el.style.background = 'rgba(29,80,224,.15)';
+    el.style.outline = '2px solid var(--accent)';
+    el.style.borderRadius = '6px';
+    el.style.transition = 'background 1.5s, outline 1.5s';
     setTimeout(function() {
       el.style.background = origBg || '';
-    }, 2000);
-  } else {
-    // Fallback: open the edit modal directly for known types
-    _openRecordById(type, id);
+      el.style.outline = origOutline || '';
+    }, 2500);
+    return true;
   }
+  // Fallback: open the edit modal directly
+  _openRecordById(type, id);
+  return false;
 }
 
 function _openRecordById(type, id) {
@@ -10555,10 +10545,8 @@ async function loadComplianceCalendar() {
   // Populate company dropdown from cache if not yet done
   var calCoEl = document.getElementById('cal-co-f');
   if (calCoEl && calCoEl.options.length <= 1) {
-    // Fetch companies if not cached
     if (!COMPANIES || !COMPANIES.length) {
-      var cos = await api('/api/companies') || [];
-      COMPANIES = cos;
+      COMPANIES = await api('/api/companies') || [];
     }
     calCoEl.innerHTML = '<option value="">All Companies</option>'
       + (COMPANIES || []).map(function(co){
@@ -10573,6 +10561,14 @@ async function loadComplianceCalendar() {
   if (cid)  p.set('company_id', cid);
   if (fy)   p.set('fy', fy);
   if (stat) p.set('status', stat);
+
+  // Show loading in the grid/list area
+  var listEl = document.getElementById('cal-list-tbl');
+  var gridEl = document.getElementById('cal-grid-cells');
+  if (_CAL_VIEW === 'list' && listEl) {
+    listEl.innerHTML = '<div style="text-align:center;padding:32px"><div class="spin" style="margin:0 auto 8px"></div>Loading…</div>';
+  }
+
   var data = await api('/api/compliance-calendar'+(p.toString()?'?'+p.toString():'')) || [];
   _CAL_DATA = data;
   if (_CAL_VIEW === 'grid') renderCalGrid(data, _CAL_DATE);
@@ -10688,8 +10684,6 @@ async function confirmMarkFiled(id) {
     toast('Marked as filed ✓','ok');
     closeModal();
     loadComplianceCalendar();
-    // Refresh dashboard widget if visible
-    if (typeof loadDashCalWidget === 'function') loadDashCalWidget();
   }
 }
 function openCalEntry(id, formCode, formName) {
@@ -11018,143 +11012,8 @@ async function initCSRF() {
 initCSRF();
 
 
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// DASHBOARD — COMPLIANCE CALENDAR WIDGET
-// Shows upcoming MCA filing deadlines across all companies
-// ═══════════════════════════════════════════════════════════════════════════════
-async function loadDashCalWidget() {
-  var wrap = document.getElementById('dash-cal-wrap');
-  var body = document.getElementById('dash-cal-body');
-  if (!wrap || !body) return;
-
-  body.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text3)"><div class="spin" style="margin:0 auto 8px"></div>Loading calendar…</div>';
-
-  // Fetch upcoming pending/overdue entries (next 90 days)
-  var data = await api('/api/compliance-calendar?status=') || [];
-  
-  // Filter to upcoming (due within 90 days or overdue) and sort by due_date
-  var today = new Date(); today.setHours(0,0,0,0);
-  var cutoff = new Date(today); cutoff.setDate(cutoff.getDate() + 90);
-  
-  var relevant = (data || []).filter(function(e) {
-    if (e.status === 'filed') return false;
-    var d = e.due_date ? new Date(e.due_date.substring(0,10)) : null;
-    return d && d <= cutoff;
-  }).sort(function(a,b) {
-    return new Date(a.due_date) - new Date(b.due_date);
-  });
-
-  if (!relevant.length) {
-    body.innerHTML = '<div style="text-align:center;padding:36px 24px">'
-      + '<div style="font-size:32px;margin-bottom:10px">✅</div>'
-      + '<div style="font-size:14px;font-weight:600;color:var(--green);margin-bottom:6px">No upcoming deadlines</div>'
-      + '<div style="font-size:12px;color:var(--text3)">All filings are current for the next 90 days.</div>'
-      + '<button class="btn btn-sm btn-outline" onclick="openSeedCalendarModal()" style="margin-top:14px">⚡ Seed Filing Deadlines</button>'
-      + '</div>';
-    return;
-  }
-
-  // Summary row
-  var overdue  = relevant.filter(function(e) { return new Date(e.due_date.substring(0,10)) < today; });
-  var dueWeek  = relevant.filter(function(e) { var d=new Date(e.due_date.substring(0,10)); return d>=today && d<=new Date(today.getTime()+7*86400000); });
-  var upcoming = relevant.filter(function(e) { return new Date(e.due_date.substring(0,10)) >= new Date(today.getTime()+7*86400000); });
-
-  var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--border)">';
-  html += _dashCalStat('Overdue', overdue.length, 'var(--red)', '🔴');
-  html += _dashCalStat('Due This Week', dueWeek.length, 'var(--orange)', '🟡');
-  html += _dashCalStat('Next 90 Days', upcoming.length, 'var(--text2)', '🔵');
-  html += '</div>';
-
-  // Table of entries
-  html += '<div style="max-height:320px;overflow-y:auto">';
-  html += '<table style="width:100%;border-collapse:collapse">';
-  html += '<thead><tr style="background:var(--bg3);position:sticky;top:0">'
-        + '<th style="padding:8px 14px;font-size:11px;font-weight:700;color:var(--text2);text-align:left">Company</th>'
-        + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text2)">Form</th>'
-        + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text2)">Due Date</th>'
-        + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text2)">Status</th>'
-        + '<th style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text2)"></th>'
-        + '</tr></thead><tbody>';
-
-  relevant.slice(0, 15).forEach(function(e) {
-    var dueDate = e.due_date ? new Date(e.due_date.substring(0,10)) : null;
-    var daysLeft = dueDate ? Math.ceil((dueDate - today) / 86400000) : null;
-    var isOverdue = daysLeft !== null && daysLeft < 0;
-    var isDueWeek = daysLeft !== null && daysLeft >= 0 && daysLeft <= 7;
-    var dateColor = isOverdue ? 'var(--red)' : isDueWeek ? 'var(--orange)' : 'var(--text)';
-    var daysLabel = daysLeft === null ? '' : isOverdue ? Math.abs(daysLeft)+'d overdue' : daysLeft === 0 ? 'Today!' : daysLeft+'d left';
-    var statusBg  = isOverdue ? '#fef2f2' : isDueWeek ? '#fffbeb' : 'var(--bg3)';
-    var statusCol = isOverdue ? 'var(--red)' : isDueWeek ? 'var(--orange)' : 'var(--text2)';
-
-    html += '<tr style="border-bottom:1px solid var(--border);transition:background .1s" '
-          + 'onmouseover="this.style.background:#eef1f8" onmouseout="this.style.background:transparent">'
-          + '<td style="padding:8px 14px;font-size:12px;font-weight:600;color:var(--text)">'+esc(e.company_name||'—')+'</td>'
-          + '<td style="padding:8px 10px"><span class="badge b-blue" style="font-size:10px">'+esc(e.form_code||'')+'</span></td>'
-          + '<td style="padding:8px 10px;font-size:12px;font-weight:700;color:'+dateColor+'">'
-          +   (dueDate ? dueDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—')
-          +   (daysLabel ? '<div style="font-size:10px;opacity:.8">'+daysLabel+'</div>' : '')
-          + '</td>'
-          + '<td style="padding:8px 10px">'
-          +   '<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;background:'+statusBg+';color:'+statusCol+';">'
-          +   (isOverdue ? '⚠️ OVERDUE' : isDueWeek ? '⏰ THIS WEEK' : '📅 UPCOMING')
-          +   '</span></td>'
-          + '<td style="padding:8px 10px;text-align:center">'
-          +   '<button class="btn btn-xs btn-success" onclick="markCalFiled('+e.id+')" style="font-size:10px">✓ Filed</button>'
-          + '</td>'
-          + '</tr>';
-  });
-  html += '</tbody></table></div>';
-
-  if (relevant.length > 15) {
-    html += '<div style="padding:8px 14px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);text-align:center">'
-          + 'Showing 15 of '+relevant.length+' entries — '
-          + '<a onclick="navigateTo(&quot;compliance-calendar&quot;)" style="color:var(--accent);cursor:pointer">View all →</a></div>';
-  }
-
-  body.innerHTML = html;
-}
-
-function _dashCalStat(label, count, color, icon) {
-  return '<div style="text-align:center;padding:14px 8px;border-right:1px solid var(--border)">'
-       + '<div style="font-size:22px;font-weight:800;color:'+color+'">'+count+'</div>'
-       + '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+icon+' '+label+'</div>'
-       + '</div>';
-}
-
-// ── Sidebar group-wise collapse/expand ───────────────────────────────────
-function toggleNavGroup(groupId) {
-  const grp = document.getElementById(groupId);
-  if (!grp) return;
-  grp.classList.toggle('collapsed');
-  // Persist collapsed groups
-  const collapsed = [];
-  document.querySelectorAll('.nav-group.collapsed').forEach(g => { if(g.id) collapsed.push(g.id); });
-  localStorage.setItem('_sb_groups', JSON.stringify(collapsed));
-}
-
-function restoreSidebarState() {
-  try {
-    const collapsed = JSON.parse(localStorage.getItem('_sb_groups') || '[]');
-    collapsed.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.classList.add('collapsed');
-    });
-  } catch(e) {}
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  const lpass = document.getElementById('l-pass');
-  if (lpass) lpass.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-  tryAutoLogin();
-});
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js"></script>
-<script>
-
-// ══ AMEND SAVED DOCUMENT ══════════════════════════════════════════════════
-let _amendQuill = null;
-let _amendDocData = null;
 
 async function amendDocument(docId) {
   const doc = await api(`/api/documents/doc/${docId}`);
