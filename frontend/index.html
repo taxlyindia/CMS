@@ -10494,7 +10494,21 @@ function setCalView(v) {
 }
 
 async function loadComplianceCalendar() {
-  var cid  = document.getElementById('cal-co-f')?.value || '';
+  // Populate company dropdown from cache if not yet done
+  var calCoEl = document.getElementById('cal-co-f');
+  if (calCoEl && calCoEl.options.length <= 1) {
+    // Fetch companies if not cached
+    if (!COMPANIES || !COMPANIES.length) {
+      var cos = await api('/api/companies') || [];
+      COMPANIES = cos;
+    }
+    calCoEl.innerHTML = '<option value="">All Companies</option>'
+      + (COMPANIES || []).map(function(co){
+          return '<option value="'+co.id+'">'+esc(co.name||co.id)+'</option>';
+        }).join('');
+  }
+
+  var cid  = calCoEl ? calCoEl.value : '';
   var fy   = document.getElementById('cal-fy-f')?.value || '';
   var stat = document.getElementById('cal-status-f')?.value || '';
   var p    = new URLSearchParams();
@@ -10511,6 +10525,7 @@ function renderCalGrid(entries, pivotDate) {
   var cells = document.getElementById('cal-grid-cells');
   var label = document.getElementById('cal-month-label');
   if (!cells || !label) return;
+  if (!pivotDate) pivotDate = _CAL_DATE || new Date();
   var year = pivotDate.getFullYear(), month = pivotDate.getMonth();
   label.textContent = pivotDate.toLocaleString('en-IN',{month:'long',year:'numeric'});
   var firstDay = new Date(year, month, 1).getDay();
@@ -10545,8 +10560,13 @@ function renderCalGrid(entries, pivotDate) {
 function renderCalList(entries) {
   var tbl = document.getElementById('cal-list-tbl');
   if (!tbl) return;
-  if (!entries||!entries.length) {
-    tbl.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No calendar entries</div><div class="empty-sub">Seed deadlines for a company to get started</div></div>';
+  if (!entries || !entries.length) {
+    tbl.innerHTML = '<div style="text-align:center;padding:48px 24px">'
+      + '<div style="font-size:40px;margin-bottom:12px">📋</div>'
+      + '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">No calendar entries yet</div>'
+      + '<div style="font-size:13px;color:var(--text3);margin-bottom:20px">Use ⚡ Seed FY Deadlines to automatically populate MCA filing deadlines for a company.</div>'
+      + '<button class="btn btn-primary" onclick="openSeedCalendarModal()">⚡ Seed FY Deadlines</button>'
+      + '</div>';
     return;
   }
   var html = '<div class="table-wrap"><table><thead><tr><th>Company</th><th>Form</th><th>Name</th><th>Due Date</th><th>FY</th><th>Status</th><th>SRN</th><th>Actions</th></tr></thead><tbody>';
@@ -10590,10 +10610,27 @@ function showCalDayDetail(dStr) {
   openModal('📅 '+dStr, html, '<button class="btn btn-primary" onclick="closeModal()">Close</button>');
 }
 async function markCalFiled(id) {
-  var srn = prompt('Enter SRN (optional):') || '';
-  await api('/api/compliance-calendar/'+id, {method:'PUT', body:{status:'filed', filed_date:new Date().toISOString().slice(0,10), srn:srn}});
-  toast('Marked as filed ✓','ok');
-  loadComplianceCalendar();
+  openModal('✓ Mark as Filed',
+    '<div class="fg"><label class="fl">SRN (System Reference Number)</label>'
+    +'<input class="fc" id="mf-srn" placeholder="Enter SRN from MCA portal (optional)"></div>'
+    +'<div class="fg"><label class="fl">Filed Date</label>'
+    +'<input class="fc" id="mf-date" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>',
+    '<button class="btn btn-outline" onclick="closeModal()">Cancel</button>'
+    +'<button class="btn btn-success" onclick="confirmMarkFiled(&quot;'+id+'&quot;)">&#10003; Mark as Filed</button>'
+  );
+}
+async function confirmMarkFiled(id) {
+  var srn  = document.getElementById('mf-srn')?.value || '';
+  var fdate= document.getElementById('mf-date')?.value || new Date().toISOString().slice(0,10);
+  var result = await api('/api/compliance-calendar/'+id, {
+    method:'PUT',
+    body: { status:'filed', filed_date:fdate, srn:srn }
+  });
+  if (result) {
+    toast('Marked as filed ✓','ok');
+    closeModal();
+    loadComplianceCalendar();
+  }
 }
 function openCalEntry(id, formCode, formName) {
   openModal('✏️ Update '+formCode,
@@ -10613,10 +10650,20 @@ async function saveCalEntry(id) {
 }
 async function exportCalIcal() {
   var cid = document.getElementById('cal-co-f')?.value || '';
-  var url = '/api/compliance-calendar/ical'+(cid?'?company_id='+cid:'');
-  var a=document.createElement('a'); a.href=url; a.download='compliance_calendar.ics'; a.click();
+  var params = new URLSearchParams();
+  if (cid) params.set('company_id', cid);
+  // Pass token as query param for direct download (can't set Authorization header on <a>)
+  if (TOKEN) params.set('token', TOKEN);
+  var url = '/api/compliance-calendar/ical'+(params.toString()?'?'+params.toString():'');
+  var a = document.createElement('a');
+  a.href = url; a.download = 'compliance_calendar.ics';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
-function openSeedCalendarModal() {
+async function openSeedCalendarModal() {
+  // Ensure companies are loaded first
+  if (!COMPANIES || !COMPANIES.length) {
+    COMPANIES = await api('/api/companies') || [];
+  }
   openModal('⚡ Seed Filing Deadlines',
     '<div class="fg"><label class="fl">Company <span class="req">*</span></label><select class="fc" id="seed-co">'+coOptions('','Select Company')+'</select></div>'
     +'<div class="fg"><label class="fl">Financial Year <span class="req">*</span></label><select class="fc" id="seed-fy"><option value="2025-26">FY 2025-26</option><option value="2024-25">FY 2024-25</option></select></div>',
