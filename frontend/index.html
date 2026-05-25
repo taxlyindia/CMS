@@ -216,6 +216,9 @@ body {
   overflow:hidden; display:flex; flex-direction:column;
   transition:margin-left .24s cubic-bezier(.4,0,.2,1);
 }
+/* When sidebar is hidden, remove the margin */
+#sidebar[style*="display:none"] ~ #main,
+#sidebar:not([style]) ~ #main { margin-left:0; }
 .sidebar.sb-collapsed ~ .main { margin-left:var(--sb-c) }
 
 /* ════════════════════════════════════════════════════════════════
@@ -2187,7 +2190,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 <button id="hamburger-btn" onclick="openMobileMenu()" style="display:none;position:fixed;top:14px;left:14px;z-index:200;background:var(--accent);border:none;border-radius:8px;width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:20px">☰</button>
 
   <!-- ════ SIDEBAR ════ -->
-  <aside id="sidebar" style="display:none">
+  <aside id="sidebar" class="sidebar" style="display:none">
 
     <!-- Brand / Logo -->
     <div class="brand" style="position:relative">
@@ -3505,7 +3508,7 @@ function _hideLogin() {
     const mn = document.getElementById('main');
     if (sb) {
       sb.style.display = 'flex';
-      sb.style.background = 'linear-gradient(160deg,#0a1628 0%,#122040 45%,#1a3a7a 100%)';
+      // CSS handles sidebar background via .sidebar class
     }
     if (mn) mn.style.display = 'flex';
     restoreSidebarState();
