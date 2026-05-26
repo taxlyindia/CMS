@@ -76,7 +76,7 @@ html { font-size:14px }
 /* ── Body ── */
 body {
   font-family:var(--font); background:var(--bg); color:var(--text);
-  height:100vh; display:flex; overflow:hidden; line-height:1.55;
+  height:100vh; overflow:hidden; line-height:1.55;
   min-width:320px;
   -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
 }
@@ -213,7 +213,8 @@ body {
    MAIN LAYOUT
 ════════════════════════════════════════════════════════════════ */
 .main {
-  margin-left:var(--sb-w); flex:1; height:100vh;
+  margin-left:var(--sb-w);
+  height:100vh;
   overflow:hidden; display:flex; flex-direction:column;
   min-width:0;
   transition:margin-left .24s cubic-bezier(.4,0,.2,1);
