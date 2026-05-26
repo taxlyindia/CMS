@@ -2977,7 +2977,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
               </div>
             </div>
             <div id="esign-requests-list" class="table-wrap" style="border:none;box-shadow:none">
-              <div class="loading"><div class="spin"></div>Loading…</div>
+              <div class="empty-state" style="padding:32px"><div class="empty-icon">✍️</div><div class="empty-title">No signature requests yet</div><div class="empty-sub">Click <b>+ New Request</b> to send a document for e-signature via DocuSign or Leegality.</div></div>
             </div>
           </div>
         </div>
@@ -3032,7 +3032,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
               </div>
             </div>
             <div id="portal-links-table" class="table-wrap" style="border:none;box-shadow:none">
-              <div class="loading"><div class="spin"></div>Loading…</div>
+              <div class="empty-state" style="padding:32px"><div class="empty-icon">🔗</div><div class="empty-title">No portal links yet</div><div class="empty-sub">Click <b>+ Generate Link</b> to create a read-only link for a client or auditor.</div></div>
             </div>
           </div>
         </div>
@@ -3141,7 +3141,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
             </div>
             <div id="wa-templates-list" class="card-body">
               <div style="display:flex;flex-direction:column;gap:8px" id="wa-tpl-items">
-                <div class="loading"><div class="spin"></div></div>
+                <div style="font-size:12px;color:var(--text3);padding:8px">No custom templates yet. Click <b>+ New Template</b> to create one.</div>
               </div>
             </div>
           </div>
@@ -3176,7 +3176,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
               <button class="btn btn-primary" onclick="saveWAPageSchedule()">💾 Save Schedule</button>
               <div id="wa-sched-page-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
               <div class="fsec" style="margin-top:16px">Active Schedules</div>
-              <div id="wa-active-schedules"><div class="loading"><div class="spin"></div></div></div>
+              <div id="wa-active-schedules"><div style="font-size:12px;color:var(--text3);padding:8px">No active schedules yet. Save a schedule above to get started.</div></div>
             </div>
           </div>
 
@@ -3184,7 +3184,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
           <div id="wa-tab-history" class="card" style="display:none">
             <div class="card-header"><div class="card-title">📜 Send History</div></div>
             <div id="wa-history-list" class="table-wrap" style="border:none;box-shadow:none">
-              <div class="loading"><div class="spin"></div>Loading…</div>
+              <div class="empty-state" style="padding:32px"><div class="empty-icon">📜</div><div class="empty-title">No messages yet</div><div class="empty-sub">Messages sent via WhatsApp will appear here.</div></div>
             </div>
           </div>
 
@@ -3743,7 +3743,15 @@ function toast(msg, type = '') {
 function openModal(title, body, footer, size = '') {
   document.getElementById('m-title').textContent = title;
   document.getElementById('m-body').innerHTML = body;
-  document.getElementById('m-foot').innerHTML = footer;
+  // footer can be an HTML string OR an array of {text,cls,fn,id,hidden} objects
+  if (Array.isArray(footer)) {
+    document.getElementById('m-foot').innerHTML = footer.map(b =>
+      `<button class="btn ${b.cls||'btn-outline'}" onclick="${b.fn||''}"
+        ${b.id ? `id="${b.id}"` : ''} ${b.hidden ? 'style="display:none"' : ''}>${b.text||''}</button>`
+    ).join('');
+  } else {
+    document.getElementById('m-foot').innerHTML = footer || '';
+  }
   document.getElementById('modal-box').className = 'modal' + (size ? ` modal-${size}` : '');
   document.getElementById('modal-bg').classList.add('open');
 }
@@ -11886,15 +11894,20 @@ function copyESignLink() {
 
 function openClientPortalModal(coId) {
   const co = COMPANIES.find(c=>c.id===coId) || {};
+  const coOpts = COMPANIES.map(c=>`<option value="${c.id}" ${c.id===coId?'selected':''}>${c.name}</option>`).join('');
   openModal('🌐 Client Portal Access', `
     <div style="background:var(--glow2);border:1px solid rgba(27,78,216,.15);border-radius:var(--r);padding:12px 14px;margin-bottom:16px">
-      <div style="font-size:12px;font-weight:700;color:var(--accent)">🏢 ${co.name||'Company'}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--accent)">🏢 ${co.name||'Select Company'}</div>
       <div style="font-size:11.5px;color:var(--text2);margin-top:2px">Generate a read-only portal link for client/auditor access</div>
+    </div>
+    <div class="fg">
+      <label class="fl">Company</label>
+      <select class="fc" id="portal-modal-co">${coOpts}</select>
     </div>
     <div class="fg2">
       <div class="fg">
         <label class="fl">Access Level</label>
-        <select class="fc" id="portal-access">
+        <select class="fc" id="portal-access" onchange="togglePortalCustom()">
           <option value="documents_only">Documents Only</option>
           <option value="compliance_view">Compliance Overview</option>
           <option value="full_readonly">Full Read-Only</option>
@@ -11912,7 +11925,7 @@ function openClientPortalModal(coId) {
       </div>
     </div>
     <div id="portal-custom-modules" style="display:none">
-      <label class="fl">Select Modules</label>
+      <label class="fl" style="margin-bottom:6px">Select Modules</label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
         ${['Documents','Meetings','Shareholders','Directors','Registers','Compliance Calendar','MCA Filings','Alerts'].map(m=>`
           <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:6px 10px;background:var(--bg3);border-radius:6px;cursor:pointer">
@@ -11929,36 +11942,43 @@ function openClientPortalModal(coId) {
       <input class="fc" type="password" id="portal-password" placeholder="Leave blank for no password">
     </div>
     <div id="portal-link-area" style="display:none">
-      <div class="fsec">🔗 Portal Link</div>
+      <div class="fsec">🔗 Generated Portal Link</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <input class="fc" id="portal-link-val" readonly style="font-family:var(--font-mono);font-size:11.5px;cursor:text">
-        <button class="btn btn-sm btn-outline" onclick="copyPortalLink()">📋</button>
-        <button class="btn btn-sm btn-outline" onclick="window.open(document.getElementById('portal-link-val')?.value,'_blank')">↗</button>
+        <input class="fc" id="portal-link-val" readonly style="font-family:var(--font-mono);font-size:11.5px">
+        <button class="btn btn-sm btn-outline" onclick="copyPortalLink()">📋 Copy</button>
+        <button class="btn btn-sm btn-outline" onclick="window.open(document.getElementById('portal-link-val')?.value,'_blank')">↗ Open</button>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:6px" id="portal-link-meta"></div>
     </div>
-  `, [
-    { text:'🔗 Generate Portal Link', cls:'btn-primary', fn:`generatePortalLink('${coId}')` },
-    { text:'📋 Manage Active Links', cls:'btn-outline', fn:`managePortalLinks('${coId}')` },
-  ]);
-  document.getElementById('portal-access').addEventListener('change', function(){
-    const custom = document.getElementById('portal-custom-modules');
-    if (custom) custom.style.display = this.value==='custom' ? '' : 'none';
-  });
+  `,
+  `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+   <button class="btn btn-outline" onclick="managePortalLinks(document.getElementById('portal-modal-co')?.value)">📋 Active Links</button>
+   <button class="btn btn-primary" onclick="generatePortalLink(document.getElementById('portal-modal-co')?.value)">🔗 Generate Link</button>`
+  );
 }
 
+function togglePortalCustom() {
+  const v = document.getElementById('portal-access')?.value;
+  const c = document.getElementById('portal-custom-modules');
+  if (c) c.style.display = v==='custom' ? '' : 'none';
+}
+
+
 async function generatePortalLink(coId) {
-  const access   = document.getElementById('portal-access')?.value;
+  const actualCoId = coId || document.getElementById('portal-modal-co')?.value;
+  const access   = document.getElementById('portal-access')?.value || 'full_readonly';
   const expiry   = parseInt(document.getElementById('portal-expiry')?.value||'30');
-  const client   = document.getElementById('portal-client')?.value;
-  const password = document.getElementById('portal-password')?.value;
+  const client   = document.getElementById('portal-client')?.value || '';
+  const password = document.getElementById('portal-password')?.value || '';
+
+  if (!actualCoId) { toast('Select a company first','err'); return; }
 
   const modules = access==='custom'
     ? Array.from(document.querySelectorAll('#portal-custom-modules input:checked')).map(i=>i.value)
     : null;
 
   const r = await api('/api/portal/generate-link', { method:'POST',
-    body:{ company_id:coId, access_level:access, expires_days:expiry, client_name:client, password, modules }
+    body:{ company_id:actualCoId, access_level:access, expires_days:expiry, client_name:client, password, modules }
   });
 
   const linkArea = document.getElementById('portal-link-area');
