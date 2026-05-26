@@ -1154,14 +1154,632 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 .forgot-card { background:var(--bg2);border:1px solid var(--border);border-radius:var(--r3);padding:40px;width:420px;max-width:95vw;box-shadow:var(--sh4); }
 
   
-/* ════════════════════════════════════════════════════════════════
-   ADVANCED FEATURES — AI Drafting / E-Sign / Portal / WhatsApp
-════════════════════════════════════════════════════════════════ */
-.wa-quick-card:hover { background:var(--glow2) !important; border-color:var(--accent) !important; transform:translateY(-2px); box-shadow:var(--sh2); }
-.wa-nav-btn.active { background:var(--glow2); color:var(--accent); font-weight:700; }
-.esign-row { transition:background .1s; }
-.esign-row:hover { background:var(--bg3); }
-.feature-badge { display:inline-flex;align-items:center;gap:4px;background:linear-gradient(90deg,var(--accent),#6366f1);color:#fff;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:5px;letter-spacing:.4px;text-transform:uppercase; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   ADVANCED TOOLS — Complete Design System
+   Layout: sidebar + main, premium GovTech SaaS aesthetic
+═══════════════════════════════════════════════════════════════════ */
+
+/* ── Layout shell ─────────────────────────────────────────────── */
+.adv-layout {
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  gap: 20px;
+  min-height: calc(100vh - 116px);
+  align-items: start;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────── */
+.adv-sidebar {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 14px;
+  position: sticky;
+  top: 0;
+  box-shadow: var(--sh1);
+}
+
+.adv-sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.adv-sidebar-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12);
+}
+
+.adv-sidebar-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.15px;
+  line-height: 1.2;
+}
+
+.adv-sidebar-sub {
+  font-size: 10.5px;
+  color: var(--text3);
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.adv-section-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text3);
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  margin: 14px 0 7px;
+  padding: 0 4px;
+}
+
+/* ── Sidebar nav list ─────────────────────────────────────────── */
+.adv-nav-list { display: flex; flex-direction: column; gap: 2px; }
+
+.adv-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text2);
+  text-align: left;
+  transition: all .13s;
+}
+.adv-nav-item:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+.adv-nav-item.active {
+  background: linear-gradient(90deg, var(--glow), var(--glow2));
+  color: var(--accent);
+  font-weight: 700;
+  border: 1px solid rgba(27,78,216,.15);
+}
+.adv-nav-icon {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── Stats grid ───────────────────────────────────────────────── */
+.adv-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin: 14px 0;
+}
+
+.adv-stat-tile {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 11px;
+  text-align: center;
+  transition: all .15s;
+}
+.adv-stat-tile:hover { border-color: var(--border2); box-shadow: var(--sh1); }
+
+.adv-stat-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent-c, var(--accent));
+  letter-spacing: -1px;
+  line-height: 1;
+}
+.adv-stat-label {
+  font-size: 10px;
+  color: var(--text3);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-top: 3px;
+}
+
+/* ── Provider cards ───────────────────────────────────────────── */
+.adv-provider-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  text-decoration: none;
+  cursor: pointer;
+  margin-bottom: 7px;
+  transition: all .14s;
+  color: var(--text);
+}
+.adv-provider-card:hover {
+  background: var(--bg2);
+  border-color: var(--border2);
+  box-shadow: var(--sh1);
+  transform: translateY(-1px);
+}
+.adv-provider-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.adv-provider-name { font-size: 12px; font-weight: 700; }
+.adv-provider-sub  { font-size: 10.5px; color: var(--text3); margin-top: 1px; }
+
+/* ── Info card ────────────────────────────────────────────────── */
+.adv-info-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 13px;
+}
+.adv-info-title { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 9px; }
+.adv-info-steps { display: flex; flex-direction: column; gap: 6px; }
+.adv-info-step  { display: flex; align-items: flex-start; gap: 8px; font-size: 11.5px; color: var(--text2); line-height: 1.5; }
+.adv-step-num   {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-size: 9.5px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+
+/* ── Access levels ────────────────────────────────────────────── */
+.adv-access-level {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: all .13s;
+}
+.adv-access-level:hover { border-color: var(--border2); }
+.adv-access-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--lvl-c, var(--accent));
+  flex-shrink: 0;
+}
+.adv-access-name { font-size: 12px; font-weight: 700; color: var(--text); }
+.adv-access-desc { font-size: 10.5px; color: var(--text3); }
+
+/* ── Provider pills ───────────────────────────────────────────── */
+.adv-provider-pill {
+  padding: 3px 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text2);
+}
+
+/* ── Main area ────────────────────────────────────────────────── */
+.adv-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ── Hero banner ──────────────────────────────────────────────── */
+.adv-page-hero {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px 24px;
+  position: relative;
+  overflow: hidden;
+}
+.adv-page-hero::after {
+  content: '';
+  position: absolute;
+  right: -30px;
+  top: -30px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(27,78,216,.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.adv-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  margin-bottom: 10px;
+}
+.adv-hero-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.3px;
+  margin-bottom: 5px;
+}
+.adv-hero-sub {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.65;
+  max-width: 600px;
+}
+
+/* ── Toolbar ──────────────────────────────────────────────────── */
+.adv-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.adv-toolbar-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ── Filter pills ─────────────────────────────────────────────── */
+.adv-filter-pill-group { display: flex; gap: 4px; background: var(--bg3); border-radius: 8px; padding: 3px; border: 1px solid var(--border); }
+.adv-filter-pill {
+  padding: 5px 13px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .13s;
+  white-space: nowrap;
+}
+.adv-filter-pill:hover { background: var(--bg2); color: var(--text); }
+.adv-filter-pill.active {
+  background: var(--bg2);
+  color: var(--accent);
+  font-weight: 700;
+  box-shadow: var(--sh0);
+}
+
+/* ── Form card ────────────────────────────────────────────────── */
+.adv-form-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: var(--sh0);
+}
+.adv-form-row {
+  display: flex;
+  gap: 13px;
+  flex-wrap: wrap;
+}
+.adv-form-row > .adv-field { flex: 1; min-width: 150px; }
+.adv-form-section-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text2);
+  letter-spacing: .2px;
+  margin-bottom: 14px;
+}
+
+/* ── Form fields ──────────────────────────────────────────────── */
+.adv-field { margin: 0; }
+.adv-label {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  margin-bottom: 6px;
+}
+.adv-input,
+.adv-select,
+.adv-textarea {
+  display: block;
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: var(--font);
+  outline: none;
+  transition: all .13s;
+}
+.adv-input:focus,
+.adv-select:focus,
+.adv-textarea:focus {
+  border-color: var(--accent);
+  background: var(--bg2);
+  box-shadow: 0 0 0 3px rgba(27,78,216,.1);
+}
+.adv-input::placeholder,
+.adv-textarea::placeholder { color: var(--text3); }
+.adv-textarea { resize: vertical; line-height: 1.65; }
+.adv-select {
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7' viewBox='0 0 11 7'%3E%3Cpath fill='%237e8fae' d='M5.5 7L0 0h11z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  padding-right: 30px;
+  cursor: pointer;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────── */
+.adv-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .14s;
+  box-shadow: 0 2px 8px rgba(27,78,216,.28);
+  white-space: nowrap;
+}
+.adv-btn-primary:hover {
+  background: var(--accent2);
+  box-shadow: 0 4px 16px rgba(27,78,216,.35);
+  transform: translateY(-1px);
+}
+.adv-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .13s;
+  white-space: nowrap;
+}
+.adv-btn-outline:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--glow2);
+}
+.adv-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--bg3);
+  color: var(--text2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .13s;
+  white-space: nowrap;
+}
+.adv-btn-ghost:hover {
+  background: var(--bg4);
+  color: var(--text);
+  border-color: var(--border2);
+}
+.adv-btn-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: linear-gradient(90deg, var(--accent), #6366f1);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .14s;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(27,78,216,.25);
+}
+.adv-btn-accent:hover { opacity: .9; transform: translateY(-1px); }
+
+/* ── Spinner ──────────────────────────────────────────────────── */
+.adv-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Status message ───────────────────────────────────────────── */
+.adv-status-msg { font-size: 12px; color: var(--text3); }
+
+/* ── Result area ──────────────────────────────────────────────── */
+.adv-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 16px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.adv-result-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(13,138,86,.2);
+  animation: pulse-dot 2s ease infinite;
+}
+@keyframes pulse-dot {
+  0%,100% { box-shadow: 0 0 0 3px rgba(13,138,86,.2); }
+  50%      { box-shadow: 0 0 0 5px rgba(13,138,86,.08); }
+}
+.adv-result-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text2);
+}
+.adv-draft-output {
+  width: 100%;
+  min-height: 380px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 16px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.85;
+  color: var(--text);
+  resize: vertical;
+  outline: none;
+}
+
+/* ── Error box ────────────────────────────────────────────────── */
+.adv-error-box {
+  background: var(--rbg);
+  border: 1px solid var(--rborder, rgba(201,44,44,.2));
+  border-radius: 10px;
+  padding: 13px 16px;
+  color: var(--red);
+  font-size: 13px;
+}
+
+/* ── Table wrap ───────────────────────────────────────────────── */
+.adv-table-wrap {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--sh0);
+}
+.adv-table-wrap table { width: 100%; border-collapse: collapse; }
+.adv-table-wrap thead tr {
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border2);
+}
+.adv-table-wrap th {
+  padding: 9px 14px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text3);
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+.adv-table-wrap td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+  vertical-align: middle;
+}
+.adv-table-wrap tbody tr:last-child td { border-bottom: none; }
+.adv-table-wrap tbody tr { transition: background .1s; }
+.adv-table-wrap tbody tr:hover { background: rgba(27,78,216,.025); }
+
+/* ── Empty state ──────────────────────────────────────────────── */
+.adv-empty-state {
+  text-align: center;
+  padding: 44px 20px;
+  color: var(--text3);
+}
+.adv-empty-icon { font-size: 36px; margin-bottom: 12px; opacity: .45; }
+.adv-empty-title {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--text2);
+  margin-bottom: 6px;
+  letter-spacing: -.1px;
+}
+.adv-empty-sub {
+  font-size: 12.5px;
+  color: var(--text3);
+  line-height: 1.7;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+/* ── Tab panels ───────────────────────────────────────────────── */
+.adv-tab-panel { display: flex; flex-direction: column; gap: 14px; }
+
+/* ── Setup guide ──────────────────────────────────────────────── */
+.adv-setup-guide {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 12px 14px;
+  margin-top: 12px;
+}
+
+/* ── Dark mode overrides ──────────────────────────────────────── */
+[data-theme="dark"] .adv-sidebar { background: var(--bg2); }
+[data-theme="dark"] .adv-form-card { background: var(--bg2); }
+[data-theme="dark"] .adv-page-hero { border-color: var(--border); }
+[data-theme="dark"] .adv-table-wrap { background: var(--bg2); }
+[data-theme="dark"] .adv-result-header { background: var(--bg2); }
+[data-theme="dark"] .adv-draft-output { background: var(--bg2); color: var(--text); }
+
+/* ── wa-nav-btn compatibility (switchWATab uses this class) ───── */
+.wa-nav-btn { }
+.wa-nav-btn.active {
+  background: linear-gradient(90deg, var(--glow), var(--glow2)) !important;
+  color: var(--accent) !important;
+  font-weight: 700 !important;
+  border: 1px solid rgba(27,78,216,.15) !important;
+}
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media(max-width:900px) {
+  .adv-layout { grid-template-columns: 1fr; }
+  .adv-sidebar { position: static; }
+  .adv-form-row { flex-direction: column; }
+}
 </style>
 </head>
 <body>
@@ -2814,390 +3432,560 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 
   
     <!-- ── AI DOCUMENT DRAFTING ── -->
-    <div class="page" id="page-ai-drafting">
-      <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start">
+    
+<!-- ── AI DOCUMENT DRAFTING ── -->
+<div class="page" id="page-ai-drafting">
+  <div class="adv-layout">
 
-        <!-- Left: Quick actions -->
+    <!-- Left sidebar -->
+    <aside class="adv-sidebar">
+      <div class="adv-sidebar-header">
+        <div class="adv-sidebar-icon" style="background:linear-gradient(135deg,#6366f1,#1b4ed8)">🤖</div>
         <div>
-          <div class="card" style="margin-bottom:12px">
-            <div class="card-header"><div class="card-title">✨ AI Draft Templates</div></div>
-            <div class="card-body" style="padding:8px">
-              <div class="fsec" style="margin-top:0">Common Documents</div>
-              <div style="display:flex;flex-direction:column;gap:4px">
-                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('board_resolution')">📋 Board Resolution</button>
-                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('agm_notice')">📣 AGM Notice</button>
-                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('appointment_letter')">👤 Director Appointment</button>
-                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('compliance_report')">📊 Compliance Report</button>
-                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('nda')">🔒 NDA</button>
-                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('loan_agreement')">💰 Loan Agreement</button>
-                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('share_transfer')">📈 Share Transfer Deed</button>
-                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('custom')">✏️ Custom Document</button>
-              </div>
-            </div>
-          </div>
+          <div class="adv-sidebar-title">AI Drafting</div>
+          <div class="adv-sidebar-sub">Powered by Claude</div>
+        </div>
+      </div>
 
-          <div class="card">
-            <div class="card-header"><div class="card-title">ℹ️ How it works</div></div>
-            <div class="card-body">
-              <div style="font-size:12px;color:var(--text2);line-height:1.75">
-                1. Select a document type<br>
-                2. Choose the company — CRM data auto-fills<br>
-                3. Add any specific instructions<br>
-                4. AI generates a ready-to-use draft<br>
-                5. Send for e-signature or save as template
-              </div>
-              <div style="margin-top:12px;padding:8px;background:var(--glow2);border-radius:6px;font-size:11px;color:var(--accent)">
-                🔒 Documents are generated locally and are not stored on external servers.
-              </div>
-            </div>
+      <div class="adv-section-label">Document Types</div>
+      <div class="adv-nav-list">
+        <button class="adv-nav-item active" onclick="quickAIDraft('board_resolution');updateAINavActive(this)">
+          <span class="adv-nav-icon">📋</span><span>Board Resolution</span>
+        </button>
+        <button class="adv-nav-item" onclick="quickAIDraft('agm_notice');updateAINavActive(this)">
+          <span class="adv-nav-icon">📣</span><span>AGM Notice</span>
+        </button>
+        <button class="adv-nav-item" onclick="quickAIDraft('appointment_letter');updateAINavActive(this)">
+          <span class="adv-nav-icon">👤</span><span>Director Appointment</span>
+        </button>
+        <button class="adv-nav-item" onclick="quickAIDraft('compliance_report');updateAINavActive(this)">
+          <span class="adv-nav-icon">📊</span><span>Compliance Report</span>
+        </button>
+        <button class="adv-nav-item" onclick="quickAIDraft('nda');updateAINavActive(this)">
+          <span class="adv-nav-icon">🔒</span><span>NDA</span>
+        </button>
+        <button class="adv-nav-item" onclick="quickAIDraft('loan_agreement');updateAINavActive(this)">
+          <span class="adv-nav-icon">💰</span><span>Loan Agreement</span>
+        </button>
+        <button class="adv-nav-item" onclick="quickAIDraft('share_transfer');updateAINavActive(this)">
+          <span class="adv-nav-icon">📈</span><span>Share Transfer Deed</span>
+        </button>
+        <button class="adv-nav-item" onclick="quickAIDraft('custom');updateAINavActive(this)">
+          <span class="adv-nav-icon">✏️</span><span>Custom Document</span>
+        </button>
+      </div>
+
+      <div class="adv-info-card" style="margin-top:16px">
+        <div class="adv-info-title">⚡ How it works</div>
+        <div class="adv-info-steps">
+          <div class="adv-info-step"><span class="adv-step-num">1</span><span>Choose a document type</span></div>
+          <div class="adv-info-step"><span class="adv-step-num">2</span><span>Select company — CRM data auto-fills</span></div>
+          <div class="adv-info-step"><span class="adv-step-num">3</span><span>Add specific instructions</span></div>
+          <div class="adv-info-step"><span class="adv-step-num">4</span><span>AI generates a legal draft</span></div>
+          <div class="adv-info-step"><span class="adv-step-num">5</span><span>Sign or save as template</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main workspace -->
+    <div class="adv-main">
+      <div class="adv-page-hero" style="background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(27,78,216,.04))">
+        <div class="adv-hero-badge" style="background:linear-gradient(135deg,#6366f1,#1b4ed8)">🤖 AI Powered</div>
+        <div class="adv-hero-title">AI Document Generator</div>
+        <div class="adv-hero-sub">Generate legally formatted compliance documents in seconds using company data from your CRM</div>
+      </div>
+
+      <div class="adv-form-card">
+        <div class="adv-form-row">
+          <div class="adv-field">
+            <label class="adv-label">Document Type</label>
+            <select class="adv-select" id="ai-main-type">
+              <option value="board_resolution">Board Resolution</option>
+              <option value="agm_notice">AGM Notice</option>
+              <option value="appointment_letter">Director Appointment Letter</option>
+              <option value="nda">Non-Disclosure Agreement</option>
+              <option value="loan_agreement">Loan Agreement</option>
+              <option value="share_transfer">Share Transfer Deed</option>
+              <option value="compliance_report">Compliance Status Report</option>
+              <option value="custom">Custom Document</option>
+            </select>
+          </div>
+          <div class="adv-field">
+            <label class="adv-label">Company</label>
+            <select class="adv-select" id="ai-main-company">
+              <option value="">Select company…</option>
+            </select>
+          </div>
+          <div class="adv-field" style="width:150px;flex-shrink:0">
+            <label class="adv-label">Language</label>
+            <select class="adv-select" id="ai-main-tone">
+              <option value="formal">Formal Legal</option>
+              <option value="simple">Plain English</option>
+              <option value="hindi">Hindi</option>
+            </select>
           </div>
         </div>
+        <div class="adv-field" style="margin-top:12px">
+          <label class="adv-label">Specific Instructions <span style="color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">(names, dates, agenda points, amounts…)</span></label>
+          <textarea class="adv-textarea" id="ai-main-instructions" placeholder="e.g. Appoint Rahul Sharma as CFO w.e.f. 1st April 2025, salary ₹12 LPA…" style="min-height:72px"></textarea>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:14px">
+          <button class="adv-btn-primary" onclick="runAIMainDraft()">
+            <span>✨</span> Generate with AI
+          </button>
+          <div id="ai-main-spinner" class="adv-spinner" style="display:none"></div>
+          <div id="ai-gen-status" style="font-size:12px;color:var(--text3)"></div>
+        </div>
+      </div>
 
-        <!-- Right: Draft workspace -->
+      <!-- Result area -->
+      <div id="ai-main-result" style="display:none">
+        <div class="adv-result-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="adv-result-dot"></div>
+            <span class="adv-result-title">Generated Draft</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="adv-btn-ghost" onclick="copyAIMainDraft()"><span>📋</span> Copy</button>
+            <button class="adv-btn-ghost" onclick="aiMainDraftToTemplate()"><span>📝</span> Save as Template</button>
+            <button class="adv-btn-accent" onclick="aiMainDraftToESign()"><span>✍️</span> Send for E-Sign</button>
+          </div>
+        </div>
+        <textarea id="ai-main-output" class="adv-draft-output" readonly></textarea>
+      </div>
+
+      <div id="ai-main-error" class="adv-error-box" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── E-SIGNATURES ── -->
+<div class="page" id="page-esign">
+  <div class="adv-layout">
+
+    <!-- Left sidebar -->
+    <aside class="adv-sidebar">
+      <div class="adv-sidebar-header">
+        <div class="adv-sidebar-icon" style="background:linear-gradient(135deg,#0d8a56,#059669)">✍️</div>
         <div>
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">🤖 AI Document Generator</div>
-              <button class="btn btn-primary btn-sm" onclick="openAIDraftModal()">+ New Draft</button>
+          <div class="adv-sidebar-title">E-Signatures</div>
+          <div class="adv-sidebar-sub">DocuSign · Leegality</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="adv-stats-grid">
+        <div class="adv-stat-tile" style="--accent-c:#c46800">
+          <div class="adv-stat-num" id="esign-stat-pending">—</div>
+          <div class="adv-stat-label">Pending</div>
+        </div>
+        <div class="adv-stat-tile" style="--accent-c:#0d8a56">
+          <div class="adv-stat-num" id="esign-stat-completed">—</div>
+          <div class="adv-stat-label">Completed</div>
+        </div>
+        <div class="adv-stat-tile" style="--accent-c:#c92c2c">
+          <div class="adv-stat-num" id="esign-stat-expired">—</div>
+          <div class="adv-stat-label">Expired</div>
+        </div>
+        <div class="adv-stat-tile" style="--accent-c:#1b4ed8">
+          <div class="adv-stat-num" id="esign-stat-total">—</div>
+          <div class="adv-stat-label">Total</div>
+        </div>
+      </div>
+
+      <div class="adv-section-label">Providers</div>
+      <a href="https://leegality.com" target="_blank" class="adv-provider-card">
+        <div class="adv-provider-logo" style="background:#1a73e8">L</div>
+        <div>
+          <div class="adv-provider-name">Leegality</div>
+          <div class="adv-provider-sub">India's #1 e-sign platform</div>
+        </div>
+        <span style="margin-left:auto;color:var(--text3);font-size:12px">↗</span>
+      </a>
+      <a href="https://docusign.com" target="_blank" class="adv-provider-card">
+        <div class="adv-provider-logo" style="background:#0a1628">DS</div>
+        <div>
+          <div class="adv-provider-name">DocuSign</div>
+          <div class="adv-provider-sub">Global e-signature standard</div>
+        </div>
+        <span style="margin-left:auto;color:var(--text3);font-size:12px">↗</span>
+      </a>
+      <a href="#" onclick="openESignNewRequest();return false" class="adv-provider-card" style="border-color:var(--accent);background:var(--glow2)">
+        <div class="adv-provider-logo" style="background:var(--bg3);color:var(--text2);font-size:14px">📄</div>
+        <div>
+          <div class="adv-provider-name" style="color:var(--accent)">Internal Signing</div>
+          <div class="adv-provider-sub">Basic in-house workflow</div>
+        </div>
+      </a>
+    </aside>
+
+    <!-- Main content -->
+    <div class="adv-main">
+      <div class="adv-page-hero" style="background:linear-gradient(135deg,rgba(13,138,86,.07),rgba(5,150,105,.03))">
+        <div class="adv-hero-badge" style="background:linear-gradient(135deg,#0d8a56,#059669)">✍️ Legally Binding</div>
+        <div class="adv-hero-title">E-Signature Requests</div>
+        <div class="adv-hero-sub">Send documents for digital signature via Leegality or DocuSign. Track status per signatory in real time.</div>
+        <button class="adv-btn-primary" style="margin-top:14px" onclick="openESignNewRequest()"><span>+</span> New Signature Request</button>
+      </div>
+
+      <div class="adv-toolbar">
+        <div class="adv-toolbar-left">
+          <div class="adv-filter-pill-group" id="esign-filter-pills">
+            <button class="adv-filter-pill active" onclick="filterESign('',this)">All</button>
+            <button class="adv-filter-pill" onclick="filterESign('pending',this)">⏳ Pending</button>
+            <button class="adv-filter-pill" onclick="filterESign('completed',this)">✅ Completed</button>
+            <button class="adv-filter-pill" onclick="filterESign('expired',this)">⛔ Expired</button>
+          </div>
+        </div>
+        <button class="adv-btn-outline" onclick="loadESignPage()">↺ Refresh</button>
+      </div>
+
+      <div id="esign-requests-list" class="adv-table-wrap">
+        <div class="adv-empty-state">
+          <div class="adv-empty-icon">✍️</div>
+          <div class="adv-empty-title">No signature requests yet</div>
+          <div class="adv-empty-sub">Click <strong>New Signature Request</strong> to send a document for e-signature via DocuSign or Leegality.</div>
+          <button class="adv-btn-primary" style="margin-top:14px" onclick="openESignNewRequest()">+ New Request</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CLIENT PORTAL ── -->
+<div class="page" id="page-client-portal">
+  <div class="adv-layout">
+
+    <!-- Left sidebar -->
+    <aside class="adv-sidebar">
+      <div class="adv-sidebar-header">
+        <div class="adv-sidebar-icon" style="background:linear-gradient(135deg,#6530b5,#8b5cf6)">🌐</div>
+        <div>
+          <div class="adv-sidebar-title">Client Portal</div>
+          <div class="adv-sidebar-sub">Secure read-only access</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="adv-stats-grid">
+        <div class="adv-stat-tile" style="--accent-c:#0d8a56">
+          <div class="adv-stat-num" id="portal-stat-active">—</div>
+          <div class="adv-stat-label">Active</div>
+        </div>
+        <div class="adv-stat-tile" style="--accent-c:#1b4ed8">
+          <div class="adv-stat-num" id="portal-stat-views">—</div>
+          <div class="adv-stat-label">Views</div>
+        </div>
+      </div>
+
+      <div class="adv-section-label">Access Levels</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="adv-access-level" style="--lvl-c:#0d8a56">
+          <span class="adv-access-dot"></span>
+          <div><div class="adv-access-name">Documents Only</div><div class="adv-access-desc">Shared documents</div></div>
+        </div>
+        <div class="adv-access-level" style="--lvl-c:#02a8d0">
+          <span class="adv-access-dot"></span>
+          <div><div class="adv-access-name">Compliance View</div><div class="adv-access-desc">Status + calendar</div></div>
+        </div>
+        <div class="adv-access-level" style="--lvl-c:#6530b5">
+          <span class="adv-access-dot"></span>
+          <div><div class="adv-access-name">Full Read-Only</div><div class="adv-access-desc">All modules</div></div>
+        </div>
+        <div class="adv-access-level" style="--lvl-c:#c46800">
+          <span class="adv-access-dot"></span>
+          <div><div class="adv-access-name">Custom Modules</div><div class="adv-access-desc">Selected sections</div></div>
+        </div>
+      </div>
+
+      <button class="adv-btn-primary" style="width:100%;margin-top:16px" onclick="openPortalNewLink()">
+        🔗 Generate New Link
+      </button>
+    </aside>
+
+    <!-- Main content -->
+    <div class="adv-main">
+      <div class="adv-page-hero" style="background:linear-gradient(135deg,rgba(101,48,181,.07),rgba(139,92,246,.03))">
+        <div class="adv-hero-badge" style="background:linear-gradient(135deg,#6530b5,#8b5cf6)">🌐 Secure Access</div>
+        <div class="adv-hero-title">Client Portal Links</div>
+        <div class="adv-hero-sub">Generate secure, read-only portal links for clients, auditors, and stakeholders. Each link has its own expiry, access level, and audit trail.</div>
+      </div>
+
+      <div class="adv-toolbar">
+        <div class="adv-toolbar-left">
+          <select class="adv-select" style="width:220px;height:34px" id="portal-co-filter" onchange="loadPortalLinks()">
+            <option value="">All Companies</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="adv-btn-outline" onclick="loadPortalLinks()">↺ Refresh</button>
+          <button class="adv-btn-primary" onclick="openPortalNewLink()">+ Generate Link</button>
+        </div>
+      </div>
+
+      <div id="portal-links-table" class="adv-table-wrap">
+        <div class="adv-empty-state">
+          <div class="adv-empty-icon">🔗</div>
+          <div class="adv-empty-title">No portal links yet</div>
+          <div class="adv-empty-sub">Click <strong>Generate Link</strong> to create a read-only portal for a client or auditor.</div>
+          <button class="adv-btn-primary" style="margin-top:14px" onclick="openPortalNewLink()">+ Generate First Link</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── WHATSAPP BUSINESS ── -->
+<div class="page" id="page-whatsapp">
+  <div class="adv-layout">
+
+    <!-- Left sidebar -->
+    <aside class="adv-sidebar">
+      <div class="adv-sidebar-header">
+        <div class="adv-sidebar-icon" style="background:linear-gradient(135deg,#25d366,#128c7e)">📲</div>
+        <div>
+          <div class="adv-sidebar-title">WhatsApp</div>
+          <div class="adv-sidebar-sub">Business Messaging</div>
+        </div>
+      </div>
+
+      <div class="adv-section-label">Navigation</div>
+      <div class="adv-nav-list">
+        <button class="adv-nav-item active wa-nav-btn" data-tab="quick" onclick="switchWATab('quick')">
+          <span class="adv-nav-icon">💬</span><span>Quick Send</span>
+        </button>
+        <button class="adv-nav-item wa-nav-btn" data-tab="bulk" onclick="switchWATab('bulk')">
+          <span class="adv-nav-icon">📢</span><span>Bulk Alerts</span>
+        </button>
+        <button class="adv-nav-item wa-nav-btn" data-tab="templates" onclick="switchWATab('templates')">
+          <span class="adv-nav-icon">📋</span><span>Message Templates</span>
+        </button>
+        <button class="adv-nav-item wa-nav-btn" data-tab="schedule" onclick="switchWATab('schedule')">
+          <span class="adv-nav-icon">⏰</span><span>Scheduled Alerts</span>
+        </button>
+        <button class="adv-nav-item wa-nav-btn" data-tab="history" onclick="switchWATab('history')">
+          <span class="adv-nav-icon">📜</span><span>Send History</span>
+        </button>
+        <button class="adv-nav-item wa-nav-btn" data-tab="settings" onclick="switchWATab('settings')">
+          <span class="adv-nav-icon">⚙️</span><span>API Settings</span>
+        </button>
+      </div>
+
+      <div class="adv-info-card" style="margin-top:16px">
+        <div class="adv-info-title">Supported Providers</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">
+          <span class="adv-provider-pill">WATI</span>
+          <span class="adv-provider-pill">Twilio</span>
+          <span class="adv-provider-pill">Gupshup</span>
+          <span class="adv-provider-pill">Kaleyra</span>
+          <span class="adv-provider-pill">Interakt</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main: tabbed content -->
+    <div class="adv-main">
+
+      <!-- Quick Send -->
+      <div id="wa-tab-quick" class="adv-tab-panel">
+        <div class="adv-page-hero" style="background:linear-gradient(135deg,rgba(37,211,102,.07),rgba(18,140,126,.03))">
+          <div class="adv-hero-badge" style="background:linear-gradient(135deg,#25d366,#128c7e)">💬 Quick Send</div>
+          <div class="adv-hero-title">Send WhatsApp Message</div>
+          <div class="adv-hero-sub">Send a compliance alert or custom message directly to any WhatsApp number.</div>
+        </div>
+        <div class="adv-form-card">
+          <div class="adv-form-row">
+            <div class="adv-field">
+              <label class="adv-label">Phone Number</label>
+              <input class="adv-input" id="wa-page-phone" placeholder="+919876543210" type="tel">
             </div>
-            <div class="card-body">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-                <div class="fg">
-                  <label class="fl">Document Type</label>
-                  <select class="fc" id="ai-main-type">
-                    <option value="board_resolution">Board Resolution</option>
-                    <option value="agm_notice">AGM Notice</option>
-                    <option value="appointment_letter">Director Appointment Letter</option>
-                    <option value="nda">Non-Disclosure Agreement</option>
-                    <option value="loan_agreement">Loan Agreement</option>
-                    <option value="share_transfer">Share Transfer Deed</option>
-                    <option value="compliance_report">Compliance Status Report</option>
-                    <option value="custom">Custom Document</option>
-                  </select>
-                </div>
-                <div class="fg">
-                  <label class="fl">Company</label>
-                  <select class="fc" id="ai-main-company"><option value="">Select company…</option></select>
-                </div>
+            <div class="adv-field">
+              <label class="adv-label">Message Template</label>
+              <select class="adv-select" id="wa-page-template" onchange="previewWAPageTemplate()">
+                <option value="compliance_alert">Compliance Alert</option>
+                <option value="dsc_expiry">DSC Expiry Reminder</option>
+                <option value="kyc_due">DIR-KYC Due Reminder</option>
+                <option value="meeting_reminder">Meeting Reminder</option>
+                <option value="document_ready">Document Ready for Signing</option>
+                <option value="custom">Custom Message</option>
+              </select>
+            </div>
+          </div>
+          <div class="adv-field" style="margin-top:12px">
+            <label class="adv-label">Message</label>
+            <textarea class="adv-textarea" id="wa-page-msg" style="min-height:120px"></textarea>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
+            <button class="adv-btn-primary" style="background:linear-gradient(135deg,#25d366,#1db954)" onclick="sendWAPage()"><span>📲</span> Send via WhatsApp</button>
+            <button class="adv-btn-outline" onclick="sendSMSPage()"><span>💬</span> Send via SMS</button>
+            <div id="wa-page-status" class="adv-status-msg"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bulk Alerts -->
+      <div id="wa-tab-bulk" class="adv-tab-panel" style="display:none">
+        <div class="adv-page-hero" style="background:linear-gradient(135deg,rgba(37,211,102,.07),rgba(18,140,126,.03))">
+          <div class="adv-hero-badge" style="background:linear-gradient(135deg,#25d366,#128c7e)">📢 Bulk</div>
+          <div class="adv-hero-title">Bulk Compliance Alerts</div>
+          <div class="adv-hero-sub">Send compliance reminders to directors and contacts across all your companies at once.</div>
+        </div>
+        <div class="adv-form-card">
+          <div class="adv-form-row">
+            <div class="adv-field">
+              <label class="adv-label">Alert Type</label>
+              <select class="adv-select" id="wa-bulk-page-type">
+                <option value="all_pending">All Pending Compliance</option>
+                <option value="dsc_expiry">DSC Expiry (30 days)</option>
+                <option value="kyc_due">DIR-KYC Due</option>
+                <option value="meeting_upcoming">Upcoming Meetings</option>
+              </select>
+            </div>
+            <div class="adv-field">
+              <label class="adv-label">Company</label>
+              <select class="adv-select" id="wa-bulk-co">
+                <option value="">All Companies</option>
+              </select>
+            </div>
+          </div>
+          <div class="adv-field" style="margin-top:12px">
+            <label class="adv-label">Recipients</label>
+            <select class="adv-select" id="wa-bulk-recipients" onchange="document.getElementById('wa-bulk-custom-phones').style.display=this.value==='custom'?'':'none'">
+              <option value="directors">All Directors (on file)</option>
+              <option value="users">All CMS Users</option>
+              <option value="custom">Custom Phone List</option>
+            </select>
+          </div>
+          <div id="wa-bulk-custom-phones" style="display:none" class="adv-field">
+            <label class="adv-label">Phone Numbers (one per line or comma separated)</label>
+            <textarea class="adv-textarea" id="wa-bulk-phones-input" style="min-height:80px" placeholder="+919876543210&#10;+919876543211"></textarea>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
+            <button class="adv-btn-primary" style="background:linear-gradient(135deg,#25d366,#1db954)" onclick="sendWAPageBulk()"><span>📢</span> Send Bulk Alert</button>
+            <div id="wa-bulk-page-status" class="adv-status-msg"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Templates -->
+      <div id="wa-tab-templates" class="adv-tab-panel" style="display:none">
+        <div class="adv-toolbar" style="margin-bottom:16px">
+          <div class="adv-hero-title" style="font-size:16px">Message Templates</div>
+          <button class="adv-btn-primary" onclick="openWATemplateEditor()">+ New Template</button>
+        </div>
+        <div id="wa-tpl-items" style="display:flex;flex-direction:column;gap:10px">
+          <div class="adv-empty-state" style="padding:28px">
+            <div class="adv-empty-icon">📋</div>
+            <div class="adv-empty-title">No custom templates</div>
+            <div class="adv-empty-sub">Save frequently used messages as templates for quick access.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Schedule -->
+      <div id="wa-tab-schedule" class="adv-tab-panel" style="display:none">
+        <div class="adv-form-card">
+          <div class="adv-form-section-title">⏰ New Scheduled Alert</div>
+          <div class="adv-form-row">
+            <div class="adv-field">
+              <label class="adv-label">Alert Type</label>
+              <select class="adv-select" id="wa-sched-page-type">
+                <option value="dsc_expiry_30">DSC expiry — 30 days before</option>
+                <option value="dsc_expiry_7">DSC expiry — 7 days before</option>
+                <option value="kyc_reminder">DIR-KYC reminder</option>
+                <option value="meeting_day_before">Meeting — day before</option>
+                <option value="compliance_weekly">Weekly summary</option>
+              </select>
+            </div>
+            <div class="adv-field" style="width:150px;flex-shrink:0">
+              <label class="adv-label">Send Time</label>
+              <input class="adv-input" type="time" id="wa-sched-page-time" value="09:00">
+            </div>
+            <div class="adv-field">
+              <label class="adv-label">Recipients</label>
+              <select class="adv-select" id="wa-sched-page-recip">
+                <option value="directors">Directors</option>
+                <option value="all_users">All CMS Users</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
+            <button class="adv-btn-primary" onclick="saveWAPageSchedule()"><span>💾</span> Save Schedule</button>
+            <div id="wa-sched-page-status" class="adv-status-msg"></div>
+          </div>
+        </div>
+        <div class="adv-form-section-title" style="margin:18px 0 10px">Active Schedules</div>
+        <div id="wa-active-schedules">
+          <div class="adv-empty-state" style="padding:24px">
+            <div class="adv-empty-icon">⏰</div>
+            <div class="adv-empty-title">No active schedules</div>
+            <div class="adv-empty-sub">Save a schedule above to auto-send compliance reminders.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div id="wa-tab-history" class="adv-tab-panel" style="display:none">
+        <div class="adv-toolbar" style="margin-bottom:14px">
+          <div class="adv-hero-title" style="font-size:16px">Send History</div>
+          <button class="adv-btn-outline" onclick="loadWAHistory()">↺ Refresh</button>
+        </div>
+        <div id="wa-history-list" class="adv-table-wrap">
+          <div class="adv-empty-state">
+            <div class="adv-empty-icon">📜</div>
+            <div class="adv-empty-title">No messages sent yet</div>
+            <div class="adv-empty-sub">Messages sent via WhatsApp will appear here.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div id="wa-tab-settings" class="adv-tab-panel" style="display:none">
+        <div id="wa-settings-panel">
+          <div class="adv-form-card">
+            <div class="adv-form-section-title">⚙️ API Configuration</div>
+            <div class="adv-form-row">
+              <div class="adv-field">
+                <label class="adv-label">Provider</label>
+                <select class="adv-select" id="wa-pg-provider">
+                  <option value="wati">WATI</option>
+                  <option value="twilio">Twilio</option>
+                  <option value="gupshup">Gupshup</option>
+                  <option value="kaleyra">Kaleyra</option>
+                  <option value="interakt">Interakt</option>
+                </select>
               </div>
-              <div class="fg">
-                <label class="fl">Instructions</label>
-                <textarea class="fc" id="ai-main-instructions" style="min-height:70px" placeholder="Specific details, names, dates, amounts, agenda points…"></textarea>
+              <div class="adv-field">
+                <label class="adv-label">Business Phone</label>
+                <input class="adv-input" id="wa-pg-phone" placeholder="+91XXXXXXXXXX">
               </div>
-              <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
-                <div class="fg" style="width:160px;margin:0">
-                  <label class="fl">Language</label>
-                  <select class="fc" id="ai-main-tone">
-                    <option value="formal">Formal Legal</option>
-                    <option value="simple">Plain English</option>
-                    <option value="hindi">Hindi</option>
-                  </select>
-                </div>
-                <button class="btn btn-primary" onclick="runAIMainDraft()" style="margin-top:16px">✨ Generate with AI</button>
-                <div id="ai-main-spinner" style="display:none" class="spin" style="margin-top:16px"></div>
+            </div>
+            <div class="adv-field" style="margin-top:12px">
+              <label class="adv-label">API Key / Bearer Token</label>
+              <input class="adv-input" type="password" id="wa-pg-key" placeholder="Enter your API key">
+            </div>
+            <div class="adv-setup-guide">
+              <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">📋 Setup Guide</div>
+              <div style="font-size:11.5px;color:var(--text3);line-height:1.8">
+                1. Create a WhatsApp Business account at <a href="https://business.whatsapp.com" target="_blank" style="color:var(--accent)">business.whatsapp.com</a><br>
+                2. Sign up with your preferred provider (e.g. <a href="https://wati.io" target="_blank" style="color:var(--accent)">WATI</a>)<br>
+                3. Get your API key from the provider dashboard<br>
+                4. Configure backend at <code style="font-family:var(--font-mono);font-size:10.5px;background:var(--bg3);padding:1px 5px;border-radius:3px">/api/notifications/send-whatsapp</code>
               </div>
-              <div id="ai-main-result" style="display:none">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                  <div style="font-size:12px;font-weight:700;color:var(--text2)">📄 Generated Draft</div>
-                  <div style="display:flex;gap:6px">
-                    <button class="btn btn-xs btn-outline" onclick="copyAIMainDraft()">📋 Copy</button>
-                    <button class="btn btn-xs btn-outline" onclick="aiMainDraftToTemplate()">📝 Save as Template</button>
-                    <button class="btn btn-xs btn-primary" onclick="aiMainDraftToESign()">✍️ Send for E-Sign</button>
-                  </div>
-                </div>
-                <textarea id="ai-main-output" class="fc" style="min-height:400px;font-family:var(--font-mono);font-size:12px;line-height:1.8" readonly></textarea>
-              </div>
-              <div id="ai-main-error" style="display:none;background:var(--rbg);border:1px solid var(--rborder);border-radius:var(--r);padding:12px;color:var(--red);font-size:12.5px"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
+              <button class="adv-btn-primary" onclick="saveWAPGSettings()"><span>💾</span> Save Settings</button>
+              <button class="adv-btn-outline" onclick="testWAPGConnection()"><span>🧪</span> Test Connection</button>
+              <div id="wa-pg-status" class="adv-status-msg"></div>
             </div>
           </div>
         </div>
       </div>
+
     </div>
+  </div>
+</div>
 
-    <!-- ── E-SIGNATURE ── -->
-    <div class="page" id="page-esign">
-      <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start">
-
-        <!-- Left: stats + actions -->
-        <div>
-          <div class="card" style="margin-bottom:12px">
-            <div class="card-header"><div class="card-title">📊 Overview</div></div>
-            <div class="card-body" style="padding:8px 0">
-              <div id="esign-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 14px">
-                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
-                  <div style="font-size:22px;font-weight:800;color:var(--orange)" id="esign-stat-pending">—</div>
-                  <div style="font-size:10.5px;color:var(--text3)">Pending</div>
-                </div>
-                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
-                  <div style="font-size:22px;font-weight:800;color:var(--green)" id="esign-stat-completed">—</div>
-                  <div style="font-size:10.5px;color:var(--text3)">Completed</div>
-                </div>
-                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
-                  <div style="font-size:22px;font-weight:800;color:var(--red)" id="esign-stat-expired">—</div>
-                  <div style="font-size:10.5px;color:var(--text3)">Expired</div>
-                </div>
-                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
-                  <div style="font-size:22px;font-weight:800;color:var(--accent)" id="esign-stat-total">—</div>
-                  <div style="font-size:10.5px;color:var(--text3)">Total</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header"><div class="card-title">🔗 Providers</div></div>
-            <div class="card-body" style="padding:8px">
-              <div style="display:flex;flex-direction:column;gap:6px">
-                <a href="https://leegality.com" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:var(--r);text-decoration:none;color:var(--text)">
-                  <div style="width:32px;height:32px;background:#1a73e8;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700">L</div>
-                  <div><div style="font-size:12px;font-weight:600">Leegality</div><div style="font-size:10.5px;color:var(--text3)">India's leading e-sign</div></div>
-                </a>
-                <a href="https://docusign.com" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:var(--r);text-decoration:none;color:var(--text)">
-                  <div style="width:32px;height:32px;background:#0A1628;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700">DS</div>
-                  <div><div style="font-size:12px;font-weight:600">DocuSign</div><div style="font-size:10.5px;color:var(--text3)">Global e-signature</div></div>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: signature queue -->
-        <div>
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">✍️ Signature Requests</div>
-              <div style="display:flex;gap:8px">
-                <select class="fc" style="width:130px;height:32px;font-size:12px" id="esign-status-filter" onchange="loadESignRequests()">
-                  <option value="">All Status</option>
-                  <option value="pending">Pending</option>
-                  <option value="completed">Completed</option>
-                  <option value="expired">Expired</option>
-                </select>
-                <button class="btn btn-primary btn-sm" onclick="openESignNewRequest()">+ New Request</button>
-              </div>
-            </div>
-            <div id="esign-requests-list" class="table-wrap" style="border:none;box-shadow:none">
-              <div class="empty-state" style="padding:32px"><div class="empty-icon">✍️</div><div class="empty-title">No signature requests yet</div><div class="empty-sub">Click <b>+ New Request</b> to send a document for e-signature via DocuSign or Leegality.</div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── CLIENT PORTAL ── -->
-    <div class="page" id="page-client-portal">
-      <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start">
-
-        <!-- Left: info -->
-        <div>
-          <div class="card" style="margin-bottom:12px">
-            <div class="card-header"><div class="card-title">🌐 Portal Overview</div></div>
-            <div class="card-body" style="padding:8px 0">
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 14px">
-                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
-                  <div style="font-size:22px;font-weight:800;color:var(--green)" id="portal-stat-active">—</div>
-                  <div style="font-size:10.5px;color:var(--text3)">Active Links</div>
-                </div>
-                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
-                  <div style="font-size:22px;font-weight:800;color:var(--accent)" id="portal-stat-views">—</div>
-                  <div style="font-size:10.5px;color:var(--text3)">Total Views</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header"><div class="card-title">🔒 Access Levels</div></div>
-            <div class="card-body">
-              <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
-                <div style="padding:8px;background:var(--gbg);border-radius:6px"><strong>Documents Only</strong><br><span style="color:var(--text3)">View shared documents only</span></div>
-                <div style="padding:8px;background:var(--cbg);border-radius:6px"><strong>Compliance View</strong><br><span style="color:var(--text3)">Compliance status + calendar</span></div>
-                <div style="padding:8px;background:var(--pbg);border-radius:6px"><strong>Full Read-Only</strong><br><span style="color:var(--text3)">All modules, read-only</span></div>
-                <div style="padding:8px;background:var(--obg);border-radius:6px"><strong>Custom Modules</strong><br><span style="color:var(--text3)">Choose specific sections</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: portal links table -->
-        <div>
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">🔗 Client Portal Links</div>
-              <div style="display:flex;gap:8px">
-                <select class="fc" style="width:180px;height:32px;font-size:12px" id="portal-co-filter" onchange="loadPortalLinks()">
-                  <option value="">All Companies</option>
-                </select>
-                <button class="btn btn-primary btn-sm" onclick="openPortalNewLink()">+ Generate Link</button>
-              </div>
-            </div>
-            <div id="portal-links-table" class="table-wrap" style="border:none;box-shadow:none">
-              <div class="empty-state" style="padding:32px"><div class="empty-icon">🔗</div><div class="empty-title">No portal links yet</div><div class="empty-sub">Click <b>+ Generate Link</b> to create a read-only link for a client or auditor.</div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── WHATSAPP CENTER ── -->
-    <div class="page" id="page-whatsapp">
-      <div style="display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start">
-
-        <!-- Left nav -->
-        <div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">📲 WA Center</div></div>
-            <div class="card-body" style="padding:6px">
-              <div style="display:flex;flex-direction:column;gap:2px">
-                <button class="btn btn-ghost wa-nav-btn active" data-tab="quick" onclick="switchWATab('quick')" style="justify-content:flex-start">💬 Quick Send</button>
-                <button class="btn btn-ghost wa-nav-btn" data-tab="bulk" onclick="switchWATab('bulk')" style="justify-content:flex-start">📢 Bulk Alerts</button>
-                <button class="btn btn-ghost wa-nav-btn" data-tab="templates" onclick="switchWATab('templates')" style="justify-content:flex-start">📋 Message Templates</button>
-                <button class="btn btn-ghost wa-nav-btn" data-tab="schedule" onclick="switchWATab('schedule')" style="justify-content:flex-start">⏰ Scheduled Alerts</button>
-                <button class="btn btn-ghost wa-nav-btn" data-tab="history" onclick="switchWATab('history')" style="justify-content:flex-start">📜 Send History</button>
-                <button class="btn btn-ghost wa-nav-btn" data-tab="settings" onclick="switchWATab('settings')" style="justify-content:flex-start">⚙️ API Settings</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: content area -->
-        <div>
-          <!-- Quick Send -->
-          <div id="wa-tab-quick" class="card">
-            <div class="card-header"><div class="card-title">💬 Quick Send</div></div>
-            <div class="card-body">
-              <div class="fg2">
-                <div class="fg">
-                  <label class="fl">Phone Number</label>
-                  <input class="fc" id="wa-page-phone" placeholder="+919876543210">
-                </div>
-                <div class="fg">
-                  <label class="fl">Template</label>
-                  <select class="fc" id="wa-page-template" onchange="previewWAPageTemplate()">
-                    <option value="compliance_alert">Compliance Alert</option>
-                    <option value="dsc_expiry">DSC Expiry Reminder</option>
-                    <option value="kyc_due">DIR-KYC Due Reminder</option>
-                    <option value="meeting_reminder">Meeting Reminder</option>
-                    <option value="document_ready">Document Ready for Signing</option>
-                    <option value="custom">Custom Message</option>
-                  </select>
-                </div>
-              </div>
-              <div class="fg">
-                <label class="fl">Message</label>
-                <textarea class="fc" id="wa-page-msg" style="min-height:120px"></textarea>
-              </div>
-              <div style="display:flex;gap:8px;align-items:center">
-                <button class="btn btn-primary" onclick="sendWAPage()">📲 Send via WhatsApp</button>
-                <button class="btn btn-outline" onclick="sendSMSPage()">💬 Send via SMS</button>
-                <div id="wa-page-status" style="font-size:12px;color:var(--text3)"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Bulk -->
-          <div id="wa-tab-bulk" class="card" style="display:none">
-            <div class="card-header"><div class="card-title">📢 Bulk Compliance Alerts</div></div>
-            <div class="card-body">
-              <div class="fg2">
-                <div class="fg">
-                  <label class="fl">Alert Type</label>
-                  <select class="fc" id="wa-bulk-page-type">
-                    <option value="all_pending">All Pending Compliance</option>
-                    <option value="dsc_expiry">DSC Expiry (30 days)</option>
-                    <option value="kyc_due">DIR-KYC Due</option>
-                    <option value="meeting_upcoming">Upcoming Meetings</option>
-                  </select>
-                </div>
-                <div class="fg">
-                  <label class="fl">Company</label>
-                  <select class="fc" id="wa-bulk-co">
-                    <option value="">All Companies</option>
-                  </select>
-                </div>
-              </div>
-              <div class="fg">
-                <label class="fl">Recipients</label>
-                <select class="fc" id="wa-bulk-recipients">
-                  <option value="directors">All Directors (on file)</option>
-                  <option value="users">All CMS Users</option>
-                  <option value="custom">Custom Phone List</option>
-                </select>
-              </div>
-              <div id="wa-bulk-custom-phones" style="display:none" class="fg">
-                <label class="fl">Phone Numbers (one per line or comma separated)</label>
-                <textarea class="fc" id="wa-bulk-phones-input" style="min-height:80px" placeholder="+919876543210&#10;+919876543211"></textarea>
-              </div>
-              <button class="btn btn-primary" onclick="sendWAPageBulk()">📢 Send Bulk Alert</button>
-              <div id="wa-bulk-page-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
-            </div>
-          </div>
-
-          <!-- Templates -->
-          <div id="wa-tab-templates" class="card" style="display:none">
-            <div class="card-header">
-              <div class="card-title">📋 Message Templates</div>
-              <button class="btn btn-primary btn-sm" onclick="openWATemplateEditor()">+ New Template</button>
-            </div>
-            <div id="wa-templates-list" class="card-body">
-              <div style="display:flex;flex-direction:column;gap:8px" id="wa-tpl-items">
-                <div style="font-size:12px;color:var(--text3);padding:8px">No custom templates yet. Click <b>+ New Template</b> to create one.</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Schedule -->
-          <div id="wa-tab-schedule" class="card" style="display:none">
-            <div class="card-header"><div class="card-title">⏰ Scheduled Alerts</div></div>
-            <div class="card-body">
-              <div class="fg2">
-                <div class="fg">
-                  <label class="fl">Alert Type</label>
-                  <select class="fc" id="wa-sched-page-type">
-                    <option value="dsc_expiry_30">DSC expiry — 30 days before</option>
-                    <option value="dsc_expiry_7">DSC expiry — 7 days before</option>
-                    <option value="kyc_reminder">DIR-KYC reminder</option>
-                    <option value="meeting_day_before">Meeting — day before</option>
-                    <option value="compliance_weekly">Weekly summary</option>
-                  </select>
-                </div>
-                <div class="fg">
-                  <label class="fl">Send Time Daily</label>
-                  <input class="fc" type="time" id="wa-sched-page-time" value="09:00">
-                </div>
-              </div>
-              <div class="fg">
-                <label class="fl">Recipients</label>
-                <select class="fc" id="wa-sched-page-recip">
-                  <option value="directors">Directors</option>
-                  <option value="all_users">All CMS Users</option>
-                </select>
-              </div>
-              <button class="btn btn-primary" onclick="saveWAPageSchedule()">💾 Save Schedule</button>
-              <div id="wa-sched-page-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
-              <div class="fsec" style="margin-top:16px">Active Schedules</div>
-              <div id="wa-active-schedules"><div style="font-size:12px;color:var(--text3);padding:8px">No active schedules yet. Save a schedule above to get started.</div></div>
-            </div>
-          </div>
-
-          <!-- History -->
-          <div id="wa-tab-history" class="card" style="display:none">
-            <div class="card-header"><div class="card-title">📜 Send History</div></div>
-            <div id="wa-history-list" class="table-wrap" style="border:none;box-shadow:none">
-              <div class="empty-state" style="padding:32px"><div class="empty-icon">📜</div><div class="empty-title">No messages yet</div><div class="empty-sub">Messages sent via WhatsApp will appear here.</div></div>
-            </div>
-          </div>
-
-          <!-- Settings -->
-          <div id="wa-tab-settings" class="card" style="display:none">
-            <div class="card-header"><div class="card-title">⚙️ WhatsApp API Settings</div></div>
-            <div class="card-body" id="wa-settings-panel">
-              <div class="loading"><div class="spin"></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     </div><!-- /content -->
 
@@ -13131,6 +13919,41 @@ async function sendTestEmail() {
 // WIRE NEW PAGES INTO ROUTER
 // ═══════════════════════════════════════════════════════════════════════════
 // Patch initSettingsPage to load 2FA status after it runs
+
+// ── Advanced Tools UI helpers ─────────────────────────────────────────────
+function updateAINavActive(btn) {
+  document.querySelectorAll('#page-ai-drafting .adv-nav-item').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function filterESign(status, btn) {
+  document.querySelectorAll('#esign-filter-pills .adv-filter-pill').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const sel = document.getElementById('esign-status-filter');
+  if(sel){ sel.value = status; }
+  loadESignPage();
+}
+
+// Override switchWATab to use adv-nav-item styling
+const _origSwitchWATab = window.switchWATab;
+window.switchWATab = function(tab) {
+  // Update sidebar nav
+  document.querySelectorAll('#page-whatsapp .adv-nav-item').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab===tab);
+  });
+  // Show/hide tab panels
+  ['quick','bulk','templates','schedule','history','settings'].forEach(t=>{
+    const el=document.getElementById('wa-tab-'+t);
+    if(el) el.style.display = t===tab ? 'flex' : 'none';
+  });
+  // Load data for certain tabs
+  if(tab==='history') loadWAHistory();
+  if(tab==='templates') loadWATemplates();
+  if(tab==='schedule') loadWASchedules();
+  if(tab==='settings') loadWASettingsPanel();
+};
+
+
 document.addEventListener('DOMContentLoaded', function() {
   const _origInitSettings = window.initSettingsPage;
   if (typeof _origInitSettings === 'function') {
