@@ -5819,6 +5819,10 @@ def portal_view(token):
 
     co_id       = rec.get('company_id', '')
     co_name     = rec.get('company_name', 'Company')
+    # Verify we have a valid company_id by checking companies table directly
+    if not co_id:
+        return _portal_error_page("⚠️ Configuration Error",
+            "This portal link is missing company configuration. Please regenerate the link."), 500
     tenant_id   = rec.get('tenant_id', '')
     access      = rec.get('access_level', 'full_readonly')
     client_name = rec.get('client_name', 'Valued Client')
@@ -5851,11 +5855,17 @@ def portal_view(token):
         return False
 
     # ── Fetch company data ────────────────────────────────────────────────
+    _qrows_errors = []
     def qrows(sql, params=()):
+        """Fresh cursor per query — avoids aborted-transaction bleed-through."""
         try:
-            _cur.execute(sql, params)
-            return rows(_cur.fetchall()) or []
-        except Exception:
+            _c = get_db().cursor()
+            _c.execute(sql, params)
+            result = rows(_c.fetchall()) or []
+            return result
+        except Exception as _qe:
+            _qrows_errors.append(str(_qe))
+            app.logger.warning(f"portal qrows: {_qe} sql={sql[:80]}")
             return []
 
     company = {
@@ -5874,7 +5884,7 @@ def portal_view(token):
 
     directors_list = qrows(
         "SELECT name, designation, din, email, date_of_appointment, date_of_cessation "
-        "FROM directors WHERE company_id=%s AND (date_of_cessation IS NULL OR date_of_cessation='') "
+        "FROM directors WHERE company_id=%s AND is_active=1 "
         "ORDER BY name", (co_id,)) if can_show('directors') else []
 
     meetings_list = qrows(
@@ -6199,6 +6209,7 @@ def portal_view(token):
 
   <div class="pt-content">
 
+    {''.join(f'<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#dc2626"><strong>⚠️ Data query issue:</strong> {e}</div>' for e in _qrows_errors) if _qrows_errors else ''}
     <div class="pt-banner">
       <span style="font-size:20px">👁️</span>
       <div>
@@ -6242,6 +6253,29 @@ h2{{font-size:22px;font-weight:800;color:#0d1426;margin-bottom:12px}}p{{font-siz
 <body><div class="card"><div class="icon">🔗</div><h2>{title}</h2><p>{message}</p>
 <div class="brand">TaxlyCMS — Client Portal</div></div></body></html>"""
 
+
+
+
+@app.route('/portal/<token>/data')
+def portal_data_debug(token):
+    """Debug endpoint — returns raw data for the portal token."""
+    _db = get_db(); _cur = _db.cursor()
+    _cur.execute("SELECT pl.*, c.name FROM portal_links pl LEFT JOIN companies c ON pl.company_id=c.id WHERE pl.token=%s AND pl.active=1", (token,))
+    rec = row(_cur.fetchone())
+    if not rec:
+        return jsonify({'error': 'Token not found or inactive'}), 404
+    co_id = rec.get('company_id','')
+    # Count rows in each table
+    counts = {}
+    for tbl in ['directors','meetings','alerts','tasks','documents','shareholders','dsc_records','auditors']:
+        try:
+            _cur2 = get_db().cursor()
+            _cur2.execute(f"SELECT COUNT(*) as cnt FROM {tbl} WHERE company_id=%s", (co_id,))
+            r2 = _cur2.fetchone()
+            counts[tbl] = r2['cnt'] if isinstance(r2, dict) else (r2[0] if r2 else 0)
+        except Exception as e:
+            counts[tbl] = f"error: {e}"
+    return jsonify({'token': token, 'company_id': co_id, 'company_name': rec.get('name',''), 'row_counts': counts, 'access_level': rec.get('access_level','')})
 
 
 # ════════════════════════════════════════════════════════════════════════════
