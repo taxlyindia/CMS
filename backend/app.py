@@ -5777,14 +5777,16 @@ _startup()  # called at import time so gunicorn workers also initialise DB
 def portal_view(token):
     """Serve the read-only client portal view for a given token."""
     import datetime as _dt
-    db = get_db()
-    rec = row(
+    _db = get_db()
+    _cur = _db.cursor()
+    _cur.execute(
         "SELECT pl.*, c.name as company_name, c.cin, c.company_type, c.registered_office "
         "FROM portal_links pl "
         "LEFT JOIN companies c ON pl.company_id = c.id "
         "WHERE pl.token = %s AND pl.active = 1",
         (token,)
     )
+    rec = row(_cur.fetchone())
     if not rec:
         return ("<html><body style='font-family:sans-serif;text-align:center;padding:60px'>""<h2>🔗 Portal Link Expired or Invalid</h2>""<p style='color:#666'>This portal link is no longer active. Please contact your Company Secretary for a new link.</p></body></html>"), 404
 
