@@ -1765,6 +1765,78 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 [data-theme="dark"] .adv-result-header { background: var(--bg2); }
 [data-theme="dark"] .adv-draft-output { background: var(--bg2); color: var(--text); }
 
+/* ── AI Provider bar ─────────────────────────────────────────── */
+.adv-ai-provider-bar {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  box-shadow: var(--sh0);
+}
+.adv-ai-provider-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  margin-bottom: 10px;
+}
+.adv-ai-provider-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.adv-ai-provider-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg3);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text2);
+  transition: all .14s;
+}
+.adv-ai-provider-tab:hover {
+  border-color: var(--border2);
+  background: var(--bg2);
+  color: var(--text);
+  box-shadow: var(--sh0);
+}
+.adv-ai-provider-tab.active {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(27,78,216,.09), rgba(99,102,241,.06));
+  color: var(--accent);
+  font-weight: 700;
+  box-shadow: 0 0 0 3px rgba(27,78,216,.08);
+}
+.adv-ai-provider-tab.active[data-provider="openai"] {
+  border-color: #10a37f;
+  background: linear-gradient(135deg, rgba(16,163,127,.09), rgba(16,163,127,.04));
+  color: #0e8f6d;
+  box-shadow: 0 0 0 3px rgba(16,163,127,.08);
+}
+.adv-ai-provider-tab.active[data-provider="gemini"] {
+  border-color: #4285f4;
+  background: linear-gradient(135deg, rgba(66,133,244,.09), rgba(234,67,53,.04));
+  color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(66,133,244,.08);
+}
+.adv-ai-provider-tab.active[data-provider="custom"] {
+  border-color: var(--purple);
+  background: linear-gradient(135deg, var(--pbg), rgba(101,48,181,.04));
+  color: var(--purple);
+  box-shadow: 0 0 0 3px var(--pbg);
+}
+.adv-ai-tab-icon { font-size: 13px; }
+.adv-api-key-input { margin-top: 0; }
+
 /* ── wa-nav-btn compatibility (switchWATab uses this class) ───── */
 .wa-nav-btn { }
 .wa-nav-btn.active {
@@ -3496,6 +3568,32 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
       </div>
 
       <div class="adv-form-card">
+        <!-- AI Provider bar -->
+        <div class="adv-ai-provider-bar">
+          <div class="adv-ai-provider-label">⚡ AI Engine</div>
+          <div class="adv-ai-provider-tabs" id="ai-provider-tabs">
+            <button class="adv-ai-provider-tab active" data-provider="claude" onclick="setAIProvider('claude',this)">
+              <span class="adv-ai-tab-icon">🤖</span> Claude
+            </button>
+            <button class="adv-ai-provider-tab" data-provider="openai" onclick="setAIProvider('openai',this)">
+              <span class="adv-ai-tab-icon">✦</span> ChatGPT
+            </button>
+            <button class="adv-ai-provider-tab" data-provider="gemini" onclick="setAIProvider('gemini',this)">
+              <span class="adv-ai-tab-icon">✧</span> Gemini
+            </button>
+            <button class="adv-ai-provider-tab" data-provider="custom" onclick="setAIProvider('custom',this)">
+              <span class="adv-ai-tab-icon">🔧</span> Custom
+            </button>
+          </div>
+          <div id="ai-provider-key-row" style="display:none">
+            <input class="adv-input adv-api-key-input" id="ai-provider-key" type="password" placeholder="Paste API key (stored locally only)">
+            <div id="ai-custom-endpoint-row" style="display:none">
+              <input class="adv-input" id="ai-custom-endpoint" placeholder="OpenAI-compatible endpoint URL (e.g. https://api.openai.com/v1)" style="margin-top:6px">
+              <input class="adv-input" id="ai-custom-model" placeholder="Model name (e.g. gpt-4o, gemini-1.5-pro)" style="margin-top:6px">
+            </div>
+          </div>
+        </div>
+
         <div class="adv-form-row">
           <div class="adv-field">
             <label class="adv-label">Document Type</label>
@@ -3947,9 +4045,10 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
             <div class="adv-form-row">
               <div class="adv-field">
                 <label class="adv-label">Provider</label>
-                <select class="adv-select" id="wa-pg-provider">
+                <select class="adv-select" id="wa-pg-provider" onchange="onWAProviderChange(this)">
+                  <option value="meta">Meta WhatsApp Cloud API (Official)</option>
                   <option value="wati">WATI</option>
-                  <option value="twilio">Twilio</option>
+                  <option value="twilio">Twilio WhatsApp</option>
                   <option value="gupshup">Gupshup</option>
                   <option value="kaleyra">Kaleyra</option>
                   <option value="interakt">Interakt</option>
@@ -3964,13 +4063,38 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
               <label class="adv-label">API Key / Bearer Token</label>
               <input class="adv-input" type="password" id="wa-pg-key" placeholder="Enter your API key">
             </div>
-            <div class="adv-setup-guide">
-              <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">📋 Setup Guide</div>
+            <div id="wa-meta-fields" style="display:none">
+              <div class="fg2" style="margin-top:12px">
+                <div class="adv-field">
+                  <label class="adv-label">Phone Number ID</label>
+                  <input class="adv-input" id="wa-pg-phone-id" placeholder="Meta Phone Number ID">
+                </div>
+                <div class="adv-field">
+                  <label class="adv-label">WhatsApp Business Account ID</label>
+                  <input class="adv-input" id="wa-pg-waba-id" placeholder="WABA ID from Meta Business Manager">
+                </div>
+              </div>
+              <div class="adv-field" style="margin-top:10px">
+                <label class="adv-label">Webhook Verify Token</label>
+                <input class="adv-input" id="wa-pg-webhook-token" placeholder="Custom string to verify Meta webhook">
+              </div>
+              <div class="adv-setup-guide" style="margin-top:10px">
+                <div style="font-size:11.5px;color:var(--text3);line-height:1.8">
+                  📋 <strong>Meta Cloud API Setup:</strong><br>
+                  1. Go to <a href="https://developers.facebook.com" target="_blank" style="color:var(--accent)">developers.facebook.com</a> → Create App → WhatsApp<br>
+                  2. Add WhatsApp product → Get <strong>Phone Number ID</strong> and <strong>WABA ID</strong><br>
+                  3. Generate a <strong>Permanent Access Token</strong> via System User in Business Manager<br>
+                  4. Configure webhook URL: <code style="font-family:var(--font-mono);font-size:10px;background:var(--bg3);padding:1px 5px;border-radius:3px">https://yourdomain.com/api/notifications/wa-webhook</code>
+                </div>
+              </div>
+            </div>
+            <div id="wa-provider-guide" class="adv-setup-guide" style="margin-top:10px">
               <div style="font-size:11.5px;color:var(--text3);line-height:1.8">
+                📋 <strong>Setup Guide:</strong><br>
                 1. Create a WhatsApp Business account at <a href="https://business.whatsapp.com" target="_blank" style="color:var(--accent)">business.whatsapp.com</a><br>
                 2. Sign up with your preferred provider (e.g. <a href="https://wati.io" target="_blank" style="color:var(--accent)">WATI</a>)<br>
                 3. Get your API key from the provider dashboard<br>
-                4. Configure backend at <code style="font-family:var(--font-mono);font-size:10.5px;background:var(--bg3);padding:1px 5px;border-radius:3px">/api/notifications/send-whatsapp</code>
+                4. Configure backend at <code style="font-family:var(--font-mono);font-size:10px;background:var(--bg3);padding:1px 5px;border-radius:3px">/api/notifications/send-whatsapp</code>
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
@@ -13457,11 +13581,28 @@ function loadWASettingsPanel() {
     </div>`;
 }
 function saveWAPGSettings() {
+  const prov = document.getElementById('wa-pg-provider')?.value||'wati';
   localStorage.setItem('wa_api_key', document.getElementById('wa-pg-key')?.value||'');
   localStorage.setItem('wa_biz_phone', document.getElementById('wa-pg-phone')?.value||'');
-  localStorage.setItem('wa_provider', document.getElementById('wa-pg-provider')?.value||'wati');
+  localStorage.setItem('wa_provider', prov);
+  if(prov==='meta') {
+    localStorage.setItem('wa_phone_id', document.getElementById('wa-pg-phone-id')?.value||'');
+    localStorage.setItem('wa_waba_id', document.getElementById('wa-pg-waba-id')?.value||'');
+    localStorage.setItem('wa_webhook_token', document.getElementById('wa-pg-webhook-token')?.value||'');
+  }
   toast('WA settings saved ✓','ok');
-  const s=document.getElementById('wa-pg-status'); if(s) s.textContent='✅ Saved';
+  const s=document.getElementById('wa-pg-status'); if(s) s.textContent='✅ Settings saved';
+}
+
+function onWAProviderChange(sel) {
+  const isMeta = sel?.value === 'meta';
+  const metaF = document.getElementById('wa-meta-fields');
+  const provGuide = document.getElementById('wa-provider-guide');
+  if (metaF) metaF.style.display = isMeta ? '' : 'none';
+  if (provGuide) provGuide.style.display = isMeta ? 'none' : '';
+  const keyLabel = document.querySelector('[for="wa-pg-key"], label[id="wa-key-label"]');
+  const keyInput = document.getElementById('wa-pg-key');
+  if (keyInput) keyInput.placeholder = isMeta ? 'Meta Permanent Access Token' : 'Enter API key';
 }
 async function testWAPGConnection() {
   const s=document.getElementById('wa-pg-status'); if(s) s.textContent='⏳ Testing…';
@@ -13952,6 +14093,118 @@ window.switchWATab = function(tab) {
   if(tab==='schedule') loadWASchedules();
   if(tab==='settings') loadWASettingsPanel();
 };
+
+
+
+// ── AI Provider Management ────────────────────────────────────────────────
+let _AI_PROVIDER = localStorage.getItem('ai_provider') || 'claude';
+let _AI_KEY = {};
+
+function setAIProvider(provider, btn) {
+  _AI_PROVIDER = provider;
+  localStorage.setItem('ai_provider', provider);
+  document.querySelectorAll('.adv-ai-provider-tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  const keyRow = document.getElementById('ai-provider-key-row');
+  const customRow = document.getElementById('ai-custom-endpoint-row');
+  if(keyRow) {
+    keyRow.style.display = provider === 'claude' ? 'none' : '';
+    if(provider !== 'claude') {
+      const keyInput = document.getElementById('ai-provider-key');
+      if(keyInput) {
+        const saved = localStorage.getItem('ai_key_'+provider) || '';
+        keyInput.value = saved;
+        keyInput.placeholder = {
+          openai: 'OpenAI API Key (sk-...)',
+          gemini: 'Google Gemini API Key',
+          custom: 'API Key for custom endpoint'
+        }[provider] || 'API Key';
+        keyInput.oninput = ()=>{ localStorage.setItem('ai_key_'+provider, keyInput.value); };
+      }
+    }
+  }
+  if(customRow) customRow.style.display = provider === 'custom' ? '' : 'none';
+}
+
+async function _callAIProvider(prompt) {
+  const provider = _AI_PROVIDER || 'claude';
+  const apiKey   = document.getElementById('ai-provider-key')?.value || localStorage.getItem('ai_key_'+provider) || '';
+
+  if (provider === 'claude') {
+    // Route through backend (uses ANTHROPIC_API_KEY env var)
+    return null;  // fall through to backend route
+  }
+
+  if (provider === 'openai') {
+    if (!apiKey) { toast('Enter your OpenAI API key','err'); throw new Error('No API key'); }
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 2000,
+        messages: [{role:'user',content:prompt}]
+      })
+    });
+    const d = await resp.json();
+    if(d.error) throw new Error(d.error.message);
+    return d.choices?.[0]?.message?.content || '';
+  }
+
+  if (provider === 'gemini') {
+    if (!apiKey) { toast('Enter your Gemini API key','err'); throw new Error('No API key'); }
+    const model = 'gemini-1.5-pro';
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+      }
+    );
+    const d = await resp.json();
+    if(d.error) throw new Error(d.error.message);
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
+
+  if (provider === 'custom') {
+    if (!apiKey) { toast('Enter API key for custom endpoint','err'); throw new Error('No API key'); }
+    const endpoint = document.getElementById('ai-custom-endpoint')?.value || localStorage.getItem('ai_custom_endpoint') || '';
+    const model    = document.getElementById('ai-custom-model')?.value || localStorage.getItem('ai_custom_model') || 'gpt-4o';
+    if (!endpoint) { toast('Enter the API endpoint URL','err'); throw new Error('No endpoint'); }
+    // Store for next time
+    if(document.getElementById('ai-custom-endpoint')?.value)
+      localStorage.setItem('ai_custom_endpoint', endpoint);
+    if(document.getElementById('ai-custom-model')?.value)
+      localStorage.setItem('ai_custom_model', model);
+    const resp = await fetch(endpoint+'/chat/completions', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+      body: JSON.stringify({model, max_tokens:2000, messages:[{role:'user',content:prompt}]})
+    });
+    const d = await resp.json();
+    if(d.error) throw new Error(typeof d.error==='string'?d.error:d.error.message);
+    return d.choices?.[0]?.message?.content || '';
+  }
+  return null;
+}
+
+// Restore saved provider on load
+(function() {
+  const saved = localStorage.getItem('ai_provider') || 'claude';
+  if(saved !== 'claude') {
+    setTimeout(()=>{
+      const btn = document.querySelector(`.adv-ai-provider-tab[data-provider="${saved}"]`);
+      if(btn) setAIProvider(saved, btn);
+    }, 300);
+  }
+  // Restore custom endpoint/model
+  const ep = localStorage.getItem('ai_custom_endpoint');
+  const cm = localStorage.getItem('ai_custom_model');
+  if(ep && document.getElementById('ai-custom-endpoint')) document.getElementById('ai-custom-endpoint').value=ep;
+  if(cm && document.getElementById('ai-custom-model')) document.getElementById('ai-custom-model').value=cm;
+})();
+
 
 
 document.addEventListener('DOMContentLoaded', function() {
