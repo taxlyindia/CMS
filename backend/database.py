@@ -1147,3 +1147,22 @@ def write_audit_log(user_id: str, action: str, module: str = None,
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"audit_log write failed: {e}")
+    # ── Advanced feature tables (esign, portal, whatsapp) ─────────────────────
+    cur.execute("""CREATE TABLE IF NOT EXISTS esign_requests (
+        id TEXT PRIMARY KEY, tenant_id TEXT, doc_title TEXT, doc_id TEXT,
+        provider TEXT DEFAULT 'leegality', signatories TEXT, status TEXT DEFAULT 'pending',
+        deadline TEXT, created_by TEXT, created_at TEXT)""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS portal_links (
+        id TEXT PRIMARY KEY, tenant_id TEXT, company_id TEXT, token TEXT UNIQUE,
+        access_level TEXT DEFAULT 'full_readonly', client_name TEXT, expires_at TEXT,
+        active INTEGER DEFAULT 1, view_count INTEGER DEFAULT 0, created_by TEXT, created_at TEXT)""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS wa_templates (
+        id TEXT PRIMARY KEY, tenant_id TEXT, name TEXT, body TEXT, created_at TEXT)""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS wa_message_log (
+        id TEXT PRIMARY KEY, tenant_id TEXT, phone TEXT, message TEXT,
+        type TEXT, status TEXT DEFAULT 'sent', sent_at TEXT)""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS wa_schedules (
+        id TEXT PRIMARY KEY, tenant_id TEXT, alert_type TEXT,
+        send_time TEXT DEFAULT '09:00', recipients TEXT DEFAULT 'directors',
+        active INTEGER DEFAULT 1, created_at TEXT)""")
+

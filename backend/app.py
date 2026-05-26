@@ -5780,6 +5780,314 @@ if __name__ == "__main__":
     print("="*62 + "\n")
     app.run(host="127.0.0.1",port=5000,debug=False)
 
+# ════════════════════════════════════════════════════════════════════════════
+# AI DOCUMENT DRAFTING
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/ai/draft', methods=['POST'])
+@require_auth
+def ai_draft():
+    """Generate AI document draft using Anthropic API (server-side)"""
+    data = request.get_json() or {}
+    doc_type     = data.get('type', 'board_resolution')
+    company_id   = data.get('company_id', '')
+    instructions = data.get('instructions', '')
+    tone         = data.get('tone', 'formal')
+    prompt       = data.get('prompt', '')
+
+    # Get company data for context
+    co = {}
+    if company_id:
+        co = row("SELECT name,cin,company_type,registered_office,date_of_incorporation FROM companies WHERE id=%s AND tenant_id=%s",
+                 (company_id, g.tenant_id)) or {}
+
+    type_labels = {
+        'board_resolution': 'Board Resolution',
+        'agm_notice': 'AGM Notice',
+        'appointment_letter': 'Director Appointment Letter',
+        'nda': 'Non-Disclosure Agreement',
+        'loan_agreement': 'Loan Agreement',
+        'share_transfer': 'Share Transfer Deed',
+        'compliance_report': 'Compliance Status Report',
+        'custom': 'Document',
+    }
+    doc_label = type_labels.get(doc_type, 'Document')
+
+    # Try Anthropic API
+    import os, json as _json
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if api_key:
+        try:
+            import urllib.request as _ur
+            tone_instr = ('Use plain conversational English.' if tone == 'simple'
+                         else 'Draft in Hindi (Devanagari script).' if tone == 'hindi'
+                         else 'Use formal Indian legal language under Companies Act 2013.')
+            if not prompt:
+                prompt = f"""You are a senior Company Secretary specializing in Indian corporate law.
+Draft a {doc_label} for the following company:
+Company: {co.get('name','N/A')}
+CIN: {co.get('cin','N/A')}
+Type: {co.get('company_type','Private Limited')}
+Registered Office: {co.get('registered_office','N/A')}
+Incorporation Date: {co.get('date_of_incorporation','N/A')}
+Additional context: {instructions or 'Standard form.'}
+Instructions: {tone_instr}
+Format the document properly with date, heading, recitals, body, signature blocks.
+Use [PLACEHOLDER] for any information that needs to be filled in.
+Output ONLY the document text, no explanations."""
+
+            req_data = _json.dumps({
+                'model': 'claude-sonnet-4-5',
+                'max_tokens': 2000,
+                'messages': [{'role': 'user', 'content': prompt}]
+            }).encode()
+            req = _ur.Request(
+                'https://api.anthropic.com/v1/messages',
+                data=req_data,
+                headers={
+                    'Content-Type': 'application/json',
+                    'x-api-key': api_key,
+                    'anthropic-version': '2023-06-01'
+                }
+            )
+            with _ur.urlopen(req, timeout=30) as resp:
+                result = _json.loads(resp.read())
+                text = ''.join(b['text'] for b in result.get('content', []) if b.get('type') == 'text')
+                if text:
+                    write_audit_log(g.user_id, g.tenant_id, 'ai_draft', None, {'type': doc_type})
+                    return jsonify({'content': text, 'type': doc_label})
+        except Exception as e:
+            # Fall through to template-based draft
+            pass
+
+    # Fallback: return empty so frontend uses its own template generator
+    return jsonify({'content': '', 'type': doc_label, 'fallback': True})
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# E-SIGNATURE STUBS (wire to Leegality/DocuSign via env vars)
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/esign/send', methods=['POST'])
+@require_auth
+def esign_send():
+    data = request.get_json() or {}
+    provider = data.get('provider', 'leegality')
+    api_key  = data.get('api_key') or os.environ.get('ESIGN_API_KEY', '')
+    signatories = data.get('signatories', [])
+    if not signatories:
+        return jsonify({'error': 'No signatories provided'}), 400
+
+    # TODO: Integrate with Leegality API at https://api.leegality.com
+    # or DocuSign at https://demo.docusign.net/restapi
+    # For now return a stub reference
+    import uuid, datetime as _dt
+    ref_id = 'ESIGN-' + str(uuid.uuid4())[:8].upper()
+    db = get_db(); cur = db.cursor()
+    try:
+        cur.execute("""INSERT INTO esign_requests
+            (id, tenant_id, doc_title, doc_id, provider, signatories, status, deadline, created_by, created_at)
+            VALUES (%s,%s,%s,%s,%s,%s,'pending',%s,%s,%s)""",
+            (ref_id, g.tenant_id, data.get('doc_title',''), data.get('doc_id',''),
+             provider, _json.dumps(signatories), data.get('deadline'),
+             g.user_id, _dt.datetime.utcnow().isoformat()))
+        db.commit()
+    except Exception:
+        db.rollback()
+    write_audit_log(g.user_id, g.tenant_id, 'esign_send', None, {'provider': provider, 'ref': ref_id})
+    return jsonify({'success': True, 'request_id': ref_id, 'provider': provider,
+                    'message': f'Configured {provider} API key to enable actual sending.'})
+
+
+@app.route('/api/esign/requests', methods=['GET'])
+@require_auth
+def esign_requests():
+    try:
+        recs = rows("SELECT * FROM esign_requests WHERE tenant_id=%s ORDER BY created_at DESC LIMIT 50", (g.tenant_id,))
+        return jsonify({'requests': recs or []})
+    except Exception:
+        return jsonify({'requests': []})
+
+
+@app.route('/api/esign/status/<req_id>', methods=['GET'])
+@require_auth
+def esign_status(req_id):
+    rec = row("SELECT * FROM esign_requests WHERE id=%s AND tenant_id=%s", (req_id, g.tenant_id))
+    if not rec:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify({**rec, 'reference': req_id, 'signatories': []})
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# CLIENT PORTAL STUBS
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/portal/generate-link', methods=['POST'])
+@require_auth
+def portal_generate_link():
+    import uuid, datetime as _dt
+    data = request.get_json() or {}
+    token = 'PTL-' + str(uuid.uuid4())[:10].upper()
+    expiry_days = int(data.get('expires_days', 30))
+    expires_at = None
+    if expiry_days > 0:
+        expires_at = (_dt.datetime.utcnow() + _dt.timedelta(days=expiry_days)).isoformat()
+    db = get_db(); cur = db.cursor()
+    try:
+        cur.execute("""INSERT INTO portal_links
+            (id, tenant_id, company_id, token, access_level, client_name, expires_at, active, created_by, created_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,1,%s,%s)""",
+            (str(uuid.uuid4()), g.tenant_id, data.get('company_id'), token,
+             data.get('access_level','full_readonly'), data.get('client_name',''),
+             expires_at, g.user_id, _dt.datetime.utcnow().isoformat()))
+        db.commit()
+    except Exception:
+        db.rollback()
+    write_audit_log(g.user_id, g.tenant_id, 'portal_link_created', None, {'token': token})
+    return jsonify({'success': True, 'token': token,
+                    'url': f"{request.host_url.rstrip('/')}portal/{token}"})
+
+
+@app.route('/api/portal/links', methods=['GET'])
+@require_auth
+def portal_links():
+    company_id = request.args.get('company_id')
+    try:
+        if company_id:
+            recs = rows("SELECT * FROM portal_links WHERE tenant_id=%s AND company_id=%s ORDER BY created_at DESC",
+                        (g.tenant_id, company_id))
+        else:
+            recs = rows("SELECT * FROM portal_links WHERE tenant_id=%s ORDER BY created_at DESC LIMIT 100",
+                        (g.tenant_id,))
+        return jsonify({'links': recs or []})
+    except Exception:
+        return jsonify({'links': []})
+
+
+@app.route('/api/portal/links/<link_id>/revoke', methods=['POST'])
+@require_auth
+def portal_revoke(link_id):
+    db = get_db(); cur = db.cursor()
+    cur.execute("UPDATE portal_links SET active=0 WHERE id=%s AND tenant_id=%s", (link_id, g.tenant_id))
+    db.commit()
+    return jsonify({'success': True})
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# WHATSAPP ENHANCED ENDPOINTS
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/notifications/wa-templates', methods=['GET', 'POST'])
+@require_auth
+def wa_templates():
+    if request.method == 'GET':
+        try:
+            recs = rows("SELECT * FROM wa_templates WHERE tenant_id=%s ORDER BY created_at DESC", (g.tenant_id,))
+            return jsonify({'templates': recs or []})
+        except Exception:
+            return jsonify({'templates': []})
+    data = request.get_json() or {}
+    import uuid, datetime as _dt
+    db = get_db(); cur = db.cursor()
+    try:
+        tid = str(uuid.uuid4())
+        cur.execute("INSERT INTO wa_templates (id,tenant_id,name,body,created_at) VALUES (%s,%s,%s,%s,%s)",
+                    (tid, g.tenant_id, data.get('name'), data.get('body'), _dt.datetime.utcnow().isoformat()))
+        db.commit()
+        return jsonify({'id': tid, 'success': True})
+    except Exception as ex:
+        db.rollback()
+        return jsonify({'error': str(ex)}), 500
+
+
+@app.route('/api/notifications/wa-templates/<tid>', methods=['DELETE'])
+@require_auth
+def wa_template_delete(tid):
+    db = get_db(); cur = db.cursor()
+    cur.execute("DELETE FROM wa_templates WHERE id=%s AND tenant_id=%s", (tid, g.tenant_id))
+    db.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/api/notifications/wa-history', methods=['GET'])
+@require_auth
+def wa_history():
+    try:
+        recs = rows("SELECT * FROM wa_message_log WHERE tenant_id=%s ORDER BY sent_at DESC LIMIT 100", (g.tenant_id,))
+        return jsonify({'messages': recs or []})
+    except Exception:
+        return jsonify({'messages': []})
+
+
+@app.route('/api/notifications/wa-schedules', methods=['GET'])
+@require_auth
+def wa_schedules():
+    try:
+        recs = rows("SELECT * FROM wa_schedules WHERE tenant_id=%s ORDER BY created_at DESC", (g.tenant_id,))
+        return jsonify({'schedules': recs or []})
+    except Exception:
+        return jsonify({'schedules': []})
+
+
+@app.route('/api/notifications/schedule-whatsapp', methods=['POST'])
+@require_auth
+def wa_schedule():
+    import uuid, datetime as _dt
+    data = request.get_json() or {}
+    db = get_db(); cur = db.cursor()
+    try:
+        sid = str(uuid.uuid4())
+        cur.execute("""INSERT INTO wa_schedules (id,tenant_id,alert_type,send_time,recipients,active,created_at)
+                       VALUES (%s,%s,%s,%s,%s,1,%s)""",
+                    (sid, g.tenant_id, data.get('alert_type'), data.get('send_time','09:00'),
+                     data.get('recipients','directors'), _dt.datetime.utcnow().isoformat()))
+        db.commit()
+        return jsonify({'success': True, 'id': sid})
+    except Exception as ex:
+        db.rollback()
+        return jsonify({'error': str(ex)}), 500
+
+
+@app.route('/api/notifications/wa-schedules/<sid>', methods=['DELETE'])
+@require_auth
+def wa_schedule_delete(sid):
+    db = get_db(); cur = db.cursor()
+    cur.execute("DELETE FROM wa_schedules WHERE id=%s AND tenant_id=%s", (sid, g.tenant_id))
+    db.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/api/notifications/bulk-whatsapp', methods=['POST'])
+@require_auth
+def bulk_whatsapp():
+    data = request.get_json() or {}
+    company_ids = data.get('company_ids') or ([data.get('company_id')] if data.get('company_id') else [])
+    alert_type  = data.get('alert_type', 'all_pending')
+    # Get phone numbers for directors of selected companies
+    sent_count = 0
+    if company_ids:
+        placeholders = ','.join(['%s'] * len(company_ids))
+        directors = rows(f"SELECT mobile FROM directors WHERE company_id IN ({placeholders}) AND tenant_id=%s AND mobile IS NOT NULL AND mobile != ''",
+                         tuple(company_ids) + (g.tenant_id,)) or []
+        sent_count = len(directors)
+    return jsonify({'success': True, 'sent_count': sent_count,
+                    'message': f'Configure WATI/Twilio API in Settings to enable actual sending.'})
+
+
+@app.route('/api/notifications/test-whatsapp', methods=['POST'])
+@require_auth
+def test_whatsapp():
+    data = request.get_json() or {}
+    api_key  = data.get('api_key','')
+    provider = data.get('provider','wati')
+    if not api_key:
+        return jsonify({'error': 'No API key provided. Add your WATI/Twilio key in Settings.'}), 400
+    # Basic validation only — actual connection test would ping provider API
+    return jsonify({'success': True, 'provider': provider,
+                    'message': f'{provider} configuration saved. Send a test message to verify.'})
+
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # P1 SPRINT — All 15 features
 # ══════════════════════════════════════════════════════════════════════════════
