@@ -5768,6 +5768,186 @@ def validate_reset_token():
 
 _startup()  # called at import time so gunicorn workers also initialise DB
 
+
+# ════════════════════════════════════════════════════════════════════════════
+# CLIENT PORTAL — Public view (no auth required)
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/portal/<token>')
+def portal_view(token):
+    """Serve the read-only client portal view for a given token."""
+    import datetime as _dt
+    db = get_db()
+    rec = row(
+        "SELECT pl.*, c.name as company_name, c.cin, c.company_type, c.registered_office "
+        "FROM portal_links pl "
+        "LEFT JOIN companies c ON pl.company_id = c.id "
+        "WHERE pl.token = %s AND pl.active = 1",
+        (token,)
+    )
+    if not rec:
+        return ("<html><body style='font-family:sans-serif;text-align:center;padding:60px'>""<h2>🔗 Portal Link Expired or Invalid</h2>""<p style='color:#666'>This portal link is no longer active. Please contact your Company Secretary for a new link.</p></body></html>"), 404
+
+    # Check expiry
+    if rec.get('expires_at'):
+        try:
+            exp = _dt.datetime.fromisoformat(rec['expires_at'])
+            if exp < _dt.datetime.utcnow():
+                return ("<html><body style='font-family:sans-serif;text-align:center;padding:60px'>""<h2>⏰ Portal Link Expired</h2>""<p style='color:#666'>This portal link expired. Please contact your Company Secretary for a renewed link.</p></body></html>"), 410
+        except Exception:
+            pass
+
+    # Update view count and last accessed
+    try:
+        cur = db.cursor()
+        cur.execute(
+            "UPDATE portal_links SET view_count = COALESCE(view_count,0)+1, last_accessed=%s WHERE token=%s",
+            (_dt.datetime.utcnow().isoformat(), token)
+        )
+        db.commit()
+    except Exception:
+        pass
+
+    access_level = rec.get('access_level', 'full_readonly')
+    company_name = rec.get('company_name', 'Company')
+    cin          = rec.get('cin', '')
+    exp_date     = rec.get('expires_at', '')
+    client_name  = rec.get('client_name', 'Valued Client')
+
+    # Format expiry for display
+    exp_display = 'Never expires'
+    if exp_date:
+        try:
+            exp_display = 'Expires ' + _dt.datetime.fromisoformat(exp_date).strftime('%d %b %Y')
+        except Exception:
+            exp_display = exp_date
+
+    access_labels = {
+        'documents_only': 'Documents Only',
+        'compliance_view': 'Compliance & Calendar',
+        'full_readonly': 'Full Read-Only Access',
+        'custom': 'Custom Modules',
+    }
+    access_label = access_labels.get(access_level, access_level.replace('_', ' ').title())
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{company_name} — Client Portal | TaxlyCMS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{{box-sizing:border-box;margin:0;padding:0}}
+    body{{font-family:'DM Sans',sans-serif;background:#f0f4fb;color:#0d1426;min-height:100vh}}
+    .topbar{{background:linear-gradient(95deg,#08112a,#121e3e,#1b4ed8);padding:0 28px;height:60px;
+             display:flex;align-items:center;justify-content:space-between;color:#fff;
+             box-shadow:0 2px 16px rgba(8,14,28,.3)}}
+    .topbar-brand{{font-size:15px;font-weight:700;display:flex;align-items:center;gap:10px}}
+    .topbar-info{{font-size:11.5px;color:rgba(255,255,255,.55);text-align:right}}
+    .badge{{display:inline-flex;align-items:center;padding:3px 9px;border-radius:5px;
+            font-size:10.5px;font-weight:600;border:1px solid}}
+    .badge-blue{{background:rgba(27,78,216,.12);color:#60a5fa;border-color:rgba(96,165,250,.3)}}
+    .hero{{background:#fff;border-bottom:1px solid #dde3f2;padding:22px 28px;
+           display:flex;align-items:center;gap:18px}}
+    .hero-icon{{width:52px;height:52px;background:linear-gradient(135deg,#1b4ed8,#6366f1);
+               border-radius:14px;display:flex;align-items:center;justify-content:center;
+               font-size:24px;flex-shrink:0}}
+    .hero-title{{font-size:20px;font-weight:800;color:#0d1426;letter-spacing:-.3px}}
+    .hero-sub{{font-size:13px;color:#7a8aaa;margin-top:3px}}
+    .content{{max-width:900px;margin:28px auto;padding:0 20px}}
+    .card{{background:#fff;border:1px solid #d8dfef;border-radius:12px;
+           overflow:hidden;margin-bottom:18px;box-shadow:0 1px 4px rgba(13,20,38,.06)}}
+    .card-header{{padding:13px 18px;background:#f8faff;border-bottom:1px solid #d8dfef;
+                  font-size:13px;font-weight:700;color:#0d1426;display:flex;align-items:center;gap:8px}}
+    .card-body{{padding:18px}}
+    .info-grid{{display:grid;grid-template-columns:1fr 1fr;gap:14px}}
+    .info-item label{{font-size:9.5px;font-weight:700;color:#7a8aaa;
+                      text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:4px}}
+    .info-item span{{font-size:13.5px;color:#0d1426;font-weight:500}}
+    .access-pill{{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;
+                  background:#edf2ff;border-radius:8px;color:#1b4ed8;
+                  font-size:12.5px;font-weight:700;border:1px solid rgba(27,78,216,.2)}}
+    .readonly-banner{{background:linear-gradient(135deg,rgba(27,78,216,.06),rgba(99,102,241,.04));
+                      border:1px solid rgba(27,78,216,.12);border-radius:10px;
+                      padding:12px 16px;display:flex;align-items:center;gap:10px;margin-bottom:18px}}
+    .contact-cta{{text-align:center;padding:28px;color:#7a8aaa;font-size:13px}}
+    .contact-cta a{{color:#1b4ed8;font-weight:600;text-decoration:none}}
+    footer{{text-align:center;padding:22px;font-size:11px;color:#7a8aaa;
+            border-top:1px solid #dde3f2;margin-top:32px}}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-brand">
+      🏛️ TaxlyCMS
+      <span style="width:1px;height:18px;background:rgba(255,255,255,.2);margin:0 4px"></span>
+      <span style="font-weight:400;font-size:13px;color:rgba(255,255,255,.7)">Client Portal</span>
+    </div>
+    <div class="topbar-info">
+      <div style="margin-bottom:2px">🔒 Read-Only Access · {access_label}</div>
+      <div>{exp_display}</div>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-icon">🏢</div>
+    <div>
+      <div class="hero-title">{company_name}</div>
+      <div class="hero-sub">CIN: {cin or 'N/A'} &nbsp;·&nbsp; Welcome, {client_name}</div>
+    </div>
+    <div style="margin-left:auto">
+      <div class="access-pill">🔐 {access_label}</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="readonly-banner">
+      <span style="font-size:20px">👁️</span>
+      <div>
+        <div style="font-size:12.5px;font-weight:700;color:#1b4ed8">Read-Only Portal</div>
+        <div style="font-size:11.5px;color:#3a4a68;margin-top:2px">
+          This portal provides read-only access to compliance information.
+          For any changes or queries, contact your Company Secretary directly.
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">📋 Portal Access Details</div>
+      <div class="card-body">
+        <div class="info-grid">
+          <div class="info-item"><label>Company</label><span>{company_name}</span></div>
+          <div class="info-item"><label>CIN</label><span>{cin or 'N/A'}</span></div>
+          <div class="info-item"><label>Access Level</label><span>{access_label}</span></div>
+          <div class="info-item"><label>Link Expires</label><span>{exp_display}</span></div>
+          <div class="info-item"><label>Token</label><span style="font-family:monospace;font-size:11.5px">{token}</span></div>
+          <div class="info-item"><label>Prepared For</label><span>{client_name or '—'}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">📂 Available Information</div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+          {"".join(f'<div style="padding:12px 14px;background:#f0f4fb;border-radius:8px;font-size:13px;font-weight:600;color:#3a4a68">{m}</div>' for m in (['All Modules'] if access_level == 'full_readonly' else ['Documents'] if access_level == 'documents_only' else ['Compliance Overview', 'Calendar', 'Filings'] if access_level == 'compliance_view' else ['Custom Modules']))}
+        </div>
+      </div>
+    </div>
+
+    <div class="contact-cta">
+      For the latest compliance data, please log in to TaxlyCMS or contact your CS.<br>
+      <a href="mailto:support@taxlycms.in">support@taxlycms.in</a>
+    </div>
+  </div>
+
+  <footer>TaxlyCMS &copy; {_dt.datetime.utcnow().year} &nbsp;·&nbsp; This is a read-only client portal link &nbsp;·&nbsp; Token: {token}</footer>
+</body>
+</html>"""
+
+
 if __name__ == "__main__":
     run_compliance_checks()
     print("\n" + "="*62)
@@ -5942,7 +6122,7 @@ def portal_generate_link():
         db.rollback()
     write_audit_log(g.user_id, g.tenant_id, 'portal_link_created', None, {'token': token})
     return jsonify({'success': True, 'token': token,
-                    'url': f"{request.host_url.rstrip('/')}portal/{token}"})
+                    'url': request.host_url.rstrip('/') + '/portal/' + token})
 
 
 @app.route('/api/portal/links', methods=['GET'])
