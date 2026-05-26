@@ -232,7 +232,7 @@ body {
 /* ════════════════════════════════════════════════════════════════
    CONTENT AREA
 ════════════════════════════════════════════════════════════════ */
-.content { padding:22px 24px; flex:1; overflow-y:auto; overflow-x:hidden; min-height:0 }
+.content { padding:16px 20px; flex:1; overflow-y:auto; overflow-x:hidden; min-height:0 }
 
 /* ════════════════════════════════════════════════════════════════
    BUTTONS
@@ -427,7 +427,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
    PAGE SHELL  — loading / empty states / skeleton
 ════════════════════════════════════════════════════════════════ */
 .page { display:none }
-.page.active { display:block }
+.page.active { display:block; margin-top:0 }
 .loading { display:flex;align-items:center;justify-content:center;padding:60px;color:var(--text3);gap:10px;font-size:13px }
 .spin { width:22px;height:22px;border:2.5px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .65s linear infinite;flex-shrink:0 }
 @keyframes spin { to{transform:rotate(360deg)} }
@@ -3704,6 +3704,8 @@ function navigateTo(page) {
   const cta = document.getElementById('main-cta');
   if (m.cta) { cta.textContent = m.cta; cta.style.display = ''; } else { cta.style.display = 'none'; }
   showPeriodBar(page);
+  // Scroll content area to top on page change
+  var _ct = document.querySelector('.content'); if (_ct) _ct.scrollTop = 0;
   ({ dashboard: loadDashboard, companies: loadCompanies, directors: loadDirectors, 'mca-filings': loadMcaFilings, 'recurring-templates': loadRecurringTemplates, 'audit-log': loadAuditLog,
      'dir-kyc': loadDirKYC,
      auditors: loadAuditors, shareholders: loadShareholders, dsc: loadDSC,
@@ -11656,17 +11658,9 @@ Use [PLACEHOLDER] for any information that needs to be filled in.
 Output ONLY the document text, no explanations.`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'anthropic-dangerous-direct-browser-calls':'true' },
-      body: JSON.stringify({
-        model:'claude-sonnet-4-5',
-        max_tokens:2000,
-        messages:[{ role:'user', content:prompt }]
-      })
-    });
-    const data = await resp.json();
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    // Try backend AI draft endpoint first
+    const r = await api('/api/ai/draft', { method:'POST', body:{ type, company_id:coId, instructions:instr, tone, prompt } });
+    const text = r?.content || r?.text || r?.draft || '';
     if (text) {
       content.textContent = text;
       window._aiDraftText = text;
@@ -11675,10 +11669,20 @@ Output ONLY the document text, no explanations.`;
         const el=document.getElementById(id); if(el) el.style.display='';
       });
     } else {
-      content.textContent = 'Error: ' + (data.error?.message || JSON.stringify(data));
+      content.textContent = _generateFallbackDraft(type, co, instr, docLabel);
+      window._aiDraftText = content.textContent;
+      window._aiDraftType = docLabel;
+      ['ai-copy-btn','ai-to-tpl-btn'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.style.display='';
+      });
     }
   } catch(e) {
-    content.textContent = 'Network error: ' + e.message;
+    // Fallback: generate template-based draft
+    const fallback = _generateFallbackDraft(type, co, instr, docLabel);
+    content.textContent = fallback;
+    window._aiDraftText = fallback;
+    window._aiDraftType = docLabel;
+    ['ai-copy-btn','ai-to-tpl-btn'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display=''; });
   }
 }
 
@@ -12311,26 +12315,22 @@ Use [PLACEHOLDER] for missing information.
 Output ONLY the document text.`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'anthropic-dangerous-direct-browser-calls':'true' },
-      body: JSON.stringify({ model:'claude-sonnet-4-5', max_tokens:2000, messages:[{role:'user',content:prompt}] })
-    });
-    const data = await resp.json();
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const r = await api('/api/ai/draft', { method:'POST', body:{ type, company_id:coId, instructions:instr, tone, prompt } });
+    const text = r?.content || r?.text || r?.draft || _generateFallbackDraft(type, co, instr, docLabel);
     if (spinner) spinner.style.display='none';
-    if (text) {
-      window._aiMainDraftText = text;
-      window._aiMainDraftType = docLabel;
-      if (output) output.value = text;
-      if (result) result.style.display='';
-      toast('AI draft generated ✓','ok');
-    } else {
-      if (error) { error.style.display=''; error.textContent = 'Error: '+(data.error?.message||JSON.stringify(data)); }
-    }
+    window._aiMainDraftText = text;
+    window._aiMainDraftType = docLabel;
+    if (output) output.value = text;
+    if (result) result.style.display='';
+    toast('Draft generated ✓','ok');
   } catch(e) {
     if (spinner) spinner.style.display='none';
-    if (error) { error.style.display=''; error.textContent = 'Network error: '+e.message; }
+    const fallback = _generateFallbackDraft(type, co, instr, docLabel);
+    window._aiMainDraftText = fallback;
+    window._aiMainDraftType = docLabel;
+    if (output) output.value = fallback;
+    if (result) result.style.display='';
+    toast('Draft ready (template-based)','ok');
   }
 }
 
@@ -12353,7 +12353,7 @@ function quickAIDraft(type) {
 }
 
 async function loadESignPage() {
-  const r = await api('/api/esign/requests');
+  const r = await api('/api/esign/requests', {silent:true});  // silent=true — no error toast
   const stats = document.getElementById('esign-stats');
   const list  = document.getElementById('esign-requests-list');
   if (r) {
@@ -12440,7 +12440,7 @@ async function loadClientPortalPage() {
 
 async function loadPortalLinks() {
   const coId = document.getElementById('portal-co-filter')?.value || '';
-  const r    = await api('/api/portal/links'+(coId?'?company_id='+coId:''));
+  const r    = await api('/api/portal/links'+(coId?'?company_id='+coId:''), {silent:true});
   const tbl  = document.getElementById('portal-links-table');
   const links= r?.links || [];
   const actStat  = document.getElementById('portal-stat-active');
@@ -12533,7 +12533,7 @@ async function sendWAPageBulk() {
 }
 
 async function loadWATemplates() {
-  const r = await api('/api/notifications/wa-templates');
+  const r = await api('/api/notifications/wa-templates', {silent:true});
   const el = document.getElementById('wa-tpl-items');
   if (!el) return;
   const templates = r?.templates || [];
@@ -12575,7 +12575,7 @@ async function deleteWATemplate(id) {
 function useWATemplate(id) { switchWATab('quick'); }
 
 async function loadWAHistory() {
-  const r = await api('/api/notifications/wa-history');
+  const r = await api('/api/notifications/wa-history', {silent:true});
   const el = document.getElementById('wa-history-list');
   if (!el) return;
   const msgs = r?.messages || [];
@@ -12595,7 +12595,7 @@ async function loadWAHistory() {
 }
 
 async function loadWASchedules() {
-  const r = await api('/api/notifications/wa-schedules');
+  const r = await api('/api/notifications/wa-schedules', {silent:true});
   const el= document.getElementById('wa-active-schedules');
   if (!el) return;
   const scheds = r?.schedules || [];
@@ -12661,6 +12661,31 @@ async function testWAPGConnection() {
   if(s) s.textContent = r?.success ? '✅ Connected!' : ('❌ '+(r?.error||'Failed'));
 }
 
+
+
+// ── Fallback template-based draft generator ──────────────────────────────
+function _generateFallbackDraft(type, co, instructions, docLabel) {
+  const name = co?.name || '[Company Name]';
+  const cin  = co?.cin  || '[CIN]';
+  const addr = co?.registered_office || '[Registered Office]';
+  const date = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
+  const fin  = `This document is prepared for ${name} (CIN: ${cin}) having its registered office at ${addr}.`;
+
+  const drafts = {
+    board_resolution: `BOARD RESOLUTION\n\nDate: ${date}\nCompany: ${name}\nCIN: ${cin}\n\nPassed at the Meeting of the Board of Directors held on ${date}:\n\n"RESOLVED THAT ${instructions || 'the Board hereby approves the matter as discussed and deliberated upon in the meeting'}."\n\n"RESOLVED FURTHER THAT any one Director or the Company Secretary be and is hereby authorised to do all such acts, deeds and things as may be necessary or incidental to give effect to the above resolution."\n\nFor ${name}\n\nDirector                Director\nName:                   Name:\nDIN:                    DIN:\nDate: ${date}`,
+
+    agm_notice: `NOTICE OF ANNUAL GENERAL MEETING\n\nDate: ${date}\n\nTo,\nAll Members,\n${name}\n\nDear Member,\n\nNOTICE is hereby given that the Annual General Meeting of ${name} will be held on [Date] at [Time] at [Venue/Video Conference] to transact the following business:\n\nORDINARY BUSINESS:\n1. To receive, consider and adopt the Audited Financial Statements for the year ended [Date]\n2. To declare dividend, if any\n3. To appoint Director retiring by rotation\n\nSPECIAL BUSINESS:\n${instructions || '4. [Special Business Item]'}\n\nBy Order of the Board\n\nCompany Secretary / Director\n${name}\nDate: ${date}`,
+
+    appointment_letter: `LETTER OF APPOINTMENT\n\nDate: ${date}\n\n${instructions || '[Director Name]'}\n[Address]\n\nDear Sir/Madam,\n\nSub: Appointment as Director — ${name}\n\nWe are pleased to inform you that the Board of Directors of ${name} (CIN: ${cin}) at its meeting held on ${date} has approved your appointment as Director of the Company, subject to approval of the Members.\n\nYour appointment is governed by the provisions of the Companies Act, 2013 and the Articles of Association of the Company.\n\nYou are requested to sign and return the duplicate copy of this letter as your acceptance.\n\nYours faithfully,\nFor ${name}\n\nAuthorised Signatory\nDate: ${date}`,
+
+    compliance_report: `COMPLIANCE STATUS REPORT\n\nCompany: ${name}\nCIN: ${cin}\nRegistered Office: ${addr}\nReport Date: ${date}\nPeriod: Financial Year ${new Date().getFullYear()}-${new Date().getFullYear()+1}\n\n1. ROC COMPLIANCES\n   - Annual Return (MGT-7): [Status]\n   - Financial Statements (AOC-4): [Status]\n   - DIR-3 KYC: [Status]\n\n2. BOARD MEETINGS\n   - Meetings held: [Count]\n   - Quorum maintained: Yes/No\n   - Minutes prepared: Yes/No\n\n3. STATUTORY REGISTERS\n   - Register of Members: Updated\n   - Register of Directors: Updated\n\n4. PENDING ITEMS\n${instructions || '   - [List any pending compliance items]'}\n\nPrepared by: [Name]\nDesignation: Company Secretary`,
+
+    nda: `NON-DISCLOSURE AGREEMENT\n\nThis Agreement is entered into on ${date} between:\n\n1. ${name}, a company incorporated under the Companies Act, 2013, having CIN: ${cin} and registered office at ${addr} (hereinafter "Disclosing Party");\n\n2. [Other Party Name], [details] (hereinafter "Receiving Party").\n\nWHEREAS, the parties wish to explore a business opportunity regarding ${instructions || '[Purpose]'};\n\nNOW THEREFORE, in consideration of the mutual covenants herein, the parties agree:\n\n1. CONFIDENTIAL INFORMATION: Any information disclosed by either party marked as confidential.\n2. OBLIGATIONS: Receiving Party shall not disclose Confidential Information to third parties.\n3. TERM: This Agreement shall be valid for [2] years from the date hereof.\n4. GOVERNING LAW: This Agreement shall be governed by the laws of India.\n\nIN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.\n\n${name}                    [Other Party]\nSignature:                Signature:\nName:                     Name:\nDesignation:              Designation:\nDate: ${date}             Date: ${date}`,
+
+    default: `${docLabel.toUpperCase()}\n\nDate: ${date}\nCompany: ${name}\nCIN: ${cin}\n\n${fin}\n\n${instructions || '[Document content to be filled based on specific requirements]'}\n\nFor ${name}\n\nAuthorised Signatory\nDate: ${date}`
+  };
+  return drafts[type] || drafts.default;
+}
 
 // ═══ APP BOOTSTRAP ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', function() {
