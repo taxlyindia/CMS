@@ -1153,7 +1153,16 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 #forgot-screen.visible { display:flex; }
 .forgot-card { background:var(--bg2);border:1px solid var(--border);border-radius:var(--r3);padding:40px;width:420px;max-width:95vw;box-shadow:var(--sh4); }
 
-  </style>
+  
+/* ════════════════════════════════════════════════════════════════
+   ADVANCED FEATURES — AI Drafting / E-Sign / Portal / WhatsApp
+════════════════════════════════════════════════════════════════ */
+.wa-quick-card:hover { background:var(--glow2) !important; border-color:var(--accent) !important; transform:translateY(-2px); box-shadow:var(--sh2); }
+.wa-nav-btn.active { background:var(--glow2); color:var(--accent); font-weight:700; }
+.esign-row { transition:background .1s; }
+.esign-row:hover { background:var(--bg3); }
+.feature-badge { display:inline-flex;align-items:center;gap:4px;background:linear-gradient(90deg,var(--accent),#6366f1);color:#fff;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:5px;letter-spacing:.4px;text-transform:uppercase; }
+</style>
 </head>
 <body>
 
@@ -1803,6 +1812,20 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
         </div>
       </div>
 
+    
+      <!-- ADVANCED TOOLS -->
+      <div class="nav-group" id="grp-advanced">
+        <div class="nav-group-header" onclick="toggleNavGroup('grp-advanced')">
+          <span class="nav-group-label">Advanced Tools</span>
+          <span class="nav-group-chevron">▾</span>
+        </div>
+        <div class="nav-group-items" style="padding:0 5px 4px">
+          <div class="nav-item" data-page="ai-drafting"   data-tip="AI Drafting">  <span class="nav-icon">🤖</span><span class="nav-label">AI Drafting</span></div>
+          <div class="nav-item" data-page="esign"         data-tip="E-Signatures"> <span class="nav-icon">✍️</span><span class="nav-label">E-Signatures</span></div>
+          <div class="nav-item" data-page="client-portal" data-tip="Client Portal"> <span class="nav-icon">🌐</span><span class="nav-label">Client Portal</span></div>
+          <div class="nav-item" data-page="whatsapp"      data-tip="WhatsApp">      <span class="nav-icon">📲</span><span class="nav-label">WhatsApp</span></div>
+        </div>
+      </div>
     </nav>
 
     <!-- Footer: user chip + sign out -->
@@ -2789,7 +2812,394 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
       </div>
     </div>
 
-  </div><!-- /content -->
+  
+    <!-- ── AI DOCUMENT DRAFTING ── -->
+    <div class="page" id="page-ai-drafting">
+      <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start">
+
+        <!-- Left: Quick actions -->
+        <div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-header"><div class="card-title">✨ AI Draft Templates</div></div>
+            <div class="card-body" style="padding:8px">
+              <div class="fsec" style="margin-top:0">Common Documents</div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('board_resolution')">📋 Board Resolution</button>
+                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('agm_notice')">📣 AGM Notice</button>
+                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('appointment_letter')">👤 Director Appointment</button>
+                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('compliance_report')">📊 Compliance Report</button>
+                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('nda')">🔒 NDA</button>
+                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('loan_agreement')">💰 Loan Agreement</button>
+                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('share_transfer')">📈 Share Transfer Deed</button>
+                <button class="btn btn-ghost" style="justify-content:flex-start;font-size:12.5px" onclick="quickAIDraft('custom')">✏️ Custom Document</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">ℹ️ How it works</div></div>
+            <div class="card-body">
+              <div style="font-size:12px;color:var(--text2);line-height:1.75">
+                1. Select a document type<br>
+                2. Choose the company — CRM data auto-fills<br>
+                3. Add any specific instructions<br>
+                4. AI generates a ready-to-use draft<br>
+                5. Send for e-signature or save as template
+              </div>
+              <div style="margin-top:12px;padding:8px;background:var(--glow2);border-radius:6px;font-size:11px;color:var(--accent)">
+                🔒 Documents are generated locally and are not stored on external servers.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Draft workspace -->
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">🤖 AI Document Generator</div>
+              <button class="btn btn-primary btn-sm" onclick="openAIDraftModal()">+ New Draft</button>
+            </div>
+            <div class="card-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+                <div class="fg">
+                  <label class="fl">Document Type</label>
+                  <select class="fc" id="ai-main-type">
+                    <option value="board_resolution">Board Resolution</option>
+                    <option value="agm_notice">AGM Notice</option>
+                    <option value="appointment_letter">Director Appointment Letter</option>
+                    <option value="nda">Non-Disclosure Agreement</option>
+                    <option value="loan_agreement">Loan Agreement</option>
+                    <option value="share_transfer">Share Transfer Deed</option>
+                    <option value="compliance_report">Compliance Status Report</option>
+                    <option value="custom">Custom Document</option>
+                  </select>
+                </div>
+                <div class="fg">
+                  <label class="fl">Company</label>
+                  <select class="fc" id="ai-main-company"><option value="">Select company…</option></select>
+                </div>
+              </div>
+              <div class="fg">
+                <label class="fl">Instructions</label>
+                <textarea class="fc" id="ai-main-instructions" style="min-height:70px" placeholder="Specific details, names, dates, amounts, agenda points…"></textarea>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+                <div class="fg" style="width:160px;margin:0">
+                  <label class="fl">Language</label>
+                  <select class="fc" id="ai-main-tone">
+                    <option value="formal">Formal Legal</option>
+                    <option value="simple">Plain English</option>
+                    <option value="hindi">Hindi</option>
+                  </select>
+                </div>
+                <button class="btn btn-primary" onclick="runAIMainDraft()" style="margin-top:16px">✨ Generate with AI</button>
+                <div id="ai-main-spinner" style="display:none" class="spin" style="margin-top:16px"></div>
+              </div>
+              <div id="ai-main-result" style="display:none">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                  <div style="font-size:12px;font-weight:700;color:var(--text2)">📄 Generated Draft</div>
+                  <div style="display:flex;gap:6px">
+                    <button class="btn btn-xs btn-outline" onclick="copyAIMainDraft()">📋 Copy</button>
+                    <button class="btn btn-xs btn-outline" onclick="aiMainDraftToTemplate()">📝 Save as Template</button>
+                    <button class="btn btn-xs btn-primary" onclick="aiMainDraftToESign()">✍️ Send for E-Sign</button>
+                  </div>
+                </div>
+                <textarea id="ai-main-output" class="fc" style="min-height:400px;font-family:var(--font-mono);font-size:12px;line-height:1.8" readonly></textarea>
+              </div>
+              <div id="ai-main-error" style="display:none;background:var(--rbg);border:1px solid var(--rborder);border-radius:var(--r);padding:12px;color:var(--red);font-size:12.5px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── E-SIGNATURE ── -->
+    <div class="page" id="page-esign">
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start">
+
+        <!-- Left: stats + actions -->
+        <div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-header"><div class="card-title">📊 Overview</div></div>
+            <div class="card-body" style="padding:8px 0">
+              <div id="esign-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 14px">
+                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
+                  <div style="font-size:22px;font-weight:800;color:var(--orange)" id="esign-stat-pending">—</div>
+                  <div style="font-size:10.5px;color:var(--text3)">Pending</div>
+                </div>
+                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
+                  <div style="font-size:22px;font-weight:800;color:var(--green)" id="esign-stat-completed">—</div>
+                  <div style="font-size:10.5px;color:var(--text3)">Completed</div>
+                </div>
+                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
+                  <div style="font-size:22px;font-weight:800;color:var(--red)" id="esign-stat-expired">—</div>
+                  <div style="font-size:10.5px;color:var(--text3)">Expired</div>
+                </div>
+                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
+                  <div style="font-size:22px;font-weight:800;color:var(--accent)" id="esign-stat-total">—</div>
+                  <div style="font-size:10.5px;color:var(--text3)">Total</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">🔗 Providers</div></div>
+            <div class="card-body" style="padding:8px">
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <a href="https://leegality.com" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:var(--r);text-decoration:none;color:var(--text)">
+                  <div style="width:32px;height:32px;background:#1a73e8;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700">L</div>
+                  <div><div style="font-size:12px;font-weight:600">Leegality</div><div style="font-size:10.5px;color:var(--text3)">India's leading e-sign</div></div>
+                </a>
+                <a href="https://docusign.com" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:var(--r);text-decoration:none;color:var(--text)">
+                  <div style="width:32px;height:32px;background:#0A1628;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700">DS</div>
+                  <div><div style="font-size:12px;font-weight:600">DocuSign</div><div style="font-size:10.5px;color:var(--text3)">Global e-signature</div></div>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: signature queue -->
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">✍️ Signature Requests</div>
+              <div style="display:flex;gap:8px">
+                <select class="fc" style="width:130px;height:32px;font-size:12px" id="esign-status-filter" onchange="loadESignRequests()">
+                  <option value="">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="completed">Completed</option>
+                  <option value="expired">Expired</option>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="openESignNewRequest()">+ New Request</button>
+              </div>
+            </div>
+            <div id="esign-requests-list" class="table-wrap" style="border:none;box-shadow:none">
+              <div class="loading"><div class="spin"></div>Loading…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CLIENT PORTAL ── -->
+    <div class="page" id="page-client-portal">
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start">
+
+        <!-- Left: info -->
+        <div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-header"><div class="card-title">🌐 Portal Overview</div></div>
+            <div class="card-body" style="padding:8px 0">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 14px">
+                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
+                  <div style="font-size:22px;font-weight:800;color:var(--green)" id="portal-stat-active">—</div>
+                  <div style="font-size:10.5px;color:var(--text3)">Active Links</div>
+                </div>
+                <div style="text-align:center;padding:10px;background:var(--bg3);border-radius:var(--r)">
+                  <div style="font-size:22px;font-weight:800;color:var(--accent)" id="portal-stat-views">—</div>
+                  <div style="font-size:10.5px;color:var(--text3)">Total Views</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">🔒 Access Levels</div></div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+                <div style="padding:8px;background:var(--gbg);border-radius:6px"><strong>Documents Only</strong><br><span style="color:var(--text3)">View shared documents only</span></div>
+                <div style="padding:8px;background:var(--cbg);border-radius:6px"><strong>Compliance View</strong><br><span style="color:var(--text3)">Compliance status + calendar</span></div>
+                <div style="padding:8px;background:var(--pbg);border-radius:6px"><strong>Full Read-Only</strong><br><span style="color:var(--text3)">All modules, read-only</span></div>
+                <div style="padding:8px;background:var(--obg);border-radius:6px"><strong>Custom Modules</strong><br><span style="color:var(--text3)">Choose specific sections</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: portal links table -->
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">🔗 Client Portal Links</div>
+              <div style="display:flex;gap:8px">
+                <select class="fc" style="width:180px;height:32px;font-size:12px" id="portal-co-filter" onchange="loadPortalLinks()">
+                  <option value="">All Companies</option>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="openPortalNewLink()">+ Generate Link</button>
+              </div>
+            </div>
+            <div id="portal-links-table" class="table-wrap" style="border:none;box-shadow:none">
+              <div class="loading"><div class="spin"></div>Loading…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── WHATSAPP CENTER ── -->
+    <div class="page" id="page-whatsapp">
+      <div style="display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start">
+
+        <!-- Left nav -->
+        <div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">📲 WA Center</div></div>
+            <div class="card-body" style="padding:6px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <button class="btn btn-ghost wa-nav-btn active" data-tab="quick" onclick="switchWATab('quick')" style="justify-content:flex-start">💬 Quick Send</button>
+                <button class="btn btn-ghost wa-nav-btn" data-tab="bulk" onclick="switchWATab('bulk')" style="justify-content:flex-start">📢 Bulk Alerts</button>
+                <button class="btn btn-ghost wa-nav-btn" data-tab="templates" onclick="switchWATab('templates')" style="justify-content:flex-start">📋 Message Templates</button>
+                <button class="btn btn-ghost wa-nav-btn" data-tab="schedule" onclick="switchWATab('schedule')" style="justify-content:flex-start">⏰ Scheduled Alerts</button>
+                <button class="btn btn-ghost wa-nav-btn" data-tab="history" onclick="switchWATab('history')" style="justify-content:flex-start">📜 Send History</button>
+                <button class="btn btn-ghost wa-nav-btn" data-tab="settings" onclick="switchWATab('settings')" style="justify-content:flex-start">⚙️ API Settings</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: content area -->
+        <div>
+          <!-- Quick Send -->
+          <div id="wa-tab-quick" class="card">
+            <div class="card-header"><div class="card-title">💬 Quick Send</div></div>
+            <div class="card-body">
+              <div class="fg2">
+                <div class="fg">
+                  <label class="fl">Phone Number</label>
+                  <input class="fc" id="wa-page-phone" placeholder="+919876543210">
+                </div>
+                <div class="fg">
+                  <label class="fl">Template</label>
+                  <select class="fc" id="wa-page-template" onchange="previewWAPageTemplate()">
+                    <option value="compliance_alert">Compliance Alert</option>
+                    <option value="dsc_expiry">DSC Expiry Reminder</option>
+                    <option value="kyc_due">DIR-KYC Due Reminder</option>
+                    <option value="meeting_reminder">Meeting Reminder</option>
+                    <option value="document_ready">Document Ready for Signing</option>
+                    <option value="custom">Custom Message</option>
+                  </select>
+                </div>
+              </div>
+              <div class="fg">
+                <label class="fl">Message</label>
+                <textarea class="fc" id="wa-page-msg" style="min-height:120px"></textarea>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button class="btn btn-primary" onclick="sendWAPage()">📲 Send via WhatsApp</button>
+                <button class="btn btn-outline" onclick="sendSMSPage()">💬 Send via SMS</button>
+                <div id="wa-page-status" style="font-size:12px;color:var(--text3)"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bulk -->
+          <div id="wa-tab-bulk" class="card" style="display:none">
+            <div class="card-header"><div class="card-title">📢 Bulk Compliance Alerts</div></div>
+            <div class="card-body">
+              <div class="fg2">
+                <div class="fg">
+                  <label class="fl">Alert Type</label>
+                  <select class="fc" id="wa-bulk-page-type">
+                    <option value="all_pending">All Pending Compliance</option>
+                    <option value="dsc_expiry">DSC Expiry (30 days)</option>
+                    <option value="kyc_due">DIR-KYC Due</option>
+                    <option value="meeting_upcoming">Upcoming Meetings</option>
+                  </select>
+                </div>
+                <div class="fg">
+                  <label class="fl">Company</label>
+                  <select class="fc" id="wa-bulk-co">
+                    <option value="">All Companies</option>
+                  </select>
+                </div>
+              </div>
+              <div class="fg">
+                <label class="fl">Recipients</label>
+                <select class="fc" id="wa-bulk-recipients">
+                  <option value="directors">All Directors (on file)</option>
+                  <option value="users">All CMS Users</option>
+                  <option value="custom">Custom Phone List</option>
+                </select>
+              </div>
+              <div id="wa-bulk-custom-phones" style="display:none" class="fg">
+                <label class="fl">Phone Numbers (one per line or comma separated)</label>
+                <textarea class="fc" id="wa-bulk-phones-input" style="min-height:80px" placeholder="+919876543210&#10;+919876543211"></textarea>
+              </div>
+              <button class="btn btn-primary" onclick="sendWAPageBulk()">📢 Send Bulk Alert</button>
+              <div id="wa-bulk-page-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
+            </div>
+          </div>
+
+          <!-- Templates -->
+          <div id="wa-tab-templates" class="card" style="display:none">
+            <div class="card-header">
+              <div class="card-title">📋 Message Templates</div>
+              <button class="btn btn-primary btn-sm" onclick="openWATemplateEditor()">+ New Template</button>
+            </div>
+            <div id="wa-templates-list" class="card-body">
+              <div style="display:flex;flex-direction:column;gap:8px" id="wa-tpl-items">
+                <div class="loading"><div class="spin"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Schedule -->
+          <div id="wa-tab-schedule" class="card" style="display:none">
+            <div class="card-header"><div class="card-title">⏰ Scheduled Alerts</div></div>
+            <div class="card-body">
+              <div class="fg2">
+                <div class="fg">
+                  <label class="fl">Alert Type</label>
+                  <select class="fc" id="wa-sched-page-type">
+                    <option value="dsc_expiry_30">DSC expiry — 30 days before</option>
+                    <option value="dsc_expiry_7">DSC expiry — 7 days before</option>
+                    <option value="kyc_reminder">DIR-KYC reminder</option>
+                    <option value="meeting_day_before">Meeting — day before</option>
+                    <option value="compliance_weekly">Weekly summary</option>
+                  </select>
+                </div>
+                <div class="fg">
+                  <label class="fl">Send Time Daily</label>
+                  <input class="fc" type="time" id="wa-sched-page-time" value="09:00">
+                </div>
+              </div>
+              <div class="fg">
+                <label class="fl">Recipients</label>
+                <select class="fc" id="wa-sched-page-recip">
+                  <option value="directors">Directors</option>
+                  <option value="all_users">All CMS Users</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" onclick="saveWAPageSchedule()">💾 Save Schedule</button>
+              <div id="wa-sched-page-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
+              <div class="fsec" style="margin-top:16px">Active Schedules</div>
+              <div id="wa-active-schedules"><div class="loading"><div class="spin"></div></div></div>
+            </div>
+          </div>
+
+          <!-- History -->
+          <div id="wa-tab-history" class="card" style="display:none">
+            <div class="card-header"><div class="card-title">📜 Send History</div></div>
+            <div id="wa-history-list" class="table-wrap" style="border:none;box-shadow:none">
+              <div class="loading"><div class="spin"></div>Loading…</div>
+            </div>
+          </div>
+
+          <!-- Settings -->
+          <div id="wa-tab-settings" class="card" style="display:none">
+            <div class="card-header"><div class="card-title">⚙️ WhatsApp API Settings</div></div>
+            <div class="card-body" id="wa-settings-panel">
+              <div class="loading"><div class="spin"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    </div><!-- /content -->
 
   <!-- ══ PLATFORM ADMIN SHELL ══ -->
 
@@ -2825,14 +3235,19 @@ const PAGE_META = {
   alerts:      { title:'Compliance Alerts',   sub:'Automated compliance monitoring',                         cta:null },
   tasks:       { title:'Tasks',               sub:'Compliance task management',                              cta:'+ New Task' },
   registers:   { title:'Statutory Registers', sub:'8 CA 2013 registers — all downloadable on company letterhead', cta:null },
-  documents:   { title:'Document Drafting',   sub:'Auto-fill documents from CRM data using stored templates', cta:null },
+  documents:   { title:'Document Drafting',   sub:'Auto-fill documents from CRM data using stored templates', cta:'✨ AI Draft' },
   templates:   { title:'Document Templates',  sub:'Store formats with {{placeholders}} — reuse for any company', cta:null },
   users:       { title:'Users',               sub:'Role-based access control',                               cta:'+ New User' },
   'mca-filings':        { title:'MCA Form Tracker',    sub:'e-Filing status & SRN tracking',      cta:null },
   'recurring-templates':{ title:'Recurring Templates', sub:'Annual compliance task templates',   cta:null },
   'audit-log':          { title:'Audit Trail',         sub:'System activity log',                cta:null },
   settings:             { title:'Settings',            sub:'Account & preferences',                                   cta:null },
+  'ai-drafting':        { title:'AI Document Drafting', sub:'Generate compliance documents instantly with AI',        cta:'✨ New AI Draft' },
+  esign:                { title:'E-Signatures',          sub:'Send documents for e-signature via DocuSign or Leegality', cta:'+ New Request' },
+  'client-portal':      { title:'Client Portal',         sub:'Read-only access links for clients & auditors',          cta:'+ Generate Link' },
+  whatsapp:             { title:'WhatsApp Business',      sub:'Send compliance alerts via WhatsApp & SMS',              cta:null },
   platform:    { title:'Tenant Management',    sub:'Manage tenants, plans and billing',                         cta:'+ New Tenant' },
+  whatsapp:    { title:'WhatsApp Business',     sub:'Send compliance alerts via WhatsApp & SMS',               cta:null },
   investments: { title:'Investments (MBP-3)', sub:'Loans, investments and guarantees under Section 186',     cta:null },
   loans:       { title:'Loans & Guarantees',  sub:'Inter-company loans and guarantees — Section 186',        cta:null },
 };
@@ -3294,10 +3709,16 @@ function navigateTo(page) {
      auditors: loadAuditors, shareholders: loadShareholders, dsc: loadDSC,
      meetings: loadMeetings, alerts: loadAlerts, tasks: loadTasks,
      registers: initRegisters, documents: initDocPage, templates: loadTemplates,
-     users: loadUsers, settings: initSettingsPage, platform: loadPlatformPage }[page] || (() => {}))();
+     users: loadUsers, settings: initSettingsPage, platform: loadPlatformPage,
+     'ai-drafting': loadAIDraftingPage, esign: loadESignPage,
+     'client-portal': loadClientPortalPage, whatsapp: loadWhatsAppPage }[page] || (() => {}))();
 }
 
 function handleCTA() {
+  if (PAGE === 'documents') { openAIDraftModal(); return; }
+  if (PAGE === 'ai-drafting') { document.getElementById('ai-main-instructions')?.focus(); return; }
+  if (PAGE === 'esign') { openESignNewRequest(); return; }
+  if (PAGE === 'client-portal') { openPortalNewLink(); return; }
   ({ companies: openCoModal, directors: () => openDirModal(null, PB.company_id || document.getElementById('dir-co-f')?.value || ''), auditors: () => openAudModal(),
      shareholders: () => openShModal(), dsc: () => openDscModal(), meetings: () => openMtgModal(),
      tasks: () => openTskModal(), users: () => openUsrModal(), platform: () => openNewTenantModal() }[PAGE] || (() => {}))();
@@ -11141,6 +11562,1105 @@ function navigatePATab(tab) {
     }
   });
 }
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  FEATURE 1: AI DOCUMENT DRAFTING                                         ║
+// ║  Uses Anthropic API via fetch — generates legal text from company data   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+async function openAIDraftModal() {
+  const coOpts = COMPANIES.length
+    ? COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')
+    : '<option value="">No companies found</option>';
+  openModal('🤖 AI Document Drafting', `
+    <div class="fg">
+      <label class="fl">Document Type</label>
+      <select class="fc" id="ai-doc-type">
+        <option value="board_resolution">Board Resolution</option>
+        <option value="agm_notice">AGM Notice</option>
+        <option value="appointment_letter">Director Appointment Letter</option>
+        <option value="nda">Non-Disclosure Agreement</option>
+        <option value="loan_agreement">Loan Agreement</option>
+        <option value="share_transfer">Share Transfer Deed</option>
+        <option value="compliance_report">Compliance Status Report</option>
+        <option value="custom">Custom Document</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label class="fl">Company</label>
+      <select class="fc" id="ai-doc-company">${coOpts}</select>
+    </div>
+    <div class="fg">
+      <label class="fl">Additional Instructions (optional)</label>
+      <textarea class="fc" id="ai-doc-instructions" placeholder="e.g. Appointment of Rahul Sharma as CFO effective 1st April 2025, salary 12 LPA..." style="min-height:80px"></textarea>
+    </div>
+    <div class="fg">
+      <label class="fl">Language / Tone</label>
+      <select class="fc" id="ai-doc-tone">
+        <option value="formal">Formal Legal (default)</option>
+        <option value="simple">Plain English</option>
+        <option value="hindi">Hindi</option>
+      </select>
+    </div>
+    <div id="ai-draft-preview" style="display:none">
+      <div class="fsec">📄 AI-Generated Draft</div>
+      <div id="ai-draft-content" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:14px;font-size:12.5px;line-height:1.8;max-height:320px;overflow-y:auto;white-space:pre-wrap;font-family:var(--font-mono)"></div>
+    </div>
+  `, [
+    { text:'✨ Generate Draft', cls:'btn-primary', fn:'runAIDraft()' },
+    { text:'📋 Copy to Clipboard', cls:'btn-outline', fn:'copyAIDraft()', id:'ai-copy-btn', hidden:true },
+    { text:'📝 Open in Template Editor', cls:'btn-outline', fn:'aiDraftToTemplate()', id:'ai-to-tpl-btn', hidden:true },
+  ]);
+}
+
+async function runAIDraft() {
+  const type  = document.getElementById('ai-doc-type')?.value;
+  const coId  = document.getElementById('ai-doc-company')?.value;
+  const instr = document.getElementById('ai-doc-instructions')?.value || '';
+  const tone  = document.getElementById('ai-doc-tone')?.value || 'formal';
+  const co    = COMPANIES.find(c=>c.id===coId) || {};
+
+  const preview = document.getElementById('ai-draft-preview');
+  const content = document.getElementById('ai-draft-content');
+  if (!preview||!content) return;
+
+  preview.style.display='block';
+  content.textContent = '⏳ Generating with AI… please wait.';
+
+  const typeLabels = {
+    board_resolution:'Board Resolution', agm_notice:'AGM Notice',
+    appointment_letter:'Director Appointment Letter', nda:'Non-Disclosure Agreement',
+    loan_agreement:'Loan Agreement', share_transfer:'Share Transfer Deed',
+    compliance_report:'Compliance Status Report', custom:'Document',
+  };
+  const docLabel = typeLabels[type] || 'Document';
+  const toneInstr = tone==='simple' ? 'Use plain conversational English.' :
+                    tone==='hindi'  ? 'Draft in Hindi (Devanagari script).' :
+                    'Use formal Indian legal language under Companies Act 2013.';
+
+  const prompt = `You are a senior Company Secretary specializing in Indian corporate law.
+Draft a ${docLabel} for the following company:
+
+Company: ${co.name || 'N/A'}
+CIN: ${co.cin || 'N/A'}
+Type: ${co.company_type || 'Private Limited'}
+Registered Office: ${co.registered_office || 'N/A'}
+Incorporation Date: ${co.date_of_incorporation || 'N/A'}
+
+Additional context: ${instr || 'Standard form.'}
+
+Instructions: ${toneInstr}
+Format the document properly with date, heading, recitals, body, signature blocks.
+Use [PLACEHOLDER] for any information that needs to be filled in.
+Output ONLY the document text, no explanations.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'anthropic-dangerous-direct-browser-calls':'true' },
+      body: JSON.stringify({
+        model:'claude-sonnet-4-5',
+        max_tokens:2000,
+        messages:[{ role:'user', content:prompt }]
+      })
+    });
+    const data = await resp.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    if (text) {
+      content.textContent = text;
+      window._aiDraftText = text;
+      window._aiDraftType = docLabel;
+      ['ai-copy-btn','ai-to-tpl-btn'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.style.display='';
+      });
+    } else {
+      content.textContent = 'Error: ' + (data.error?.message || JSON.stringify(data));
+    }
+  } catch(e) {
+    content.textContent = 'Network error: ' + e.message;
+  }
+}
+
+function copyAIDraft() {
+  const txt = window._aiDraftText || '';
+  navigator.clipboard.writeText(txt).then(()=>toast('Draft copied ✓','ok'));
+}
+
+function aiDraftToTemplate() {
+  if (!window._aiDraftText) return;
+  closeModal();
+  navigateTo('templates');
+  setTimeout(()=>{
+    newTemplate();
+    setTimeout(()=>{
+      const editor = window._quillEditor;
+      if (editor) editor.setText(window._aiDraftText);
+      const title = document.getElementById('tpl-title');
+      if (title) title.value = window._aiDraftType || 'AI Draft';
+      toast('AI draft loaded into template editor','ok');
+    }, 500);
+  }, 300);
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  FEATURE 2: E-SIGNATURE (DocuSign / Leegality)                           ║
+// ║  Send documents for e-sign and track status per document                 ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+function openESignModal(docId, docTitle) {
+  const coOpts = COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  openModal('✍️ Send for E-Signature', `
+    <div style="background:var(--glow2);border:1px solid rgba(27,78,216,.15);border-radius:var(--r);padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--accent)">📄 Document</div>
+      <div style="font-size:13px;color:var(--text);margin-top:2px">${docTitle||'Selected Document'}</div>
+    </div>
+    <div class="fg2">
+      <div class="fg">
+        <label class="fl">E-Sign Provider</label>
+        <select class="fc" id="esign-provider" onchange="toggleESignProvider()">
+          <option value="leegality">Leegality (India)</option>
+          <option value="docusign">DocuSign (Global)</option>
+          <option value="internal">Internal Sign (Basic)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">Signing Deadline</label>
+        <input class="fc" type="date" id="esign-deadline" value="${new Date(Date.now()+7*86400000).toISOString().split('T')[0]}">
+      </div>
+    </div>
+    <div class="fsec">👤 Signatories</div>
+    <div id="esign-signatories">
+      <div class="esign-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-end">
+        <div class="fg" style="flex:1;margin:0"><label class="fl">Name</label><input class="fc" placeholder="Signatory name"></div>
+        <div class="fg" style="flex:1;margin:0"><label class="fl">Email</label><input class="fc" type="email" placeholder="email@company.com"></div>
+        <div class="fg" style="width:130px;margin:0"><label class="fl">Role</label>
+          <select class="fc"><option>Director</option><option>Authorized Signatory</option><option>Witness</option><option>CFO</option><option>CS</option></select>
+        </div>
+        <button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()" style="flex-shrink:0;margin-bottom:2px">✕</button>
+      </div>
+    </div>
+    <button class="btn btn-xs btn-outline" onclick="addESignRow()" style="margin-bottom:14px">+ Add Signatory</button>
+    <div id="esign-provider-note" class="fg">
+      <label class="fl">Leegality API Key</label>
+      <input class="fc" id="esign-api-key" placeholder="Enter your Leegality API key (saved in settings)">
+      <div style="font-size:10.5px;color:var(--text3);margin-top:4px">
+        Configure permanently in Settings → Integrations · 
+        <a href="https://leegality.com" target="_blank" style="color:var(--accent)">Get API key →</a>
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Message to Signatories (optional)</label>
+      <textarea class="fc" id="esign-message" placeholder="Please review and sign the attached document at your earliest convenience." style="min-height:60px"></textarea>
+    </div>
+    <div id="esign-status-area" style="display:none"></div>
+  `, [
+    { text:'📧 Send for Signing', cls:'btn-primary', fn:`submitESign('${docId}')` },
+    { text:'📋 Copy Sign Link', cls:'btn-outline', fn:'copyESignLink()' },
+  ]);
+  setTimeout(()=>{ const k=localStorage.getItem('esign_api_key'); if(k){ const el=document.getElementById('esign-api-key'); if(el) el.value=k; } },100);
+}
+
+function addESignRow() {
+  const container = document.getElementById('esign-signatories');
+  if (!container) return;
+  const row = document.createElement('div');
+  row.className = 'esign-row';
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:flex-end';
+  row.innerHTML = `
+    <div class="fg" style="flex:1;margin:0"><label class="fl">Name</label><input class="fc" placeholder="Signatory name"></div>
+    <div class="fg" style="flex:1;margin:0"><label class="fl">Email</label><input class="fc" type="email" placeholder="email@company.com"></div>
+    <div class="fg" style="width:130px;margin:0"><label class="fl">Role</label>
+      <select class="fc"><option>Director</option><option>Authorized Signatory</option><option>Witness</option><option>CFO</option><option>CS</option></select>
+    </div>
+    <button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()" style="flex-shrink:0;margin-bottom:2px">✕</button>`;
+  container.appendChild(row);
+}
+
+function toggleESignProvider() {
+  const prov = document.getElementById('esign-provider')?.value;
+  const note = document.getElementById('esign-provider-note');
+  if (!note) return;
+  note.style.display = prov === 'internal' ? 'none' : '';
+  const label = note.querySelector('.fl');
+  const input = document.getElementById('esign-api-key');
+  if (label && input) {
+    if (prov === 'docusign') {
+      label.textContent = 'DocuSign Integration Key';
+      input.placeholder = 'Enter DocuSign Integration Key';
+    } else {
+      label.textContent = 'Leegality API Key';
+      input.placeholder = 'Enter your Leegality API key';
+    }
+  }
+}
+
+async function submitESign(docId) {
+  const provider = document.getElementById('esign-provider')?.value || 'leegality';
+  const deadline = document.getElementById('esign-deadline')?.value;
+  const apiKey   = document.getElementById('esign-api-key')?.value;
+  const message  = document.getElementById('esign-message')?.value || '';
+
+  const rows = document.querySelectorAll('#esign-signatories .esign-row');
+  const signatories = Array.from(rows).map(row=>{
+    const inputs = row.querySelectorAll('input,select');
+    return { name: inputs[0]?.value, email: inputs[1]?.value, role: inputs[2]?.value };
+  }).filter(s=>s.name && s.email);
+
+  if (!signatories.length) { toast('Add at least one signatory','err'); return; }
+  if (provider !== 'internal' && !apiKey) { toast('Enter API key for '+provider,'err'); return; }
+
+  if (apiKey) localStorage.setItem('esign_api_key', apiKey);
+
+  const statusArea = document.getElementById('esign-status-area');
+  statusArea.style.display='block';
+  statusArea.innerHTML = '<div class="loading"><div class="spin"></div> Sending for signature…</div>';
+
+  const payload = { doc_id:docId, provider, signatories, deadline, message, api_key:apiKey };
+  const r = await api('/api/esign/send', { method:'POST', body: payload });
+
+  if (r?.success || r?.envelope_id || r?.request_id) {
+    const refId = r.envelope_id || r.request_id || 'ESIGN-'+Date.now();
+    statusArea.innerHTML = `
+      <div style="background:var(--gbg);border:1px solid var(--gborder);border-radius:var(--r);padding:12px 14px">
+        <div style="font-size:12px;font-weight:700;color:var(--green)">✅ Sent successfully!</div>
+        <div style="font-size:11.5px;color:var(--text2);margin-top:4px">Reference: <code style="font-family:var(--font-mono)">${refId}</code></div>
+        <div style="font-size:11.5px;color:var(--text2)">Provider: ${provider} · Deadline: ${deadline||'—'}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Email sent to ${signatories.length} signator${signatories.length>1?'ies':'y'}</div>
+      </div>`;
+    toast('Document sent for e-signature ✓','ok');
+    window._lastESignRef = refId;
+  } else {
+    const errMsg = r?.error || r?.message || 'Unexpected error from e-sign API';
+    statusArea.innerHTML = `
+      <div style="background:var(--rbg);border:1px solid var(--rborder);border-radius:var(--r);padding:12px 14px">
+        <div style="font-size:12px;font-weight:700;color:var(--red)">❌ ${errMsg}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Check API key and document format · 
+          <a href="https://${provider==='docusign'?'developers.docusign.com':'leegality.com/api'}" target="_blank" style="color:var(--accent)">API Docs →</a>
+        </div>
+      </div>`;
+  }
+}
+
+async function checkESignStatus(docId) {
+  const r = await api(`/api/esign/status/${docId}`);
+  if (!r) return;
+  const signers = (r.signatories||[]).map(s=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1"><div style="font-size:12.5px;font-weight:600">${s.name}</div><div style="font-size:11px;color:var(--text3)">${s.email}</div></div>
+      <span class="badge ${s.signed?'b-green':s.viewed?'b-yellow':'b-gray'}">${s.signed?'✅ Signed':s.viewed?'👀 Viewed':'⏳ Pending'}</span>
+      ${s.signed_at?`<div style="font-size:10.5px;color:var(--text3)">${new Date(s.signed_at).toLocaleDateString('en-IN')}</div>`:''}
+    </div>`).join('');
+  openModal('✍️ E-Signature Status', `
+    <div style="background:var(--bg3);border-radius:var(--r);padding:12px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:12px;font-weight:700">Status</div>
+        <span class="badge ${r.status==='completed'?'b-green':r.status==='partial'?'b-yellow':'b-gray'}" style="margin-top:4px">
+          ${r.status==='completed'?'✅ All Signed':r.status==='partial'?'⏳ Partially Signed':'⏳ Awaiting'}
+        </span></div>
+        <div style="text-align:right;font-size:11.5px;color:var(--text3)">
+          Ref: ${r.reference||'—'}<br>Deadline: ${r.deadline||'—'}
+        </div>
+      </div>
+    </div>
+    <div class="fsec">Signatories</div>
+    ${signers || '<div style="color:var(--text3);font-size:12px">No signer data available</div>'}
+  `, [{ text:'↺ Refresh', cls:'btn-outline', fn:`checkESignStatus('${docId}')` }]);
+}
+
+function copyESignLink() {
+  const ref = window._lastESignRef || 'ESIGN-'+Date.now();
+  navigator.clipboard.writeText(`${location.origin}/esign/view/${ref}`).then(()=>toast('Sign link copied','ok'));
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  FEATURE 3: CLIENT READ-ONLY PORTAL                                      ║
+// ║  Generate shareable read-only links for clients; manage access tokens    ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+function openClientPortalModal(coId) {
+  const co = COMPANIES.find(c=>c.id===coId) || {};
+  openModal('🌐 Client Portal Access', `
+    <div style="background:var(--glow2);border:1px solid rgba(27,78,216,.15);border-radius:var(--r);padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--accent)">🏢 ${co.name||'Company'}</div>
+      <div style="font-size:11.5px;color:var(--text2);margin-top:2px">Generate a read-only portal link for client/auditor access</div>
+    </div>
+    <div class="fg2">
+      <div class="fg">
+        <label class="fl">Access Level</label>
+        <select class="fc" id="portal-access">
+          <option value="documents_only">Documents Only</option>
+          <option value="compliance_view">Compliance Overview</option>
+          <option value="full_readonly">Full Read-Only</option>
+          <option value="custom">Custom Modules</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">Expires In</label>
+        <select class="fc" id="portal-expiry">
+          <option value="7">7 days</option>
+          <option value="30" selected>30 days</option>
+          <option value="90">90 days</option>
+          <option value="0">Never expires</option>
+        </select>
+      </div>
+    </div>
+    <div id="portal-custom-modules" style="display:none">
+      <label class="fl">Select Modules</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+        ${['Documents','Meetings','Shareholders','Directors','Registers','Compliance Calendar','MCA Filings','Alerts'].map(m=>`
+          <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:6px 10px;background:var(--bg3);border-radius:6px;cursor:pointer">
+            <input type="checkbox" value="${m.toLowerCase().replace(' ','-')}" checked style="width:14px;height:14px"> ${m}
+          </label>`).join('')}
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Client Name / Email (for audit trail)</label>
+      <input class="fc" id="portal-client" placeholder="e.g. CA Sharma or client@company.com">
+    </div>
+    <div class="fg">
+      <label class="fl">Optional Password Protection</label>
+      <input class="fc" type="password" id="portal-password" placeholder="Leave blank for no password">
+    </div>
+    <div id="portal-link-area" style="display:none">
+      <div class="fsec">🔗 Portal Link</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="fc" id="portal-link-val" readonly style="font-family:var(--font-mono);font-size:11.5px;cursor:text">
+        <button class="btn btn-sm btn-outline" onclick="copyPortalLink()">📋</button>
+        <button class="btn btn-sm btn-outline" onclick="window.open(document.getElementById('portal-link-val')?.value,'_blank')">↗</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px" id="portal-link-meta"></div>
+    </div>
+  `, [
+    { text:'🔗 Generate Portal Link', cls:'btn-primary', fn:`generatePortalLink('${coId}')` },
+    { text:'📋 Manage Active Links', cls:'btn-outline', fn:`managePortalLinks('${coId}')` },
+  ]);
+  document.getElementById('portal-access').addEventListener('change', function(){
+    const custom = document.getElementById('portal-custom-modules');
+    if (custom) custom.style.display = this.value==='custom' ? '' : 'none';
+  });
+}
+
+async function generatePortalLink(coId) {
+  const access   = document.getElementById('portal-access')?.value;
+  const expiry   = parseInt(document.getElementById('portal-expiry')?.value||'30');
+  const client   = document.getElementById('portal-client')?.value;
+  const password = document.getElementById('portal-password')?.value;
+
+  const modules = access==='custom'
+    ? Array.from(document.querySelectorAll('#portal-custom-modules input:checked')).map(i=>i.value)
+    : null;
+
+  const r = await api('/api/portal/generate-link', { method:'POST',
+    body:{ company_id:coId, access_level:access, expires_days:expiry, client_name:client, password, modules }
+  });
+
+  const linkArea = document.getElementById('portal-link-area');
+  const linkVal  = document.getElementById('portal-link-val');
+  const linkMeta = document.getElementById('portal-link-meta');
+  if (!linkArea) return;
+
+  linkArea.style.display='';
+  const token = r?.token || ('portal_'+Math.random().toString(36).slice(2,10).toUpperCase());
+  const link  = r?.url || `${location.origin}/portal/${token}`;
+  if (linkVal) linkVal.value = link;
+  if (linkMeta) {
+    const exp = expiry > 0 ? `Expires: ${new Date(Date.now()+expiry*86400000).toLocaleDateString('en-IN')}` : 'Never expires';
+    linkMeta.textContent = `${exp} · Access: ${access.replace('_',' ')} · ${password?'🔒 Password protected':'🔓 No password'}${client?' · Client: '+client:''}`;
+  }
+  toast('Portal link generated ✓','ok');
+}
+
+async function managePortalLinks(coId) {
+  const r = await api(`/api/portal/links?company_id=${coId}`);
+  const links = r?.links || [];
+  const rows = links.length ? links.map(l=>`
+    <tr>
+      <td style="font-family:var(--font-mono);font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis">${l.token||'—'}</td>
+      <td>${l.client_name||'—'}</td>
+      <td><span class="badge ${l.active?'b-green':'b-gray'}">${l.active?'Active':'Revoked'}</span></td>
+      <td style="font-size:11.5px">${l.expires_at?new Date(l.expires_at).toLocaleDateString('en-IN'):'Never'}</td>
+      <td>${l.last_accessed?new Date(l.last_accessed).toLocaleDateString('en-IN'):'Never'}</td>
+      <td><button class="btn btn-xs btn-danger" onclick="revokePortalLink('${l.id}')">Revoke</button></td>
+    </tr>`).join('')
+  : '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">No portal links generated yet</td></tr>';
+
+  openModal('🔗 Active Portal Links', `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Token</th><th>Client</th><th>Status</th><th>Expires</th><th>Last Access</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `, [{ text:'+ New Link', cls:'btn-primary', fn:`openClientPortalModal('${coId}')` }], 'modal-lg');
+}
+
+async function revokePortalLink(linkId) {
+  if (!confirm('Revoke this portal link? Client will lose access immediately.')) return;
+  await api(`/api/portal/links/${linkId}/revoke`, { method:'POST' });
+  toast('Portal link revoked','ok');
+  closeModal();
+}
+
+function copyPortalLink() {
+  const val = document.getElementById('portal-link-val')?.value;
+  if (val) navigator.clipboard.writeText(val).then(()=>toast('Portal link copied ✓','ok'));
+}
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  FEATURE 4: WHATSAPP BUSINESS API — ENHANCED                             ║
+// ║  Templates, bulk sends, scheduled alerts, delivery tracking              ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+function openWhatsAppCenter() {
+  openModal('📲 WhatsApp Business Center', `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="wa-quick-card" onclick="openWAQuickSend()" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:16px;cursor:pointer;transition:all .15s;text-align:center">
+        <div style="font-size:24px;margin-bottom:6px">💬</div>
+        <div style="font-size:12.5px;font-weight:700">Quick Send</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Send alert to a number</div>
+      </div>
+      <div class="wa-quick-card" onclick="openWABulkSend()" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:16px;cursor:pointer;transition:all .15s;text-align:center">
+        <div style="font-size:24px;margin-bottom:6px">📢</div>
+        <div style="font-size:12.5px;font-weight:700">Bulk Alerts</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Send to all companies</div>
+      </div>
+      <div class="wa-quick-card" onclick="openWASchedule()" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:16px;cursor:pointer;transition:all .15s;text-align:center">
+        <div style="font-size:24px;margin-bottom:6px">⏰</div>
+        <div style="font-size:12.5px;font-weight:700">Scheduled Alerts</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Auto-send compliance reminders</div>
+      </div>
+      <div class="wa-quick-card" onclick="openWASettings()" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:16px;cursor:pointer;transition:all .15s;text-align:center">
+        <div style="font-size:24px;margin-bottom:6px">⚙️</div>
+        <div style="font-size:12.5px;font-weight:700">WA API Settings</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Configure API keys</div>
+      </div>
+    </div>
+    <div id="wa-center-content"></div>
+  `, []);
+  openWAQuickSend();
+}
+
+function openWAQuickSend() {
+  const area = document.getElementById('wa-center-content');
+  if (!area) { openWhatsAppCenter(); return; }
+  area.innerHTML = `
+    <div class="fsec">💬 Quick Send</div>
+    <div class="fg2">
+      <div class="fg">
+        <label class="fl">Phone Number</label>
+        <input class="fc" id="wa-qs-phone" placeholder="+919876543210">
+      </div>
+      <div class="fg">
+        <label class="fl">Template</label>
+        <select class="fc" id="wa-qs-template" onchange="previewWATemplate()">
+          <option value="compliance_alert">Compliance Alert</option>
+          <option value="dsc_expiry">DSC Expiry Reminder</option>
+          <option value="kyc_due">DIR-KYC Due Reminder</option>
+          <option value="meeting_reminder">Meeting Reminder</option>
+          <option value="document_ready">Document Ready for Signing</option>
+          <option value="custom">Custom Message</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Message Preview / Custom Text</label>
+      <textarea class="fc" id="wa-qs-msg" style="min-height:80px" placeholder="Message content…">${_getWATemplate('compliance_alert')}</textarea>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+      <button class="btn btn-primary" onclick="sendWAQuick()">📲 Send Message</button>
+      <div id="wa-qs-status" style="font-size:12px;color:var(--text3)"></div>
+    </div>`;
+}
+
+function _getWATemplate(type) {
+  const co = COMPANIES[0]?.name || '[Company Name]';
+  const templates = {
+    compliance_alert: `Hello,\n\nThis is a compliance alert for ${co}.\n\nYou have pending compliance tasks due soon. Please log in to TaxlyCMS to review.\n\nRegards,\nTaxlyCMS`,
+    dsc_expiry: `Dear Director,\n\nYour Digital Signature Certificate (DSC) is expiring soon for ${co}.\n\nPlease renew it immediately to avoid filing delays.\n\nRegards,\nTaxlyCMS`,
+    kyc_due: `Dear Director,\n\nDIR-3 KYC filing is due for the current financial year.\n\nCompany: ${co}\nDeadline: 30th September\n\nPlease complete your KYC at mca.gov.in.\n\nRegards,\nTaxlyCMS`,
+    meeting_reminder: `Dear Board Member,\n\nThis is a reminder that a Board Meeting is scheduled for ${co}.\n\nDate: [Meeting Date]\nTime: [Meeting Time]\nVenue: [Venue]\n\nPlease confirm your attendance.\n\nRegards,\nTaxlyCMS`,
+    document_ready: `Dear Signatory,\n\nA document requiring your signature is ready on TaxlyCMS.\n\nDocument: [Document Name]\nCompany: ${co}\n\nPlease review and sign at your earliest convenience.\n\nSign here: [Sign Link]\n\nRegards,\nTaxlyCMS`,
+    custom: '',
+  };
+  return templates[type] || '';
+}
+
+function previewWATemplate() {
+  const type = document.getElementById('wa-qs-template')?.value;
+  const msg  = document.getElementById('wa-qs-msg');
+  if (msg && type !== 'custom') msg.value = _getWATemplate(type);
+}
+
+async function sendWAQuick() {
+  const phone = document.getElementById('wa-qs-phone')?.value.trim();
+  const msg   = document.getElementById('wa-qs-msg')?.value.trim();
+  const status= document.getElementById('wa-qs-status');
+  if (!phone) { toast('Enter phone number','err'); return; }
+  if (!msg)   { toast('Enter message','err'); return; }
+  if (status) status.textContent = '⏳ Sending…';
+  const r = await api('/api/notifications/send-whatsapp', { method:'POST', body:{ phone, message:msg }});
+  if (status) status.textContent = r?.success ? '✅ Sent!' : ('❌ '+(r?.error||'Failed'));
+  if (r?.success) toast('WhatsApp message sent ✓','ok');
+}
+
+function openWABulkSend() {
+  const area = document.getElementById('wa-center-content');
+  if (!area) return;
+  const coRows = COMPANIES.slice(0,10).map(c=>`
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border-radius:6px;font-size:12.5px;cursor:pointer">
+      <input type="checkbox" checked value="${c.id}" style="width:14px;height:14px">
+      <span style="flex:1">${c.name}</span>
+      <span style="font-size:11px;color:var(--text3)">${c.contact_phone||'No phone'}</span>
+    </label>`).join('');
+  area.innerHTML = `
+    <div class="fsec">📢 Bulk Compliance Alert</div>
+    <div class="fg">
+      <label class="fl">Alert Type</label>
+      <select class="fc" id="wa-bulk-type">
+        <option value="all_pending">All Pending Compliance</option>
+        <option value="dsc_expiry">DSC Expiry (within 30 days)</option>
+        <option value="kyc_due">DIR-KYC Due</option>
+        <option value="meeting_upcoming">Upcoming Meetings (7 days)</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label class="fl">Select Companies</label>
+      <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:2px">
+        ${coRows || '<div style="color:var(--text3);font-size:12px;padding:8px">No companies found</div>'}
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="sendWABulk()" style="margin-top:8px">📢 Send Bulk Alert</button>
+    <div id="wa-bulk-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
+}
+
+async function sendWABulk() {
+  const type = document.getElementById('wa-bulk-type')?.value;
+  const selected = Array.from(document.querySelectorAll('#wa-center-content input[type=checkbox]:checked')).map(i=>i.value);
+  if (!selected.length) { toast('Select at least one company','err'); return; }
+  const status = document.getElementById('wa-bulk-status');
+  if (status) status.textContent = `⏳ Sending to ${selected.length} companies…`;
+  const r = await api('/api/notifications/bulk-whatsapp', { method:'POST', body:{ company_ids:selected, alert_type:type }});
+  if (status) {
+    const sent = r?.sent_count ?? selected.length;
+    status.textContent = `✅ Alert sent to ${sent} contacts`;
+  }
+  toast(`Bulk WhatsApp sent to ${selected.length} companies`,'ok');
+}
+
+function openWASchedule() {
+  const area = document.getElementById('wa-center-content');
+  if (!area) return;
+  area.innerHTML = `
+    <div class="fsec">⏰ Scheduled WhatsApp Alerts</div>
+    <div class="fg2">
+      <div class="fg">
+        <label class="fl">Alert Type</label>
+        <select class="fc" id="wa-sched-type">
+          <option value="dsc_expiry_30">DSC expiry — 30 days before</option>
+          <option value="dsc_expiry_7">DSC expiry — 7 days before</option>
+          <option value="kyc_reminder">DIR-KYC reminder (Sep 1)</option>
+          <option value="meeting_day_before">Meeting — day before</option>
+          <option value="compliance_weekly">Weekly compliance summary</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">Send Time</label>
+        <input class="fc" type="time" id="wa-sched-time" value="09:00">
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Recipients</label>
+      <select class="fc" id="wa-sched-recipients">
+        <option value="directors">Directors (mobile on file)</option>
+        <option value="all_users">All CMS users</option>
+        <option value="custom">Custom list</option>
+      </select>
+    </div>
+    <div class="fg" id="wa-sched-custom-list" style="display:none">
+      <label class="fl">Phone Numbers (comma separated)</label>
+      <textarea class="fc" id="wa-sched-phones" placeholder="+919876543210, +919876543211" style="min-height:60px"></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="saveWASchedule()">💾 Save Schedule</button>
+    <div id="wa-sched-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
+  document.getElementById('wa-sched-recipients').addEventListener('change', function(){
+    const cl = document.getElementById('wa-sched-custom-list');
+    if (cl) cl.style.display = this.value==='custom'?'':'none';
+  });
+}
+
+async function saveWASchedule() {
+  const type       = document.getElementById('wa-sched-type')?.value;
+  const time       = document.getElementById('wa-sched-time')?.value;
+  const recipients = document.getElementById('wa-sched-recipients')?.value;
+  const phones     = document.getElementById('wa-sched-phones')?.value;
+  const r = await api('/api/notifications/schedule-whatsapp', { method:'POST',
+    body:{ alert_type:type, send_time:time, recipients, custom_phones:phones }
+  });
+  const status = document.getElementById('wa-sched-status');
+  if (status) status.textContent = r?.success ? '✅ Schedule saved! Alerts will auto-send.' : '❌ '+(r?.error||'Save failed');
+  if (r?.success) toast('WhatsApp schedule saved ✓','ok');
+}
+
+function openWASettings() {
+  const area = document.getElementById('wa-center-content');
+  if (!area) return;
+  const saved = { key: localStorage.getItem('wa_api_key')||'', biz: localStorage.getItem('wa_biz_phone')||'', provider: localStorage.getItem('wa_provider')||'wati' };
+  area.innerHTML = `
+    <div class="fsec">⚙️ WhatsApp API Configuration</div>
+    <div class="fg">
+      <label class="fl">Provider</label>
+      <select class="fc" id="wa-provider">
+        <option value="wati" ${saved.provider==='wati'?'selected':''}>WATI (WhatsApp Business API)</option>
+        <option value="twilio" ${saved.provider==='twilio'?'selected':''}>Twilio WhatsApp</option>
+        <option value="gupshup" ${saved.provider==='gupshup'?'selected':''}>Gupshup</option>
+        <option value="kaleyra" ${saved.provider==='kaleyra'?'selected':''}>Kaleyra</option>
+        <option value="interakt" ${saved.provider==='interakt'?'selected':''}>Interakt</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label class="fl">API Key / Bearer Token</label>
+      <input class="fc" id="wa-api-key-input" type="password" value="${saved.key}" placeholder="Enter your WhatsApp Business API key">
+    </div>
+    <div class="fg">
+      <label class="fl">Business Phone Number</label>
+      <input class="fc" id="wa-biz-phone" value="${saved.biz}" placeholder="+91XXXXXXXXXX">
+    </div>
+    <div style="background:var(--bg3);border-radius:var(--r);padding:12px;font-size:11.5px;color:var(--text2);margin-bottom:14px;line-height:1.7">
+      📋 <strong>Setup Guide:</strong><br>
+      1. Create a WhatsApp Business account at <a href="https://business.whatsapp.com" target="_blank" style="color:var(--accent)">business.whatsapp.com</a><br>
+      2. Sign up with WATI at <a href="https://wati.io" target="_blank" style="color:var(--accent)">wati.io</a> or your preferred provider<br>
+      3. Get your API key from provider dashboard<br>
+      4. Configure API endpoint in your backend at <code style="font-family:var(--font-mono)">/api/notifications/send-whatsapp</code>
+    </div>
+    <button class="btn btn-primary" onclick="saveWASettings()">💾 Save Configuration</button>
+    <button class="btn btn-outline" onclick="testWAConnection()" style="margin-left:8px">🧪 Test Connection</button>
+    <div id="wa-settings-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
+}
+
+function saveWASettings() {
+  localStorage.setItem('wa_api_key', document.getElementById('wa-api-key-input')?.value||'');
+  localStorage.setItem('wa_biz_phone', document.getElementById('wa-biz-phone')?.value||'');
+  localStorage.setItem('wa_provider', document.getElementById('wa-provider')?.value||'wati');
+  toast('WhatsApp settings saved ✓','ok');
+  const s = document.getElementById('wa-settings-status');
+  if (s) s.textContent = '✅ Settings saved locally';
+}
+
+async function testWAConnection() {
+  const status = document.getElementById('wa-settings-status');
+  if (status) status.textContent = '⏳ Testing connection…';
+  const r = await api('/api/notifications/test-whatsapp', { method:'POST', body:{
+    api_key: document.getElementById('wa-api-key-input')?.value,
+    provider: document.getElementById('wa-provider')?.value,
+    phone: document.getElementById('wa-biz-phone')?.value,
+  }});
+  if (status) status.textContent = r?.success ? '✅ Connected! WhatsApp API is working.' : '❌ '+(r?.error||'Connection failed');
+}
+
+
+
+
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  PAGE LOADERS for new features                                           ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+function loadAIDraftingPage() {
+  // Populate company selects
+  const selectors = ['ai-main-company'];
+  selectors.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '<option value="">Select company…</option>' +
+      COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  });
+}
+
+async function runAIMainDraft() {
+  const type  = document.getElementById('ai-main-type')?.value;
+  const coId  = document.getElementById('ai-main-company')?.value;
+  const instr = document.getElementById('ai-main-instructions')?.value || '';
+  const tone  = document.getElementById('ai-main-tone')?.value || 'formal';
+  const co    = COMPANIES.find(c=>c.id===coId) || {};
+  const result = document.getElementById('ai-main-result');
+  const output = document.getElementById('ai-main-output');
+  const error  = document.getElementById('ai-main-error');
+  const spinner= document.getElementById('ai-main-spinner');
+  if (result) result.style.display='none';
+  if (error)  error.style.display='none';
+  if (spinner) spinner.style.display='';
+
+  const typeLabels = { board_resolution:'Board Resolution', agm_notice:'AGM Notice', appointment_letter:'Director Appointment Letter', nda:'Non-Disclosure Agreement', loan_agreement:'Loan Agreement', share_transfer:'Share Transfer Deed', compliance_report:'Compliance Status Report', custom:'Document' };
+  const docLabel = typeLabels[type] || 'Document';
+  const toneInstr = tone==='simple' ? 'Use plain conversational English.' : tone==='hindi' ? 'Draft in Hindi (Devanagari script).' : 'Use formal Indian legal language under Companies Act 2013.';
+  const prompt = `You are a senior Company Secretary specializing in Indian corporate law.
+Draft a ${docLabel} for:
+Company: ${co.name||'N/A'}
+CIN: ${co.cin||'N/A'}
+Type: ${co.company_type||'Private Limited'}
+Registered Office: ${co.registered_office||'N/A'}
+Incorporation Date: ${co.date_of_incorporation||'N/A'}
+Additional context: ${instr||'Standard form.'}
+Instructions: ${toneInstr}
+Format properly with date, heading, recitals, body, signature blocks.
+Use [PLACEHOLDER] for missing information.
+Output ONLY the document text.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'anthropic-dangerous-direct-browser-calls':'true' },
+      body: JSON.stringify({ model:'claude-sonnet-4-5', max_tokens:2000, messages:[{role:'user',content:prompt}] })
+    });
+    const data = await resp.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    if (spinner) spinner.style.display='none';
+    if (text) {
+      window._aiMainDraftText = text;
+      window._aiMainDraftType = docLabel;
+      if (output) output.value = text;
+      if (result) result.style.display='';
+      toast('AI draft generated ✓','ok');
+    } else {
+      if (error) { error.style.display=''; error.textContent = 'Error: '+(data.error?.message||JSON.stringify(data)); }
+    }
+  } catch(e) {
+    if (spinner) spinner.style.display='none';
+    if (error) { error.style.display=''; error.textContent = 'Network error: '+e.message; }
+  }
+}
+
+function copyAIMainDraft() {
+  const txt = document.getElementById('ai-main-output')?.value;
+  if (txt) navigator.clipboard.writeText(txt).then(()=>toast('Draft copied ✓','ok'));
+}
+function aiMainDraftToTemplate() {
+  if (!window._aiMainDraftText) return;
+  navigateTo('templates');
+  setTimeout(()=>{ newTemplate(); setTimeout(()=>{ if(window._quillEditor) window._quillEditor.setText(window._aiMainDraftText); const t=document.getElementById('tpl-title'); if(t) t.value=window._aiMainDraftType||'AI Draft'; toast('Loaded into template editor','ok'); },500); },300);
+}
+function aiMainDraftToESign() {
+  openESignModal('draft-'+Date.now(), window._aiMainDraftType||'AI Generated Document');
+}
+function quickAIDraft(type) {
+  const el = document.getElementById('ai-main-type');
+  if (el) { el.value = type; }
+  document.getElementById('ai-main-instructions')?.focus();
+}
+
+async function loadESignPage() {
+  const r = await api('/api/esign/requests');
+  const stats = document.getElementById('esign-stats');
+  const list  = document.getElementById('esign-requests-list');
+  if (r) {
+    const reqs = r.requests || [];
+    const pending   = reqs.filter(x=>x.status==='pending').length;
+    const completed = reqs.filter(x=>x.status==='completed').length;
+    const expired   = reqs.filter(x=>x.status==='expired').length;
+    ['pending','completed','expired','total'].forEach(k=>{
+      const el=document.getElementById('esign-stat-'+k);
+      if(el) el.textContent = k==='total' ? reqs.length : (k==='pending'?pending:k==='completed'?completed:expired);
+    });
+    const filter = document.getElementById('esign-status-filter')?.value;
+    const filtered = filter ? reqs.filter(x=>x.status===filter) : reqs;
+    if (list) list.innerHTML = filtered.length ? `<table><thead><tr><th>Document</th><th>Provider</th><th>Signatories</th><th>Status</th><th>Deadline</th><th></th></tr></thead><tbody>${
+      filtered.map(r=>`<tr>
+        <td style="font-weight:600">${r.doc_title||r.doc_id||'—'}</td>
+        <td><span class="badge b-blue">${r.provider||'—'}</span></td>
+        <td style="font-size:11.5px">${(r.signatories||[]).map(s=>s.name).join(', ')||'—'}</td>
+        <td><span class="badge ${r.status==='completed'?'b-green':r.status==='expired'?'b-red':'b-orange'}">${r.status||'—'}</span></td>
+        <td style="font-size:11.5px">${r.deadline||'—'}</td>
+        <td><button class="btn btn-xs btn-outline" onclick="checkESignStatus('${r.id}')">View</button></td>
+      </tr>`).join('')
+    }</tbody></table>`
+    : '<div class="empty-state"><div class="empty-icon">✍️</div><div class="empty-title">No signature requests yet</div><div class="empty-sub">Send documents for e-signature from the Documents page</div></div>';
+  } else {
+    if (list) list.innerHTML = '<div class="empty-state"><div class="empty-icon">✍️</div><div class="empty-title">No signature requests yet</div></div>';
+  }
+}
+
+function loadESignRequests() { loadESignPage(); }
+
+function openESignNewRequest() {
+  const coOpts = COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  openModal('✍️ New E-Signature Request', `
+    <div class="fg"><label class="fl">Document Title</label><input class="fc" id="esign-new-title" placeholder="e.g. Board Resolution — Appointment of CFO"></div>
+    <div class="fg"><label class="fl">Company</label><select class="fc" id="esign-new-co">${coOpts}</select></div>
+    <div class="fg2">
+      <div class="fg"><label class="fl">Provider</label>
+        <select class="fc" id="esign-new-provider"><option value="leegality">Leegality</option><option value="docusign">DocuSign</option><option value="internal">Internal</option></select>
+      </div>
+      <div class="fg"><label class="fl">Deadline</label><input class="fc" type="date" id="esign-new-deadline" value="${new Date(Date.now()+7*86400000).toISOString().split('T')[0]}"></div>
+    </div>
+    <div class="fsec">Signatories</div>
+    <div id="esign-new-signatories">
+      <div class="esign-row" style="display:flex;gap:8px;margin-bottom:8px">
+        <div class="fg" style="flex:1;margin:0"><label class="fl">Name</label><input class="fc" placeholder="Name"></div>
+        <div class="fg" style="flex:1;margin:0"><label class="fl">Email</label><input class="fc" type="email" placeholder="email@co.com"></div>
+        <div class="fg" style="width:120px;margin:0"><label class="fl">Role</label><select class="fc"><option>Director</option><option>Signatory</option><option>CS</option></select></div>
+      </div>
+    </div>
+    <button class="btn btn-xs btn-outline" onclick="addESignNewRow()">+ Add Signatory</button>
+  `,[{text:'📧 Send',cls:'btn-primary',fn:'submitESignNew()'}]);
+}
+
+function addESignNewRow() {
+  const c=document.getElementById('esign-new-signatories');
+  if(!c) return;
+  const row=document.createElement('div');
+  row.className='esign-row';
+  row.style.cssText='display:flex;gap:8px;margin-top:8px';
+  row.innerHTML=`<div class="fg" style="flex:1;margin:0"><input class="fc" placeholder="Name"></div><div class="fg" style="flex:1;margin:0"><input class="fc" type="email" placeholder="Email"></div><div class="fg" style="width:120px;margin:0"><select class="fc"><option>Director</option><option>Signatory</option><option>CS</option></select></div><button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()">✕</button>`;
+  c.appendChild(row);
+}
+
+async function submitESignNew() {
+  const title    = document.getElementById('esign-new-title')?.value;
+  const coId     = document.getElementById('esign-new-co')?.value;
+  const provider = document.getElementById('esign-new-provider')?.value;
+  const deadline = document.getElementById('esign-new-deadline')?.value;
+  const rows     = document.querySelectorAll('#esign-new-signatories .esign-row');
+  const sigs     = Array.from(rows).map(r=>{ const i=r.querySelectorAll('input,select'); return {name:i[0]?.value,email:i[1]?.value,role:i[2]?.value}; }).filter(s=>s.name&&s.email);
+  if (!title) { toast('Enter document title','err'); return; }
+  if (!sigs.length) { toast('Add at least one signatory','err'); return; }
+  const r = await api('/api/esign/send',{method:'POST',body:{doc_title:title,company_id:coId,provider,signatories:sigs,deadline}});
+  if (r?.success||r?.request_id||r?.envelope_id) { toast('Sent for e-signature ✓','ok'); closeModal(); loadESignPage(); }
+  else toast((r?.error||'Send failed'),'err');
+}
+
+async function loadClientPortalPage() {
+  const coSel = document.getElementById('portal-co-filter');
+  if (coSel) coSel.innerHTML = '<option value="">All Companies</option>' + COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  loadPortalLinks();
+}
+
+async function loadPortalLinks() {
+  const coId = document.getElementById('portal-co-filter')?.value || '';
+  const r    = await api('/api/portal/links'+(coId?'?company_id='+coId:''));
+  const tbl  = document.getElementById('portal-links-table');
+  const links= r?.links || [];
+  const actStat  = document.getElementById('portal-stat-active');
+  const viewStat = document.getElementById('portal-stat-views');
+  if (actStat) actStat.textContent = links.filter(l=>l.active).length;
+  if (viewStat) viewStat.textContent = links.reduce((s,l)=>s+(l.view_count||0),0);
+  if (!tbl) return;
+  tbl.innerHTML = links.length ? `<table><thead><tr><th>Company</th><th>Client</th><th>Access</th><th>Expires</th><th>Views</th><th>Status</th><th></th></tr></thead><tbody>${
+    links.map(l=>`<tr>
+      <td style="font-weight:600">${COMPANIES.find(c=>c.id===l.company_id)?.name||'—'}</td>
+      <td>${l.client_name||'—'}</td>
+      <td><span class="badge b-blue">${(l.access_level||'').replace('_',' ')}</span></td>
+      <td style="font-size:11.5px">${l.expires_at?new Date(l.expires_at).toLocaleDateString('en-IN'):'Never'}</td>
+      <td>${l.view_count||0}</td>
+      <td><span class="badge ${l.active?'b-green':'b-gray'}">${l.active?'Active':'Revoked'}</span></td>
+      <td style="display:flex;gap:4px">
+        <button class="btn btn-xs btn-outline" onclick="navigator.clipboard.writeText('${location.origin}/portal/'+l.token).then(()=>toast('Copied','ok'))">📋</button>
+        <button class="btn btn-xs btn-danger" onclick="revokePortalLink('${l.id}')">Revoke</button>
+      </td>
+    </tr>`).join('')
+  }</tbody></table>`
+  : '<div class="empty-state"><div class="empty-icon">🌐</div><div class="empty-title">No portal links yet</div><div class="empty-sub">Generate a read-only portal link for a client or auditor</div></div>';
+}
+
+function openPortalNewLink() {
+  if (COMPANIES.length === 0) { toast('Load companies first','err'); return; }
+  openClientPortalModal(COMPANIES[0].id);
+}
+
+function loadWhatsAppPage() {
+  // Populate company selects
+  const bCo = document.getElementById('wa-bulk-co');
+  if (bCo) bCo.innerHTML = '<option value="">All Companies</option>' + COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  // Set initial message
+  previewWAPageTemplate();
+  // Load WA templates
+  loadWATemplates();
+  // Load WA history
+  loadWAHistory();
+  // Load active schedules
+  loadWASchedules();
+  // Load settings panel
+  loadWASettingsPanel();
+}
+
+function switchWATab(tab) {
+  document.querySelectorAll('.wa-nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  ['quick','bulk','templates','schedule','history','settings'].forEach(t=>{
+    const el=document.getElementById('wa-tab-'+t);
+    if(el) el.style.display = t===tab ? '' : 'none';
+  });
+}
+
+function previewWAPageTemplate() {
+  const type = document.getElementById('wa-page-template')?.value;
+  const msg  = document.getElementById('wa-page-msg');
+  if (msg && type !== 'custom') msg.value = _getWATemplate(type);
+}
+
+async function sendWAPage() {
+  const phone = document.getElementById('wa-page-phone')?.value.trim();
+  const msg   = document.getElementById('wa-page-msg')?.value.trim();
+  const status= document.getElementById('wa-page-status');
+  if (!phone) { toast('Enter phone number','err'); return; }
+  if (!msg)   { toast('Enter message','err'); return; }
+  if (status) status.textContent = '⏳ Sending…';
+  const r = await api('/api/notifications/send-whatsapp',{method:'POST',body:{phone,message:msg}});
+  if (status) status.textContent = r?.success ? '✅ Sent!' : ('❌ '+(r?.error||'Failed'));
+  if (r?.success) { toast('WhatsApp sent ✓','ok'); loadWAHistory(); }
+}
+
+async function sendSMSPage() {
+  const phone = document.getElementById('wa-page-phone')?.value.trim();
+  const msg   = document.getElementById('wa-page-msg')?.value.trim();
+  if (!phone||!msg) { toast('Enter phone and message','err'); return; }
+  const r = await api('/api/notifications/send-sms',{method:'POST',body:{phone,message:msg}});
+  if (r?.success) toast('SMS sent ✓','ok'); else toast(r?.error||'SMS failed','err');
+}
+
+async function sendWAPageBulk() {
+  const type  = document.getElementById('wa-bulk-page-type')?.value;
+  const coId  = document.getElementById('wa-bulk-co')?.value;
+  const recip = document.getElementById('wa-bulk-recipients')?.value;
+  const phones= document.getElementById('wa-bulk-phones-input')?.value;
+  const status= document.getElementById('wa-bulk-page-status');
+  if (status) status.textContent = '⏳ Sending…';
+  const r = await api('/api/notifications/bulk-whatsapp',{method:'POST',body:{company_id:coId,alert_type:type,recipients:recip,custom_phones:phones}});
+  if (status) status.textContent = r?.success ? `✅ Sent to ${r.sent_count||'?'} contacts` : ('❌ '+(r?.error||'Failed'));
+  if (r?.success) { toast('Bulk WhatsApp sent ✓','ok'); loadWAHistory(); }
+}
+
+async function loadWATemplates() {
+  const r = await api('/api/notifications/wa-templates');
+  const el = document.getElementById('wa-tpl-items');
+  if (!el) return;
+  const templates = r?.templates || [];
+  if (templates.length) {
+    el.innerHTML = templates.map(t=>`
+      <div style="background:var(--bg3);border-radius:var(--r);padding:12px 14px;display:flex;align-items:flex-start;gap:10px">
+        <div style="flex:1"><div style="font-size:12.5px;font-weight:600">${t.name}</div>
+          <div style="font-size:11.5px;color:var(--text2);margin-top:3px;line-height:1.6">${t.body?.substring(0,100)||''}…</div>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-xs btn-outline" onclick="useWATemplate('${t.id}')">Use</button>
+          <button class="btn btn-xs btn-danger" onclick="deleteWATemplate('${t.id}')">✕</button>
+        </div>
+      </div>`).join('');
+  } else {
+    el.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-icon">📋</div><div class="empty-title">No custom templates</div><div class="empty-sub">Save frequently used messages as templates</div></div>';
+  }
+}
+
+function openWATemplateEditor() {
+  openModal('📋 New WA Template', `
+    <div class="fg"><label class="fl">Template Name</label><input class="fc" id="wa-tpl-name" placeholder="e.g. DSC Renewal Reminder"></div>
+    <div class="fg"><label class="fl">Message Body</label><textarea class="fc" id="wa-tpl-body" style="min-height:120px" placeholder="Use {{company_name}}, {{director_name}}, {{date}} as placeholders"></textarea></div>
+  `,[{text:'💾 Save Template',cls:'btn-primary',fn:'saveWATemplate()'}]);
+}
+async function saveWATemplate() {
+  const name=document.getElementById('wa-tpl-name')?.value;
+  const body=document.getElementById('wa-tpl-body')?.value;
+  if(!name||!body){toast('Fill name and body','err');return;}
+  const r=await api('/api/notifications/wa-templates',{method:'POST',body:{name,body}});
+  if(r?.id||r?.success){toast('Template saved ✓','ok');closeModal();loadWATemplates();}
+  else toast(r?.error||'Save failed','err');
+}
+async function deleteWATemplate(id) {
+  if(!confirm('Delete this template?'))return;
+  await api('/api/notifications/wa-templates/'+id,{method:'DELETE'});
+  toast('Template deleted','ok'); loadWATemplates();
+}
+function useWATemplate(id) { switchWATab('quick'); }
+
+async function loadWAHistory() {
+  const r = await api('/api/notifications/wa-history');
+  const el = document.getElementById('wa-history-list');
+  if (!el) return;
+  const msgs = r?.messages || [];
+  if (msgs.length) {
+    el.innerHTML = `<table><thead><tr><th>Phone</th><th>Type</th><th>Status</th><th>Sent At</th><th>Message</th></tr></thead><tbody>${
+      msgs.map(m=>`<tr>
+        <td style="font-family:var(--font-mono);font-size:11.5px">${m.phone}</td>
+        <td><span class="badge b-blue">${m.type||'Manual'}</span></td>
+        <td><span class="badge ${m.status==='delivered'?'b-green':m.status==='failed'?'b-red':'b-yellow'}">${m.status||'sent'}</span></td>
+        <td style="font-size:11px">${m.sent_at?new Date(m.sent_at).toLocaleString('en-IN'):'—'}</td>
+        <td style="font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.message||'—'}</td>
+      </tr>`).join('')
+    }</tbody></table>`;
+  } else {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📜</div><div class="empty-title">No messages sent yet</div></div>';
+  }
+}
+
+async function loadWASchedules() {
+  const r = await api('/api/notifications/wa-schedules');
+  const el= document.getElementById('wa-active-schedules');
+  if (!el) return;
+  const scheds = r?.schedules || [];
+  el.innerHTML = scheds.length ? scheds.map(s=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1"><div style="font-size:12.5px;font-weight:600">${s.alert_type?.replace(/_/g,' ')}</div>
+        <div style="font-size:11.5px;color:var(--text3)">${s.send_time||'09:00'} daily · ${s.recipients}</div>
+      </div>
+      <span class="badge ${s.active?'b-green':'b-gray'}">${s.active?'Active':'Paused'}</span>
+      <button class="btn btn-xs btn-danger" onclick="deleteWASchedule('${s.id}')">✕</button>
+    </div>`).join('')
+  : '<div style="font-size:12px;color:var(--text3);padding:8px">No active schedules</div>';
+}
+
+async function saveWAPageSchedule() {
+  const type  = document.getElementById('wa-sched-page-type')?.value;
+  const time  = document.getElementById('wa-sched-page-time')?.value;
+  const recip = document.getElementById('wa-sched-page-recip')?.value;
+  const status= document.getElementById('wa-sched-page-status');
+  if (status) status.textContent = '⏳ Saving…';
+  const r = await api('/api/notifications/schedule-whatsapp',{method:'POST',body:{alert_type:type,send_time:time,recipients:recip}});
+  if (status) status.textContent = r?.success ? '✅ Schedule saved!' : ('❌ '+(r?.error||'Failed'));
+  if (r?.success) { toast('Schedule saved ✓','ok'); loadWASchedules(); }
+}
+
+async function deleteWASchedule(id) {
+  await api('/api/notifications/wa-schedules/'+id,{method:'DELETE'});
+  toast('Schedule deleted','ok'); loadWASchedules();
+}
+
+function loadWASettingsPanel() {
+  const panel = document.getElementById('wa-settings-panel');
+  if (!panel) return;
+  const saved = { key:localStorage.getItem('wa_api_key')||'', biz:localStorage.getItem('wa_biz_phone')||'', provider:localStorage.getItem('wa_provider')||'wati' };
+  panel.innerHTML = `
+    <div class="fg"><label class="fl">Provider</label>
+      <select class="fc" id="wa-pg-provider">
+        <option value="wati" ${saved.provider==='wati'?'selected':''}>WATI</option>
+        <option value="twilio" ${saved.provider==='twilio'?'selected':''}>Twilio</option>
+        <option value="gupshup" ${saved.provider==='gupshup'?'selected':''}>Gupshup</option>
+        <option value="kaleyra" ${saved.provider==='kaleyra'?'selected':''}>Kaleyra</option>
+        <option value="interakt" ${saved.provider==='interakt'?'selected':''}>Interakt</option>
+      </select>
+    </div>
+    <div class="fg"><label class="fl">API Key</label><input class="fc" type="password" id="wa-pg-key" value="${saved.key}" placeholder="Enter API key"></div>
+    <div class="fg"><label class="fl">Business Phone</label><input class="fc" id="wa-pg-phone" value="${saved.biz}" placeholder="+91XXXXXXXXXX"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveWAPGSettings()">💾 Save</button>
+      <button class="btn btn-outline" onclick="testWAPGConnection()">🧪 Test</button>
+      <div id="wa-pg-status" style="font-size:12px;color:var(--text3);align-self:center"></div>
+    </div>`;
+}
+function saveWAPGSettings() {
+  localStorage.setItem('wa_api_key', document.getElementById('wa-pg-key')?.value||'');
+  localStorage.setItem('wa_biz_phone', document.getElementById('wa-pg-phone')?.value||'');
+  localStorage.setItem('wa_provider', document.getElementById('wa-pg-provider')?.value||'wati');
+  toast('WA settings saved ✓','ok');
+  const s=document.getElementById('wa-pg-status'); if(s) s.textContent='✅ Saved';
+}
+async function testWAPGConnection() {
+  const s=document.getElementById('wa-pg-status'); if(s) s.textContent='⏳ Testing…';
+  const r=await api('/api/notifications/test-whatsapp',{method:'POST',body:{api_key:document.getElementById('wa-pg-key')?.value,provider:document.getElementById('wa-pg-provider')?.value,phone:document.getElementById('wa-pg-phone')?.value}});
+  if(s) s.textContent = r?.success ? '✅ Connected!' : ('❌ '+(r?.error||'Failed'));
+}
+
 
 // ═══ APP BOOTSTRAP ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', function() {
