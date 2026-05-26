@@ -5769,18 +5769,22 @@ def validate_reset_token():
 _startup()  # called at import time so gunicorn workers also initialise DB
 
 
+
 # ════════════════════════════════════════════════════════════════════════════
-# CLIENT PORTAL — Public view (no auth required)
+# CLIENT PORTAL — Public read-only view (no auth required)
 # ════════════════════════════════════════════════════════════════════════════
 
 @app.route('/portal/<token>')
 def portal_view(token):
-    """Serve the read-only client portal view for a given token."""
-    import datetime as _dt
-    _db = get_db()
-    _cur = _db.cursor()
+    """Fully functional read-only client portal with live compliance data."""
+    import datetime as _dt, json as _json
+
+    # ── Validate token ────────────────────────────────────────────────────
+    _db = get_db(); _cur = _db.cursor()
     _cur.execute(
-        "SELECT pl.*, c.name as company_name, c.cin, c.company_type, c.registered_office "
+        "SELECT pl.*, c.name as company_name, c.cin, c.company_type, "
+        "c.registered_office, c.email as company_email, c.phone as company_phone, "
+        "c.authorized_capital, c.paid_up_capital, c.incorporation_date, c.gstin, c.pan "
         "FROM portal_links pl "
         "LEFT JOIN companies c ON pl.company_id = c.id "
         "WHERE pl.token = %s AND pl.active = 1",
@@ -5788,41 +5792,41 @@ def portal_view(token):
     )
     rec = row(_cur.fetchone())
     if not rec:
-        return ("<html><body style='font-family:sans-serif;text-align:center;padding:60px'>""<h2>🔗 Portal Link Expired or Invalid</h2>""<p style='color:#666'>This portal link is no longer active. Please contact your Company Secretary for a new link.</p></body></html>"), 404
+        return _portal_error_page("🔗 Invalid or Revoked Link",
+            "This portal link is no longer active. Please contact your Company Secretary for a new link."), 404
 
-    # Check expiry
+    # ── Check expiry ──────────────────────────────────────────────────────
     if rec.get('expires_at'):
         try:
             exp = _dt.datetime.fromisoformat(rec['expires_at'])
             if exp < _dt.datetime.utcnow():
-                return ("<html><body style='font-family:sans-serif;text-align:center;padding:60px'>""<h2>⏰ Portal Link Expired</h2>""<p style='color:#666'>This portal link expired. Please contact your Company Secretary for a renewed link.</p></body></html>"), 410
+                return _portal_error_page("⏰ Link Expired",
+                    f"This portal link expired on {exp.strftime('%d %b %Y')}. "
+                    "Please contact your Company Secretary for a renewed link."), 410
         except Exception:
             pass
 
-    # Update view count and last accessed
+    # ── Update view count ─────────────────────────────────────────────────
     try:
-        cur = db.cursor()
-        cur.execute(
-            "UPDATE portal_links SET view_count = COALESCE(view_count,0)+1, last_accessed=%s WHERE token=%s",
+        _cur.execute(
+            "UPDATE portal_links SET view_count=COALESCE(view_count,0)+1, "
+            "last_accessed=%s WHERE token=%s",
             (_dt.datetime.utcnow().isoformat(), token)
         )
-        db.commit()
+        _db.commit()
     except Exception:
         pass
 
-    access_level = rec.get('access_level', 'full_readonly')
-    company_name = rec.get('company_name', 'Company')
-    cin          = rec.get('cin', '')
-    exp_date     = rec.get('expires_at', '')
-    client_name  = rec.get('client_name', 'Valued Client')
-
-    # Format expiry for display
+    co_id       = rec.get('company_id', '')
+    co_name     = rec.get('company_name', 'Company')
+    tenant_id   = rec.get('tenant_id', '')
+    access      = rec.get('access_level', 'full_readonly')
+    client_name = rec.get('client_name', 'Valued Client')
+    exp_date    = rec.get('expires_at', '')
     exp_display = 'Never expires'
     if exp_date:
-        try:
-            exp_display = 'Expires ' + _dt.datetime.fromisoformat(exp_date).strftime('%d %b %Y')
-        except Exception:
-            exp_display = exp_date
+        try: exp_display = 'Expires ' + _dt.datetime.fromisoformat(exp_date).strftime('%d %b %Y')
+        except Exception: pass
 
     access_labels = {
         'documents_only': 'Documents Only',
@@ -5830,137 +5834,415 @@ def portal_view(token):
         'full_readonly': 'Full Read-Only Access',
         'custom': 'Custom Modules',
     }
-    access_label = access_labels.get(access_level, access_level.replace('_', ' ').title())
+    access_label = access_labels.get(access, 'Read-Only Access')
+
+    # ── Helper: check if module is accessible ────────────────────────────
+    modules_json = rec.get('modules', '') or '[]'
+    try:
+        allowed_modules = _json.loads(modules_json) if modules_json else []
+    except Exception:
+        allowed_modules = []
+
+    def can_show(module):
+        if access == 'full_readonly': return True
+        if access == 'documents_only': return module == 'documents'
+        if access == 'compliance_view': return module in ('compliance','meetings','alerts','calendar')
+        if access == 'custom': return module in allowed_modules
+        return False
+
+    # ── Fetch company data ────────────────────────────────────────────────
+    def qrows(sql, params=()):
+        try:
+            _cur.execute(sql, params)
+            return rows(_cur.fetchall()) or []
+        except Exception:
+            return []
+
+    company = {
+        'name': co_name,
+        'cin': rec.get('cin',''),
+        'company_type': rec.get('company_type',''),
+        'registered_office': rec.get('registered_office',''),
+        'email': rec.get('company_email',''),
+        'phone': rec.get('company_phone',''),
+        'authorized_capital': rec.get('authorized_capital',0),
+        'paid_up_capital': rec.get('paid_up_capital',0),
+        'incorporation_date': rec.get('incorporation_date',''),
+        'gstin': rec.get('gstin',''),
+        'pan': rec.get('pan',''),
+    }
+
+    directors_list = qrows(
+        "SELECT name, designation, din, email, date_of_appointment, date_of_cessation "
+        "FROM directors WHERE company_id=%s AND (date_of_cessation IS NULL OR date_of_cessation='') "
+        "ORDER BY name", (co_id,)) if can_show('directors') else []
+
+    meetings_list = qrows(
+        "SELECT meeting_type, meeting_no, meeting_date, meeting_time, venue, status "
+        "FROM meetings WHERE company_id=%s ORDER BY meeting_date DESC LIMIT 10",
+        (co_id,)) if can_show('meetings') else []
+
+    alerts_list = qrows(
+        "SELECT title, due_date, severity, status, alert_type "
+        "FROM alerts WHERE company_id=%s AND status!='resolved' "
+        "ORDER BY due_date ASC LIMIT 15",
+        (co_id,)) if can_show('alerts') else []
+
+    documents_list = qrows(
+        "SELECT doc_name, doc_type, module, created_at "
+        "FROM documents WHERE company_id=%s ORDER BY created_at DESC LIMIT 20",
+        (co_id,)) if can_show('documents') else []
+
+    shareholders_list = qrows(
+        "SELECT name, share_class, shares_held, face_value, folio_no "
+        "FROM shareholders WHERE company_id=%s AND is_active=1 ORDER BY shares_held DESC LIMIT 20",
+        (co_id,)) if can_show('shareholders') else []
+
+    dsc_list = qrows(
+        "SELECT holder_name, holder_type, valid_to, custody_status, dsc_class "
+        "FROM dsc_records WHERE company_id=%s AND is_active=1 ORDER BY valid_to ASC",
+        (co_id,)) if can_show('compliance') else []
+
+    auditors_list = qrows(
+        "SELECT name, firm_name, membership_no, appointment_date, end_date, nature_of_appointment "
+        "FROM auditors WHERE company_id=%s ORDER BY appointment_date DESC LIMIT 5",
+        (co_id,)) if can_show('compliance') else []
+
+    # Upcoming tasks (only non-sensitive, status-based)
+    tasks_list = qrows(
+        "SELECT title, due_date, priority, status, module "
+        "FROM tasks WHERE company_id=%s AND status NOT IN ('completed','cancelled') "
+        "ORDER BY due_date ASC LIMIT 10",
+        (co_id,)) if can_show('compliance') else []
+
+    # ── Stats ─────────────────────────────────────────────────────────────
+    total_directors = len(directors_list)
+    active_alerts   = len([a for a in alerts_list if a.get('status') != 'resolved'])
+    upcoming_meetings = len([m for m in meetings_list if m.get('status') in ('scheduled','pending')])
+    open_tasks      = len(tasks_list)
+
+    # ── Render helpers ────────────────────────────────────────────────────
+    def esc(v): return str(v or '').replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
+
+    def severity_badge(s):
+        s = str(s or '').lower()
+        colors = {'critical':'#dc2626,#fee2e2','high':'#c2410c,#ffedd5','medium':'#b45309,#fef3c7','low':'#059669,#d1fae5'}
+        c,bg = colors.get(s,('#6b7280','#f3f4f6')).split(',')
+        return f'<span style="padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:700;background:{bg};color:{c}">{s.upper()}</span>'
+
+    def status_badge(s):
+        s = str(s or '').lower()
+        m = {'scheduled':'#2563eb,#dbeafe','completed':'#059669,#d1fae5','pending':'#d97706,#fef3c7',
+             'drafted':'#7c3aed,#ede9fe','active':'#059669,#d1fae5','expired':'#dc2626,#fee2e2'}
+        c,bg = m.get(s,('#6b7280','#f3f4f6')).split(',')
+        return f'<span style="padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:600;background:{bg};color:{c}">{s}</span>'
+
+    def fmt_date(d):
+        if not d: return '—'
+        try: return _dt.datetime.fromisoformat(str(d)).strftime('%d %b %Y')
+        except Exception: return str(d)
+
+    def fmt_currency(v):
+        try: return f"₹{float(v or 0):,.0f}"
+        except Exception: return '—'
+
+    def section(title, icon, content, show=True):
+        if not show or not content: return ''
+        return f'''
+        <div class="pt-section">
+          <div class="pt-section-header">
+            <span class="pt-section-icon">{icon}</span>
+            <h2 class="pt-section-title">{title}</h2>
+          </div>
+          <div class="pt-section-body">{content}</div>
+        </div>'''
+
+    # ── Build sections HTML ───────────────────────────────────────────────
+    # 1. Company Overview (always shown)
+    company_html = f'''
+      <div class="pt-info-grid">
+        <div class="pt-info-item"><div class="pt-info-label">CIN</div><div class="pt-info-val">{esc(company["cin"])}</div></div>
+        <div class="pt-info-item"><div class="pt-info-label">Company Type</div><div class="pt-info-val">{esc(company["company_type"])}</div></div>
+        <div class="pt-info-item"><div class="pt-info-label">Incorporation Date</div><div class="pt-info-val">{fmt_date(company["incorporation_date"])}</div></div>
+        <div class="pt-info-item"><div class="pt-info-label">PAN</div><div class="pt-info-val">{esc(company["pan"]) or "—"}</div></div>
+        <div class="pt-info-item"><div class="pt-info-label">GSTIN</div><div class="pt-info-val">{esc(company["gstin"]) or "—"}</div></div>
+        <div class="pt-info-item"><div class="pt-info-label">Email</div><div class="pt-info-val">{esc(company["email"]) or "—"}</div></div>
+        <div class="pt-info-item"><div class="pt-info-label">Phone</div><div class="pt-info-val">{esc(company["phone"]) or "—"}</div></div>
+        <div class="pt-info-item"><div class="pt-info-label">Authorized Capital</div><div class="pt-info-val">{fmt_currency(company["authorized_capital"])}</div></div>
+        <div class="pt-info-item"><div class="pt-info-label">Paid-up Capital</div><div class="pt-info-val">{fmt_currency(company["paid_up_capital"])}</div></div>
+        <div class="pt-info-item" style="grid-column:1/-1"><div class="pt-info-label">Registered Office</div><div class="pt-info-val">{esc(company["registered_office"]) or "—"}</div></div>
+      </div>'''
+
+    # 2. Directors
+    dir_rows = ''.join(f'''<tr>
+      <td><strong>{esc(d.get("name",""))}</strong></td>
+      <td>{esc(d.get("designation",""))}</td>
+      <td style="font-family:monospace;font-size:11.5px">{esc(d.get("din","")) or "—"}</td>
+      <td>{esc(d.get("email","")) or "—"}</td>
+      <td>{fmt_date(d.get("date_of_appointment",""))}</td>
+    </tr>''' for d in directors_list)
+    directors_html = f'''<div class="pt-table-wrap"><table><thead><tr>
+      <th>Name</th><th>Designation</th><th>DIN</th><th>Email</th><th>Appointed</th>
+    </tr></thead><tbody>{dir_rows}</tbody></table></div>''' if directors_list else '<div class="pt-empty">No directors on record</div>'
+
+    # 3. Meetings
+    mtg_rows = ''.join(f'''<tr>
+      <td>{esc(m.get("meeting_type",""))}</td>
+      <td>{esc(str(m.get("meeting_no","")) or "—")}</td>
+      <td>{fmt_date(m.get("meeting_date",""))}</td>
+      <td>{esc(m.get("venue","")) or "—"}</td>
+      <td>{status_badge(m.get("status",""))}</td>
+    </tr>''' for m in meetings_list)
+    meetings_html = f'''<div class="pt-table-wrap"><table><thead><tr>
+      <th>Type</th><th>No.</th><th>Date</th><th>Venue</th><th>Status</th>
+    </tr></thead><tbody>{mtg_rows}</tbody></table></div>''' if meetings_list else '<div class="pt-empty">No meetings on record</div>'
+
+    # 4. Alerts
+    alert_rows = ''.join(f'''<tr>
+      <td><strong>{esc(a.get("title",""))}</strong></td>
+      <td>{esc(a.get("alert_type","")) or "—"}</td>
+      <td>{fmt_date(a.get("due_date",""))}</td>
+      <td>{severity_badge(a.get("severity",""))}</td>
+      <td>{status_badge(a.get("status",""))}</td>
+    </tr>''' for a in alerts_list)
+    alerts_html = f'''<div class="pt-table-wrap"><table><thead><tr>
+      <th>Alert</th><th>Type</th><th>Due Date</th><th>Severity</th><th>Status</th>
+    </tr></thead><tbody>{alert_rows}</tbody></table></div>''' if alerts_list else '<div class="pt-empty">✅ No active alerts</div>'
+
+    # 5. Documents
+    doc_rows = ''.join(f'''<tr>
+      <td><strong>{esc(d.get("doc_name",""))}</strong></td>
+      <td>{esc(d.get("doc_type","")) or "—"}</td>
+      <td>{esc(d.get("module","")) or "—"}</td>
+      <td>{fmt_date(d.get("created_at",""))}</td>
+    </tr>''' for d in documents_list)
+    documents_html = f'''<div class="pt-table-wrap"><table><thead><tr>
+      <th>Document Name</th><th>Type</th><th>Module</th><th>Created</th>
+    </tr></thead><tbody>{doc_rows}</tbody></table></div>''' if documents_list else '<div class="pt-empty">No documents available</div>'
+
+    # 6. Shareholders
+    sh_rows = ''.join(f'''<tr>
+      <td><strong>{esc(s.get("name",""))}</strong></td>
+      <td>{esc(s.get("folio_no","")) or "—"}</td>
+      <td>{esc(s.get("share_class","")) or "Equity"}</td>
+      <td style="text-align:right">{int(s.get("shares_held") or 0):,}</td>
+      <td style="text-align:right">{fmt_currency(s.get("face_value",""))}</td>
+    </tr>''' for s in shareholders_list)
+    shareholders_html = f'''<div class="pt-table-wrap"><table><thead><tr>
+      <th>Name</th><th>Folio No.</th><th>Class</th><th style="text-align:right">Shares</th><th style="text-align:right">Face Value</th>
+    </tr></thead><tbody>{sh_rows}</tbody></table></div>''' if shareholders_list else '<div class="pt-empty">No shareholders on record</div>'
+
+    # 7. DSC Records
+    dsc_rows = ''.join(f'''<tr>
+      <td><strong>{esc(d.get("holder_name",""))}</strong></td>
+      <td>{esc(d.get("holder_type","")) or "—"}</td>
+      <td>{esc(d.get("dsc_class","")) or "—"}</td>
+      <td>{fmt_date(d.get("valid_to",""))}</td>
+      <td>{status_badge(d.get("custody_status",""))}</td>
+    </tr>''' for d in dsc_list)
+    dsc_html = f'''<div class="pt-table-wrap"><table><thead><tr>
+      <th>Holder</th><th>Type</th><th>Class</th><th>Valid To</th><th>Custody</th>
+    </tr></thead><tbody>{dsc_rows}</tbody></table></div>''' if dsc_list else '<div class="pt-empty">No DSC records</div>'
+
+    # 8. Auditors
+    aud_rows = ''.join(f'''<tr>
+      <td><strong>{esc(a.get("firm_name","") or a.get("name",""))}</strong></td>
+      <td>{esc(a.get("name","")) or "—"}</td>
+      <td style="font-family:monospace;font-size:11px">{esc(a.get("membership_no","")) or "—"}</td>
+      <td>{esc(a.get("nature_of_appointment","")) or "—"}</td>
+      <td>{fmt_date(a.get("appointment_date",""))}</td>
+      <td>{fmt_date(a.get("end_date",""))}</td>
+    </tr>''' for a in auditors_list)
+    auditors_html = f'''<div class="pt-table-wrap"><table><thead><tr>
+      <th>Firm Name</th><th>Auditor Name</th><th>Membership No.</th><th>Nature</th><th>Appointed</th><th>End Date</th>
+    </tr></thead><tbody>{aud_rows}</tbody></table></div>''' if auditors_list else '<div class="pt-empty">No auditor records</div>'
+
+    # 9. Pending Tasks (compliance)
+    task_rows = ''.join(f'''<tr>
+      <td><strong>{esc(t.get("title",""))}</strong></td>
+      <td>{esc(t.get("module","")) or "—"}</td>
+      <td>{fmt_date(t.get("due_date",""))}</td>
+      <td>{severity_badge(t.get("priority",""))}</td>
+      <td>{status_badge(t.get("status",""))}</td>
+    </tr>''' for t in tasks_list)
+    tasks_html = f'''<div class="pt-table-wrap"><table><thead><tr>
+      <th>Task</th><th>Module</th><th>Due Date</th><th>Priority</th><th>Status</th>
+    </tr></thead><tbody>{task_rows}</tbody></table></div>''' if tasks_list else '<div class="pt-empty">✅ No pending compliance tasks</div>'
+
+    # ── Stats bar ─────────────────────────────────────────────────────────
+    stats_html = f'''
+    <div class="pt-stats">
+      <div class="pt-stat"><div class="pt-stat-num">{total_directors}</div><div class="pt-stat-label">Directors</div></div>
+      <div class="pt-stat pt-stat-alert" style="{'display:block' if active_alerts > 0 else 'display:block'}">
+        <div class="pt-stat-num" style="color:{'#dc2626' if active_alerts > 0 else '#059669'}">{active_alerts}</div>
+        <div class="pt-stat-label">Active Alerts</div>
+      </div>
+      <div class="pt-stat"><div class="pt-stat-num">{upcoming_meetings}</div><div class="pt-stat-label">Upcoming Meetings</div></div>
+      <div class="pt-stat"><div class="pt-stat-num">{open_tasks}</div><div class="pt-stat-label">Open Tasks</div></div>
+    </div>'''
+
+    # ── Assemble the page ─────────────────────────────────────────────────
+    year = _dt.datetime.utcnow().year
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>{company_name} — Client Portal | TaxlyCMS</title>
+  <title>{esc(co_name)} — Client Portal | TaxlyCMS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Syne:wght@700;800&display=swap" rel="stylesheet">
   <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
-    body{{font-family:'DM Sans',sans-serif;background:#f0f4fb;color:#0d1426;min-height:100vh}}
-    .topbar{{background:linear-gradient(95deg,#08112a,#121e3e,#1b4ed8);padding:0 28px;height:60px;
-             display:flex;align-items:center;justify-content:space-between;color:#fff;
-             box-shadow:0 2px 16px rgba(8,14,28,.3)}}
-    .topbar-brand{{font-size:15px;font-weight:700;display:flex;align-items:center;gap:10px}}
-    .topbar-info{{font-size:11.5px;color:rgba(255,255,255,.55);text-align:right}}
-    .badge{{display:inline-flex;align-items:center;padding:3px 9px;border-radius:5px;
-            font-size:10.5px;font-weight:600;border:1px solid}}
-    .badge-blue{{background:rgba(27,78,216,.12);color:#60a5fa;border-color:rgba(96,165,250,.3)}}
-    .hero{{background:#fff;border-bottom:1px solid #dde3f2;padding:22px 28px;
-           display:flex;align-items:center;gap:18px}}
-    .hero-icon{{width:52px;height:52px;background:linear-gradient(135deg,#1b4ed8,#6366f1);
-               border-radius:14px;display:flex;align-items:center;justify-content:center;
-               font-size:24px;flex-shrink:0}}
-    .hero-title{{font-size:20px;font-weight:800;color:#0d1426;letter-spacing:-.3px}}
-    .hero-sub{{font-size:13px;color:#7a8aaa;margin-top:3px}}
-    .content{{max-width:900px;margin:28px auto;padding:0 20px}}
-    .card{{background:#fff;border:1px solid #d8dfef;border-radius:12px;
-           overflow:hidden;margin-bottom:18px;box-shadow:0 1px 4px rgba(13,20,38,.06)}}
-    .card-header{{padding:13px 18px;background:#f8faff;border-bottom:1px solid #d8dfef;
-                  font-size:13px;font-weight:700;color:#0d1426;display:flex;align-items:center;gap:8px}}
-    .card-body{{padding:18px}}
-    .info-grid{{display:grid;grid-template-columns:1fr 1fr;gap:14px}}
-    .info-item label{{font-size:9.5px;font-weight:700;color:#7a8aaa;
-                      text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:4px}}
-    .info-item span{{font-size:13.5px;color:#0d1426;font-weight:500}}
-    .access-pill{{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;
-                  background:#edf2ff;border-radius:8px;color:#1b4ed8;
-                  font-size:12.5px;font-weight:700;border:1px solid rgba(27,78,216,.2)}}
-    .readonly-banner{{background:linear-gradient(135deg,rgba(27,78,216,.06),rgba(99,102,241,.04));
-                      border:1px solid rgba(27,78,216,.12);border-radius:10px;
-                      padding:12px 16px;display:flex;align-items:center;gap:10px;margin-bottom:18px}}
-    .contact-cta{{text-align:center;padding:28px;color:#7a8aaa;font-size:13px}}
-    .contact-cta a{{color:#1b4ed8;font-weight:600;text-decoration:none}}
-    footer{{text-align:center;padding:22px;font-size:11px;color:#7a8aaa;
-            border-top:1px solid #dde3f2;margin-top:32px}}
+    body{{font-family:'DM Sans',sans-serif;background:#f0f4fb;color:#0d1426;min-height:100vh;font-size:14px;-webkit-font-smoothing:antialiased}}
+    ::-webkit-scrollbar{{width:5px;height:5px}}
+    ::-webkit-scrollbar-thumb{{background:#c4cde0;border-radius:10px}}
+
+    /* Topbar */
+    .pt-topbar{{background:linear-gradient(95deg,#08112a,#121e3e,#1b4ed8);padding:0 28px;height:58px;
+               display:flex;align-items:center;justify-content:space-between;gap:16px;
+               box-shadow:0 2px 16px rgba(8,14,28,.3);position:sticky;top:0;z-index:100}}
+    .pt-brand{{display:flex;align-items:center;gap:10px;color:#fff;font-size:15px;font-weight:700;text-decoration:none}}
+    .pt-brand-sep{{width:1px;height:18px;background:rgba(255,255,255,.22)}}
+    .pt-topbar-meta{{text-align:right;font-size:11px;color:rgba(255,255,255,.55);line-height:1.6}}
+
+    /* Hero */
+    .pt-hero{{background:#fff;border-bottom:1px solid #dde3f2;padding:22px 28px;
+              display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}}
+    .pt-hero-left{{display:flex;align-items:center;gap:16px}}
+    .pt-hero-icon{{width:52px;height:52px;background:linear-gradient(135deg,#1b4ed8,#6366f1);
+                   border-radius:14px;display:flex;align-items:center;justify-content:center;
+                   font-size:24px;flex-shrink:0;box-shadow:0 4px 12px rgba(27,78,216,.25)}}
+    .pt-company-name{{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:#0d1426;letter-spacing:-.3px}}
+    .pt-company-meta{{font-size:12px;color:#7a8aaa;margin-top:3px}}
+    .pt-access-badge{{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;
+                      background:linear-gradient(90deg,rgba(27,78,216,.09),rgba(99,102,241,.06));
+                      border:1px solid rgba(27,78,216,.2);border-radius:9px;
+                      color:#1b4ed8;font-size:12px;font-weight:700;white-space:nowrap}}
+
+    /* Stats */
+    .pt-stats{{display:flex;gap:12px;padding:16px 28px;background:#fff;border-bottom:1px solid #dde3f2;flex-wrap:wrap}}
+    .pt-stat{{background:#f0f4fb;border:1px solid #dde3f2;border-radius:10px;padding:10px 18px;text-align:center;min-width:90px}}
+    .pt-stat-num{{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#1b4ed8;letter-spacing:-1px;line-height:1}}
+    .pt-stat-label{{font-size:10px;color:#7a8aaa;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:3px}}
+
+    /* Banner */
+    .pt-banner{{background:linear-gradient(90deg,rgba(27,78,216,.07),rgba(99,102,241,.04));
+                border:1px solid rgba(27,78,216,.12);border-radius:10px;padding:12px 18px;
+                display:flex;align-items:center;gap:12px;margin-bottom:18px}}
+
+    /* Content */
+    .pt-content{{max-width:1100px;margin:24px auto;padding:0 24px}}
+
+    /* Sections */
+    .pt-section{{background:#fff;border:1px solid #dde3f2;border-radius:14px;overflow:hidden;margin-bottom:18px;box-shadow:0 1px 4px rgba(13,20,38,.06)}}
+    .pt-section-header{{display:flex;align-items:center;gap:10px;padding:14px 20px;background:#f8faff;border-bottom:1px solid #dde3f2}}
+    .pt-section-icon{{font-size:18px;line-height:1}}
+    .pt-section-title{{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:#0d1426;letter-spacing:-.1px}}
+    .pt-section-body{{padding:18px 20px}}
+
+    /* Info grid */
+    .pt-info-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}}
+    .pt-info-item{{}}
+    .pt-info-label{{font-size:9.5px;font-weight:700;color:#7a8aaa;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px}}
+    .pt-info-val{{font-size:13.5px;color:#0d1426;font-weight:500}}
+
+    /* Tables */
+    .pt-table-wrap{{overflow-x:auto;-webkit-overflow-scrolling:touch}}
+    .pt-table-wrap table{{width:100%;border-collapse:collapse;font-size:13px}}
+    .pt-table-wrap thead tr{{background:#f8faff;border-bottom:2px solid #dde3f2}}
+    .pt-table-wrap th{{padding:9px 14px;font-size:9.5px;font-weight:700;color:#7a8aaa;text-transform:uppercase;letter-spacing:.7px;text-align:left;white-space:nowrap}}
+    .pt-table-wrap td{{padding:11px 14px;border-bottom:1px solid #eef1fa;vertical-align:middle}}
+    .pt-table-wrap tbody tr:last-child td{{border-bottom:none}}
+    .pt-table-wrap tbody tr:hover{{background:#f8faff}}
+
+    /* Empty */
+    .pt-empty{{padding:28px;text-align:center;color:#7a8aaa;font-size:13px}}
+
+    /* Footer */
+    footer{{text-align:center;padding:24px;font-size:11.5px;color:#7a8aaa;border-top:1px solid #dde3f2;margin-top:24px;line-height:2}}
+    footer a{{color:#1b4ed8;font-weight:600;text-decoration:none}}
+
+    @media(max-width:700px){{
+      .pt-info-grid{{grid-template-columns:1fr 1fr}}
+      .pt-stats{{gap:8px}}
+      .pt-stat{{min-width:70px;padding:8px 12px}}
+      .pt-hero{{flex-direction:column;align-items:flex-start}}
+    }}
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div class="topbar-brand">
-      🏛️ TaxlyCMS
-      <span style="width:1px;height:18px;background:rgba(255,255,255,.2);margin:0 4px"></span>
+  <div class="pt-topbar">
+    <div class="pt-brand">
+      <span>🏛️</span> TaxlyCMS
+      <div class="pt-brand-sep"></div>
       <span style="font-weight:400;font-size:13px;color:rgba(255,255,255,.7)">Client Portal</span>
     </div>
-    <div class="topbar-info">
-      <div style="margin-bottom:2px">🔒 Read-Only Access · {access_label}</div>
+    <div class="pt-topbar-meta">
+      <div>🔒 Read-Only Access &nbsp;·&nbsp; {esc(access_label)}</div>
       <div>{exp_display}</div>
     </div>
   </div>
 
-  <div class="hero">
-    <div class="hero-icon">🏢</div>
-    <div>
-      <div class="hero-title">{company_name}</div>
-      <div class="hero-sub">CIN: {cin or 'N/A'} &nbsp;·&nbsp; Welcome, {client_name}</div>
+  <div class="pt-hero">
+    <div class="pt-hero-left">
+      <div class="pt-hero-icon">🏢</div>
+      <div>
+        <div class="pt-company-name">{esc(co_name)}</div>
+        <div class="pt-company-meta">CIN: {esc(company.get("cin","") or "N/A")} &nbsp;·&nbsp; Welcome, {esc(client_name)}</div>
+      </div>
     </div>
-    <div style="margin-left:auto">
-      <div class="access-pill">🔐 {access_label}</div>
-    </div>
+    <div class="pt-access-badge">🔐 {esc(access_label)}</div>
   </div>
 
-  <div class="content">
-    <div class="readonly-banner">
+  {stats_html}
+
+  <div class="pt-content">
+
+    <div class="pt-banner">
       <span style="font-size:20px">👁️</span>
       <div>
         <div style="font-size:12.5px;font-weight:700;color:#1b4ed8">Read-Only Portal</div>
-        <div style="font-size:11.5px;color:#3a4a68;margin-top:2px">
-          This portal provides read-only access to compliance information.
+        <div style="font-size:12px;color:#3a4a68;margin-top:1px">
+          This portal provides read-only access to compliance information for {esc(co_name)}.
           For any changes or queries, contact your Company Secretary directly.
         </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-header">📋 Portal Access Details</div>
-      <div class="card-body">
-        <div class="info-grid">
-          <div class="info-item"><label>Company</label><span>{company_name}</span></div>
-          <div class="info-item"><label>CIN</label><span>{cin or 'N/A'}</span></div>
-          <div class="info-item"><label>Access Level</label><span>{access_label}</span></div>
-          <div class="info-item"><label>Link Expires</label><span>{exp_display}</span></div>
-          <div class="info-item"><label>Token</label><span style="font-family:monospace;font-size:11.5px">{token}</span></div>
-          <div class="info-item"><label>Prepared For</label><span>{client_name or '—'}</span></div>
-        </div>
-      </div>
-    </div>
+    {section("Company Overview", "🏢", company_html)}
+    {section("Board of Directors", "👤", directors_html, can_show('directors'))}
+    {section("Active Compliance Alerts", "🔔", alerts_html, can_show('alerts'))}
+    {section("Pending Tasks", "✅", tasks_html, can_show('compliance'))}
+    {section("Meetings", "🗓️", meetings_html, can_show('meetings'))}
+    {section("Documents", "📄", documents_html, can_show('documents'))}
+    {section("Shareholders", "📈", shareholders_html, can_show('shareholders'))}
+    {section("DSC Records", "🔏", dsc_html, can_show('compliance'))}
+    {section("Auditors", "🔍", auditors_html, can_show('compliance'))}
 
-    <div class="card">
-      <div class="card-header">📂 Available Information</div>
-      <div class="card-body">
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
-          {"".join(f'<div style="padding:12px 14px;background:#f0f4fb;border-radius:8px;font-size:13px;font-weight:600;color:#3a4a68">{m}</div>' for m in (['All Modules'] if access_level == 'full_readonly' else ['Documents'] if access_level == 'documents_only' else ['Compliance Overview', 'Calendar', 'Filings'] if access_level == 'compliance_view' else ['Custom Modules']))}
-        </div>
-      </div>
-    </div>
-
-    <div class="contact-cta">
-      For the latest compliance data, please log in to TaxlyCMS or contact your CS.<br>
-      <a href="mailto:support@taxlycms.in">support@taxlycms.in</a>
-    </div>
   </div>
 
-  <footer>TaxlyCMS &copy; {_dt.datetime.utcnow().year} &nbsp;·&nbsp; This is a read-only client portal link &nbsp;·&nbsp; Token: {token}</footer>
+  <footer>
+    For the latest compliance data, please log in to TaxlyCMS or contact your CS &nbsp;·&nbsp;
+    <a href="mailto:support@taxlycms.in">support@taxlycms.in</a><br>
+    TaxlyCMS &copy; {year} &nbsp;·&nbsp; Read-only client portal &nbsp;·&nbsp;
+    Token: <code style="font-family:monospace;font-size:10px">{esc(token)}</code>
+  </footer>
 </body>
 </html>"""
 
 
-if __name__ == "__main__":
-    run_compliance_checks()
-    print("\n" + "="*62)
-    print("  TAXLY-CMS v2.0 - Corporate Compliance Management System")
-    print("="*62)
-    print("  URL    : http://127.0.0.1:5000")
-    print("  Admin  : admin@compli.in / admin123")
-    print("  Manager: manager@compli.in / manager123")
-    print("  Staff  : staff@compli.in / staff123")
-    print("="*62 + "\n")
-    app.run(host="127.0.0.1",port=5000,debug=False)
+def _portal_error_page(title, message):
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title} | TaxlyCMS</title>
+<style>*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:'DM Sans',sans-serif;background:#f0f4fb;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}}
+.card{{background:#fff;border-radius:16px;padding:48px 36px;max-width:480px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(13,20,38,.1);border:1px solid #dde3f2}}
+h2{{font-size:22px;font-weight:800;color:#0d1426;margin-bottom:12px}}p{{font-size:14px;color:#7a8aaa;line-height:1.7}}
+.icon{{font-size:48px;margin-bottom:18px}}.brand{{font-size:13px;color:#1b4ed8;font-weight:700;margin-top:24px}}</style></head>
+<body><div class="card"><div class="icon">🔗</div><h2>{title}</h2><p>{message}</p>
+<div class="brand">TaxlyCMS — Client Portal</div></div></body></html>"""
+
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # AI DOCUMENT DRAFTING
