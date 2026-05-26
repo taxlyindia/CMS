@@ -5785,7 +5785,7 @@ if __name__ == "__main__":
 # ════════════════════════════════════════════════════════════════════════════
 
 @app.route('/api/ai/draft', methods=['POST'])
-@require_auth
+@login_required
 def ai_draft():
     """Generate AI document draft using Anthropic API (server-side)"""
     data = request.get_json() or {}
@@ -5869,8 +5869,9 @@ Output ONLY the document text, no explanations."""
 # ════════════════════════════════════════════════════════════════════════════
 
 @app.route('/api/esign/send', methods=['POST'])
-@require_auth
+@login_required
 def esign_send():
+    import json as _json, uuid, datetime as _dt
     data = request.get_json() or {}
     provider = data.get('provider', 'leegality')
     api_key  = data.get('api_key') or os.environ.get('ESIGN_API_KEY', '')
@@ -5878,10 +5879,6 @@ def esign_send():
     if not signatories:
         return jsonify({'error': 'No signatories provided'}), 400
 
-    # TODO: Integrate with Leegality API at https://api.leegality.com
-    # or DocuSign at https://demo.docusign.net/restapi
-    # For now return a stub reference
-    import uuid, datetime as _dt
     ref_id = 'ESIGN-' + str(uuid.uuid4())[:8].upper()
     db = get_db(); cur = db.cursor()
     try:
@@ -5900,7 +5897,7 @@ def esign_send():
 
 
 @app.route('/api/esign/requests', methods=['GET'])
-@require_auth
+@login_required
 def esign_requests():
     try:
         recs = rows("SELECT * FROM esign_requests WHERE tenant_id=%s ORDER BY created_at DESC LIMIT 50", (g.tenant_id,))
@@ -5910,7 +5907,7 @@ def esign_requests():
 
 
 @app.route('/api/esign/status/<req_id>', methods=['GET'])
-@require_auth
+@login_required
 def esign_status(req_id):
     rec = row("SELECT * FROM esign_requests WHERE id=%s AND tenant_id=%s", (req_id, g.tenant_id))
     if not rec:
@@ -5923,7 +5920,7 @@ def esign_status(req_id):
 # ════════════════════════════════════════════════════════════════════════════
 
 @app.route('/api/portal/generate-link', methods=['POST'])
-@require_auth
+@login_required
 def portal_generate_link():
     import uuid, datetime as _dt
     data = request.get_json() or {}
@@ -5949,7 +5946,7 @@ def portal_generate_link():
 
 
 @app.route('/api/portal/links', methods=['GET'])
-@require_auth
+@login_required
 def portal_links():
     company_id = request.args.get('company_id')
     try:
@@ -5965,7 +5962,7 @@ def portal_links():
 
 
 @app.route('/api/portal/links/<link_id>/revoke', methods=['POST'])
-@require_auth
+@login_required
 def portal_revoke(link_id):
     db = get_db(); cur = db.cursor()
     cur.execute("UPDATE portal_links SET active=0 WHERE id=%s AND tenant_id=%s", (link_id, g.tenant_id))
@@ -5978,7 +5975,7 @@ def portal_revoke(link_id):
 # ════════════════════════════════════════════════════════════════════════════
 
 @app.route('/api/notifications/wa-templates', methods=['GET', 'POST'])
-@require_auth
+@login_required
 def wa_templates():
     if request.method == 'GET':
         try:
@@ -6001,7 +5998,7 @@ def wa_templates():
 
 
 @app.route('/api/notifications/wa-templates/<tid>', methods=['DELETE'])
-@require_auth
+@login_required
 def wa_template_delete(tid):
     db = get_db(); cur = db.cursor()
     cur.execute("DELETE FROM wa_templates WHERE id=%s AND tenant_id=%s", (tid, g.tenant_id))
@@ -6010,7 +6007,7 @@ def wa_template_delete(tid):
 
 
 @app.route('/api/notifications/wa-history', methods=['GET'])
-@require_auth
+@login_required
 def wa_history():
     try:
         recs = rows("SELECT * FROM wa_message_log WHERE tenant_id=%s ORDER BY sent_at DESC LIMIT 100", (g.tenant_id,))
@@ -6020,7 +6017,7 @@ def wa_history():
 
 
 @app.route('/api/notifications/wa-schedules', methods=['GET'])
-@require_auth
+@login_required
 def wa_schedules():
     try:
         recs = rows("SELECT * FROM wa_schedules WHERE tenant_id=%s ORDER BY created_at DESC", (g.tenant_id,))
@@ -6030,7 +6027,7 @@ def wa_schedules():
 
 
 @app.route('/api/notifications/schedule-whatsapp', methods=['POST'])
-@require_auth
+@login_required
 def wa_schedule():
     import uuid, datetime as _dt
     data = request.get_json() or {}
@@ -6049,7 +6046,7 @@ def wa_schedule():
 
 
 @app.route('/api/notifications/wa-schedules/<sid>', methods=['DELETE'])
-@require_auth
+@login_required
 def wa_schedule_delete(sid):
     db = get_db(); cur = db.cursor()
     cur.execute("DELETE FROM wa_schedules WHERE id=%s AND tenant_id=%s", (sid, g.tenant_id))
@@ -6058,7 +6055,7 @@ def wa_schedule_delete(sid):
 
 
 @app.route('/api/notifications/bulk-whatsapp', methods=['POST'])
-@require_auth
+@login_required
 def bulk_whatsapp():
     data = request.get_json() or {}
     company_ids = data.get('company_ids') or ([data.get('company_id')] if data.get('company_id') else [])
@@ -6075,7 +6072,7 @@ def bulk_whatsapp():
 
 
 @app.route('/api/notifications/test-whatsapp', methods=['POST'])
-@require_auth
+@login_required
 def test_whatsapp():
     data = request.get_json() or {}
     api_key  = data.get('api_key','')
