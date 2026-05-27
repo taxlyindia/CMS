@@ -6252,17 +6252,52 @@ async function deleteAud(id) { await deactivateAud(id); }
 async function loadShareholders() {
   const cid = PB.company_id || document.getElementById('sh-co-f')?.value || '';
   if (cid) { const el = document.getElementById('sh-co-f'); if(el) el.value = cid; }
-  if (!cid) { document.getElementById('sh-tbl').innerHTML = `<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-title">Select a company to view shareholders</div></div>`; return; }
-  const shs = await api(`/api/companies/${cid}/shareholders`); if (!shs) return;
-  if (!shs.length) { document.getElementById('sh-tbl').innerHTML = `<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-title">No shareholders on record</div><div class="empty-sub">Add shareholders using the + Add Shareholder button</div></div>`; return; }
+  if (!cid) {
+    document.getElementById('sh-tbl').innerHTML = `<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-title">Select a company to view shareholders</div></div>`;
+    return;
+  }
+  // Build URL with period filter
+  const params = new URLSearchParams();
+  if (PB.from) params.set('date_from', PB.from);
+  if (PB.to)   params.set('date_to',   PB.to);
+  const qs = params.toString() ? '?' + params.toString() : '';
+  const shs = await api(`/api/companies/${cid}/shareholders${qs}`);
+  if (!shs) return;
+
+  // Share capital validation
+  const capCheck = await api(`/api/companies/${cid}/share-capital-check`);
+  const capWarning = (capCheck && !capCheck.matched)
+    ? `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--rbg);border:1px solid var(--rborder);border-radius:var(--r);margin-bottom:12px">
+        <span style="font-size:18px">🚩</span>
+        <div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--red)">Share Capital Mismatch!</div>
+          <div style="font-size:11.5px;color:var(--text2)">
+            Shares held by shareholders: <strong>${(capCheck.total_shares_held||0).toLocaleString('en-IN')}</strong>
+            &nbsp;vs&nbsp; Company subscribed capital: <strong>${(capCheck.subscribed_capital||0).toLocaleString('en-IN')}</strong>
+            &nbsp;— Difference: <strong style="color:var(--red)">${(capCheck.difference||0).toLocaleString('en-IN')}</strong>
+          </div>
+        </div>
+      </div>` : '';
+
+  if (!shs.length) {
+    document.getElementById('sh-tbl').innerHTML = capWarning + `<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-title">No shareholders on record</div><div class="empty-sub">Add shareholders using the + Add Shareholder button</div></div>`;
+    return;
+  }
+
   const total = shs.reduce((a, s) => a + (s.shares_held || 0), 0);
-  document.getElementById('sh-tbl').innerHTML = `
+  const capMatchBadge = capCheck
+    ? (capCheck.matched
+        ? `<span class="badge b-green" title="Shares match subscribed capital">✓ Capital Matched</span>`
+        : `<span class="badge b-red" title="Shares don't match subscribed capital">🚩 Capital Mismatch</span>`)
+    : '';
+
+  document.getElementById('sh-tbl').innerHTML = capWarning + `
     <div class="table-wrap"><table>
       <thead><tr>
         <th>Name</th><th>Folio No.</th><th>PAN</th>
-        <th>Mobile</th><th>Email</th>
-        <th>Share Class</th><th>Shares Held</th><th>% Holding</th><th>Face Value</th>
-        <th>Date of Entry</th><th>MCA User ID</th><th>MCA Password</th>
+        <th>Mobile</th><th>Share Class</th>
+        <th>Shares Held</th><th>Dist. No. From</th><th>Dist. No. To</th>
+        <th>% Holding</th><th>Face Value</th><th>Date of Entry</th>
         <th>Actions</th>
       </tr></thead>
       <tbody>${shs.map(s => {
@@ -6273,25 +6308,29 @@ async function loadShareholders() {
           <td><code>${s.folio_no || '—'}</code></td>
           <td><code>${s.pan || '—'}</code></td>
           <td style="white-space:nowrap">${s.mobile || '—'}</td>
-          <td style="font-size:12px">${s.email || '—'}</td>
           <td><span class="badge b-blue">${s.share_class}</span></td>
           <td style="font-weight:700;font-family:var(--font-mono)">${(s.shares_held || 0).toLocaleString('en-IN')}</td>
+          <td style="font-family:var(--font-mono);font-size:12px">${s.distinctive_no_from || '—'}</td>
+          <td style="font-family:var(--font-mono);font-size:12px">${s.distinctive_no_to || '—'}</td>
           <td style="font-family:var(--font-mono)">${pct}%</td>
           <td>₹${s.face_value}</td>
           <td style="font-size:12px">${fd(s.date_of_entry)}</td>
-          <td>${s.mca_user_id ? credSpan(s.mca_user_id, 'MCA User ID') : '—'}</td>
-          <td>${s.mca_password ? credSpan(s.mca_password, 'MCA Password') : '—'}</td>
           <td><div class="td-actions">
             <button class="btn btn-xs btn-ghost" onclick="openShModal('${s.id}','${cid}')">Edit</button>
-            <button class="btn btn-xs btn-warning" onclick="deactivateSh('${s.id}')" title="Deactivate">⏸ Off</button>
-            <button class="btn btn-xs btn-danger" onclick="hardDeleteSh('${s.id}')" title="Permanently delete">🗑 Del</button>
+            <button class="btn btn-xs btn-primary" onclick="openTransferShareModal('${s.id}','${cid}')" title="Transfer shares">⇄ Transfer</button>
+            <button class="btn btn-xs btn-warning" onclick="deactivateSh('${s.id}')" title="Deactivate">⏸</button>
+            <button class="btn btn-xs btn-danger" onclick="hardDeleteSh('${s.id}')" title="Permanently delete">🗑</button>
           </div></td>
         </tr>`;
       }).join('')}
       </tbody>
     </table>
-    <div class="tfoot">Total: ${total.toLocaleString('en-IN')} shares across ${shs.length} holder(s)</div></div>`;
+    <div class="tfoot" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Total: <strong>${total.toLocaleString('en-IN')}</strong> shares across <strong>${shs.length}</strong> holder(s)</span>
+      ${capMatchBadge}
+    </div></div>`;
 }
+
 
 function openShModal(id = null, cid = null) {
   openModal(id ? '✏️ Edit Shareholder' : '📈 Add Shareholder', `
@@ -6308,6 +6347,8 @@ function openShModal(id = null, cid = null) {
       <div class="fg"><label class="fl">Shares Held</label><input class="fc" id="sh-shares" type="number" value="0"></div>
       <div class="fg"><label class="fl">Face Value (₹)</label><input class="fc" id="sh-fv" type="number" value="10"></div>
       <div class="fg"><label class="fl">Date of Entry</label><input class="fc" id="sh-date" type="date"></div>
+      <div class="fg"><label class="fl">Distinctive No. From</label><input class="fc" id="sh-dist-from" type="number" placeholder="e.g. 1"></div>
+      <div class="fg"><label class="fl">Distinctive No. To</label><input class="fc" id="sh-dist-to" type="number" placeholder="e.g. 100"></div>
     </div>
     <div class="fg"><label class="fl">Address</label><input class="fc" id="sh-addr"></div>
     <div class="fsec">🔐 MCA Portal Credentials</div>
@@ -6337,6 +6378,8 @@ async function saveSh(id) {
     mca_user_id: document.getElementById('sh-mca-uid').value.trim(),
     mca_password: document.getElementById('sh-mca-pwd').value,
     mca_notes: document.getElementById('sh-mca-notes').value.trim(),
+    distinctive_no_from: document.getElementById('sh-dist-from')?.value ? parseInt(document.getElementById('sh-dist-from').value) : null,
+    distinctive_no_to:   document.getElementById('sh-dist-to')?.value   ? parseInt(document.getElementById('sh-dist-to').value)   : null,
   };
   if (!b.name || !b.company_id) { toast('Company and name required', 'err'); return; }
   if (id) await api(`/api/shareholders/${id}`, { method: 'PUT', body: b });
@@ -14204,6 +14247,136 @@ async function _callAIProvider(prompt) {
   if(ep && document.getElementById('ai-custom-endpoint')) document.getElementById('ai-custom-endpoint').value=ep;
   if(cm && document.getElementById('ai-custom-model')) document.getElementById('ai-custom-model').value=cm;
 })();
+
+
+
+
+// ── Share Transfer ────────────────────────────────────────────────────────
+async function openTransferShareModal(shId, cid) {
+  // Fetch current shareholder details
+  const shs = await api(`/api/companies/${cid}/shareholders`);
+  const sh = (shs || []).find(s => s.id === shId);
+  if (!sh) { toast('Shareholder not found', 'err'); return; }
+
+  const othersOpts = (shs || [])
+    .filter(s => s.id !== shId && s.is_active !== 0)
+    .map(s => `<option value="${s.id}" data-folio="${s.folio_no||''}">${s.name} (Folio: ${s.folio_no||'N/A'}, ${(s.shares_held||0).toLocaleString('en-IN')} shares)</option>`)
+    .join('');
+
+  openModal('⇄ Transfer Shares', `
+    <div style="background:var(--glow2);border:1px solid rgba(27,78,216,.15);border-radius:var(--r);padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--accent)">📈 Transferor</div>
+      <div style="font-size:13.5px;font-weight:700;color:var(--text)">${sh.name}</div>
+      <div style="font-size:11.5px;color:var(--text2);margin-top:2px">
+        Folio: <code>${sh.folio_no||'N/A'}</code> &nbsp;·&nbsp;
+        Class: ${sh.share_class} &nbsp;·&nbsp;
+        Available: <strong>${(sh.shares_held||0).toLocaleString('en-IN')} shares</strong>
+        ${sh.distinctive_no_from ? ` &nbsp;·&nbsp; Distinctive: ${sh.distinctive_no_from}–${sh.distinctive_no_to}` : ''}
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Transfer To</label>
+      <select class="fc" id="tr-type" onchange="toggleTransferType()">
+        <option value="existing">Existing Shareholder</option>
+        <option value="new">New Shareholder (create folio)</option>
+      </select>
+    </div>
+    <!-- Existing shareholder selection -->
+    <div id="tr-existing-section" class="fg">
+      <label class="fl">Select Existing Shareholder</label>
+      <select class="fc" id="tr-existing-sh">
+        <option value="">— Select —</option>
+        ${othersOpts}
+      </select>
+    </div>
+    <!-- New shareholder fields -->
+    <div id="tr-new-section" style="display:none">
+      <div class="fg2">
+        <div class="fg"><label class="fl">Full Name <span class="req">*</span></label><input class="fc" id="tr-new-name" placeholder="New shareholder name"></div>
+        <div class="fg"><label class="fl">PAN</label><input class="fc" id="tr-new-pan" placeholder="ABCDE1234F" style="text-transform:uppercase"></div>
+        <div class="fg"><label class="fl">Mobile</label><input class="fc" id="tr-new-mob" type="tel" placeholder="9876543210"></div>
+        <div class="fg"><label class="fl">Email</label><input class="fc" id="tr-new-email" type="email" placeholder="name@email.com"></div>
+        <div class="fg"><label class="fl">Address</label><input class="fc" id="tr-new-addr" placeholder="Address"></div>
+        <div class="fg"><label class="fl">New Folio No. (auto-generated if blank)</label><input class="fc" id="tr-new-folio" placeholder="Leave blank to auto-generate"></div>
+      </div>
+    </div>
+    <div class="fg2">
+      <div class="fg">
+        <label class="fl">Shares to Transfer <span class="req">*</span></label>
+        <input class="fc" id="tr-shares" type="number" min="1" max="${sh.shares_held||0}" placeholder="No. of shares">
+        <div style="font-size:10.5px;color:var(--text3);margin-top:3px">Max: ${(sh.shares_held||0).toLocaleString('en-IN')}</div>
+      </div>
+      <div class="fg">
+        <label class="fl">Transfer Date</label>
+        <input class="fc" id="tr-date" type="date" value="${new Date().toISOString().split('T')[0]}">
+      </div>
+    </div>
+    <div class="fg2">
+      <div class="fg">
+        <label class="fl">Distinctive No. From</label>
+        <input class="fc" id="tr-dist-from" type="number" placeholder="${sh.distinctive_no_from||''}" value="${sh.distinctive_no_from||''}">
+      </div>
+      <div class="fg">
+        <label class="fl">Distinctive No. To</label>
+        <input class="fc" id="tr-dist-to" type="number" placeholder="${sh.distinctive_no_to||''}" value="${sh.distinctive_no_to||''}">
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Transfer Consideration / Remarks</label>
+      <input class="fc" id="tr-remarks" placeholder="e.g. Sale at ₹100/share, gift, succession etc.">
+    </div>
+  `, [
+    { text: '✓ Confirm Transfer', cls: 'btn-primary', fn: `doTransferShare('${shId}','${cid}')` },
+    { text: 'Cancel', cls: 'btn-outline', fn: 'closeModal()' }
+  ], 'lg');
+}
+
+function toggleTransferType() {
+  const type = document.getElementById('tr-type')?.value;
+  document.getElementById('tr-existing-section').style.display = type==='existing' ? '' : 'none';
+  document.getElementById('tr-new-section').style.display      = type==='new'      ? '' : 'none';
+}
+
+async function doTransferShare(shId, cid) {
+  const type       = document.getElementById('tr-type')?.value;
+  const shares     = parseInt(document.getElementById('tr-shares')?.value || '0');
+  const trDate     = document.getElementById('tr-date')?.value;
+  const distFrom   = document.getElementById('tr-dist-from')?.value;
+  const distTo     = document.getElementById('tr-dist-to')?.value;
+  const remarks    = document.getElementById('tr-remarks')?.value || '';
+
+  if (!shares || shares <= 0) { toast('Enter number of shares to transfer', 'err'); return; }
+
+  let payload = { transferor_id: shId, company_id: cid, shares_to_transfer: shares,
+                  transfer_date: trDate, distinctive_no_from: distFrom, distinctive_no_to: distTo,
+                  remarks, transfer_type: type };
+
+  if (type === 'existing') {
+    const toId = document.getElementById('tr-existing-sh')?.value;
+    if (!toId) { toast('Select a recipient shareholder', 'err'); return; }
+    payload.transferee_id = toId;
+  } else {
+    const name = document.getElementById('tr-new-name')?.value?.trim();
+    if (!name) { toast('Enter name of new shareholder', 'err'); return; }
+    payload.new_shareholder = {
+      name,
+      pan:    (document.getElementById('tr-new-pan')?.value||'').toUpperCase(),
+      mobile: document.getElementById('tr-new-mob')?.value||'',
+      email:  document.getElementById('tr-new-email')?.value||'',
+      address:document.getElementById('tr-new-addr')?.value||'',
+      folio_no: document.getElementById('tr-new-folio')?.value||'',
+    };
+  }
+
+  const r = await api('/api/shareholders/transfer', { method: 'POST', body: payload });
+  if (r?.success) {
+    toast(`Transfer successful! ${type==='new'?'New folio: '+r.new_folio_no:''}`, 'ok');
+    closeModal();
+    loadShareholders();
+  } else {
+    toast(r?.error || 'Transfer failed', 'err');
+  }
+}
 
 
 
