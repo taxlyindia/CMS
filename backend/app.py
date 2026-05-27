@@ -1121,8 +1121,19 @@ def upload_adt1(aid):
 @login_required
 def list_shareholders(cid):
     conn=get_db(); c=conn.cursor()
-    c.execute("SELECT * FROM shareholders WHERE company_id=%s AND is_active=1 ORDER BY name",(cid,))
-    return jsonify(rows(c.fetchall()))
+    date_from = request.args.get('date_from','')
+    date_to   = request.args.get('date_to','')
+    sql = "SELECT * FROM shareholders WHERE company_id=%s AND is_active=1"
+    params = [cid]
+    if date_from:
+        sql += " AND date_of_entry >= %s"; params.append(date_from)
+    if date_to:
+        sql += " AND date_of_entry <= %s"; params.append(date_to)
+    sql += " ORDER BY name"
+    c.execute(sql, params)
+    result = rows(c.fetchall())
+    conn.close()
+    return jsonify(result)
 
 @app.route("/api/shareholders", methods=["GET","POST"])
 @login_required
@@ -1140,12 +1151,12 @@ def create_shareholder():
     d=request.get_json(silent=True, force=True) or {}; sid=str(uuid.uuid4()); conn=get_db(); c=conn.cursor()
     c.execute("""INSERT INTO shareholders
         (id,company_id,name,folio_no,pan,email,mobile,address,share_class,shares_held,face_value,
-         date_of_entry,mca_user_id,mca_password,tenant_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+         date_of_entry,mca_user_id,mca_password,distinctive_no_from,distinctive_no_to,tenant_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (sid,d["company_id"],d["name"],d.get("folio_no"),_str((d.get("pan") or "").upper()),
          d.get("email"),d.get("mobile"),d.get("address"),d.get("share_class","Equity"),
          _num(d.get("shares_held",0),cast=int),_num(d.get("face_value",10),default=10),_dt(d.get("date_of_entry")),
-         d.get("mca_user_id"),d.get("mca_password"),g.tenant_id))
+         d.get("mca_user_id"),d.get("mca_password"),d.get("distinctive_no_from"),d.get("distinctive_no_to"),g.tenant_id))
     conn.commit()
     c.execute("SELECT * FROM shareholders WHERE id=%s",(sid,)); result=row(c.fetchone()); conn.close()
     return jsonify(result),201
@@ -1156,7 +1167,8 @@ def update_shareholder(sid):
     if not can("shareholder","update"): return jsonify({"error":"Insufficient permissions"}),403
     d=request.get_json(silent=True, force=True) or {}
     fields={k:d[k] for k in ["name","folio_no","pan","email","mobile","address","share_class",
-             "shares_held","face_value","is_active","mca_user_id","mca_password"] if k in d}
+             "shares_held","face_value","is_active","mca_user_id","mca_password",
+             "distinctive_no_from","distinctive_no_to"] if k in d}
     conn=get_db(); c=conn.cursor()
     c.execute(f"UPDATE shareholders SET {','.join(k+'=%s' for k in fields)} WHERE id=%s",list(fields.values())+[sid])
     conn.commit(); c.execute("SELECT * FROM shareholders WHERE id=%s",(sid,)); result=row(c.fetchone()); conn.close()
@@ -1178,6 +1190,157 @@ def hard_delete_shareholder(sid):
     conn=get_db(); c=conn.cursor()
     c.execute("DELETE FROM shareholders WHERE id=%s",(sid,)); conn.commit(); conn.close()
     return jsonify({"success":True})
+
+
+@app.route("/api/shareholders/transfer", methods=["POST"])
+@login_required
+def transfer_shares():
+    """Transfer shares from one shareholder to another (existing or new)."""
+    if not can("shareholder","update"): return jsonify({"error":"Insufficient permissions"}),403
+    d = request.get_json(silent=True, force=True) or {}
+    transferor_id    = d.get("transferor_id","")
+    company_id       = d.get("company_id","")
+    shares_to_xfer   = int(d.get("shares_to_transfer",0))
+    transfer_date    = d.get("transfer_date","")
+    dist_from        = d.get("distinctive_no_from")
+    dist_to          = d.get("distinctive_no_to")
+    remarks          = d.get("remarks","")
+    transfer_type    = d.get("transfer_type","existing")  # "existing" or "new"
+
+    if not transferor_id or shares_to_xfer <= 0:
+        return jsonify({"error":"Invalid transferor or share count"}), 400
+
+    conn = get_db(); c = conn.cursor()
+    try:
+        # Get transferor
+        c.execute("SELECT * FROM shareholders WHERE id=%s AND is_active=1", (transferor_id,))
+        transferor = row(c.fetchone())
+        if not transferor:
+            return jsonify({"error":"Transferor not found"}), 404
+        if transferor["shares_held"] < shares_to_xfer:
+            return jsonify({"error":f"Insufficient shares. Available: {transferor['shares_held']}"}), 400
+
+        new_folio_no = None
+        transferee_id = None
+
+        if transfer_type == "existing":
+            transferee_id = d.get("transferee_id","")
+            if not transferee_id:
+                return jsonify({"error":"Select a transferee shareholder"}), 400
+            c.execute("SELECT * FROM shareholders WHERE id=%s AND is_active=1", (transferee_id,))
+            transferee = row(c.fetchone())
+            if not transferee:
+                return jsonify({"error":"Transferee not found"}), 404
+            # Add shares to existing shareholder
+            new_shares_te = (transferee["shares_held"] or 0) + shares_to_xfer
+            c.execute("""UPDATE shareholders SET shares_held=%s,
+                         distinctive_no_from=COALESCE(distinctive_no_from,%s),
+                         distinctive_no_to=COALESCE(%s,distinctive_no_to)
+                         WHERE id=%s""",
+                      (new_shares_te, dist_from, dist_to, transferee_id))
+
+        else:  # new shareholder
+            ns = d.get("new_shareholder",{})
+            if not ns.get("name"):
+                return jsonify({"error":"New shareholder name required"}), 400
+            # Generate folio number if not provided
+            new_folio_no = ns.get("folio_no","").strip()
+            if not new_folio_no:
+                c.execute("SELECT COUNT(*) as cnt FROM shareholders WHERE company_id=%s", (company_id,))
+                cnt_r = c.fetchone()
+                cnt = (cnt_r["cnt"] if isinstance(cnt_r,dict) else cnt_r[0]) if cnt_r else 0
+                new_folio_no = f"F{int(cnt or 0)+1:04d}"
+            transferee_id = str(uuid.uuid4())
+            c.execute("""INSERT INTO shareholders
+                (id,company_id,name,folio_no,pan,email,mobile,address,share_class,
+                 shares_held,face_value,date_of_entry,distinctive_no_from,distinctive_no_to,
+                 is_active,tenant_id)
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,%s)""",
+                (transferee_id, company_id, ns["name"],
+                 new_folio_no,
+                 _str((ns.get("pan") or "").upper()),
+                 ns.get("email",""), ns.get("mobile",""), ns.get("address",""),
+                 transferor.get("share_class","Equity"),
+                 shares_to_xfer, transferor.get("face_value",10),
+                 transfer_date or None,
+                 dist_from, dist_to, g.tenant_id))
+
+        # Deduct from transferor
+        remaining = transferor["shares_held"] - shares_to_xfer
+        if remaining <= 0:
+            # All shares transferred — hide the folio (is_active=0)
+            c.execute("UPDATE shareholders SET shares_held=0, is_active=0 WHERE id=%s", (transferor_id,))
+        else:
+            # Partial transfer — update shares and clear distinctive nos
+            c.execute("UPDATE shareholders SET shares_held=%s, distinctive_no_from=NULL, distinctive_no_to=NULL WHERE id=%s",
+                      (remaining, transferor_id))
+
+        # Log the transfer in share_transfers table
+        try:
+            c.execute("""INSERT INTO share_transfers
+                (id,company_id,transferor_id,transferee_id,shares_transferred,transfer_date,
+                 distinctive_no_from,distinctive_no_to,remarks,tenant_id,created_at)
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())""",
+                (str(uuid.uuid4()), company_id, transferor_id, transferee_id,
+                 shares_to_xfer, transfer_date or None,
+                 dist_from, dist_to, remarks, g.tenant_id))
+        except Exception:
+            pass  # log failure is non-fatal
+
+        conn.commit()
+        write_audit_log(g.user_id, g.tenant_id, "share_transfer", company_id,
+                        {"transferor_id":transferor_id,"shares":shares_to_xfer,"type":transfer_type})
+        return jsonify({
+            "success": True,
+            "new_folio_no": new_folio_no,
+            "remaining_shares": remaining if remaining > 0 else 0,
+            "transferee_hidden": remaining <= 0
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+
+@app.route("/api/companies/<cid>/share-capital-check")
+@login_required
+def share_capital_check(cid):
+    """Check if total shares held match company subscribed share capital."""
+    conn = get_db(); c = conn.cursor()
+    try:
+        # Total shares held by active shareholders
+        c.execute("SELECT COALESCE(SUM(shares_held),0) as total FROM shareholders WHERE company_id=%s AND is_active=1", (cid,))
+        r1 = c.fetchone()
+        total_held = int((r1["total"] if isinstance(r1,dict) else r1[0]) or 0)
+
+        # Company subscribed/paid-up capital (in face value units)
+        c.execute("SELECT paid_up_capital, authorized_capital FROM companies WHERE id=%s", (cid,))
+        r2 = row(c.fetchone())
+        subscribed_capital = 0
+        if r2:
+            # paid_up_capital is in rupees, face_value typically 10
+            # Get face value from first shareholder
+            c.execute("SELECT face_value FROM shareholders WHERE company_id=%s AND is_active=1 LIMIT 1", (cid,))
+            r3 = c.fetchone()
+            fv = float((r3["face_value"] if isinstance(r3,dict) else r3[0]) if r3 else 10) or 10
+            subscribed_capital = int((r2.get("paid_up_capital") or 0) / fv)
+
+        matched    = subscribed_capital == 0 or total_held == subscribed_capital
+        difference = total_held - subscribed_capital
+        return jsonify({
+            "matched": matched,
+            "total_shares_held": total_held,
+            "subscribed_capital": subscribed_capital,
+            "difference": difference,
+            "flag": not matched
+        })
+    except Exception as e:
+        return jsonify({"matched": True, "error": str(e)})
+    finally:
+        conn.close()
+
 
 # ══ DSC RECORDS ══════════════════════════════════════════════════════════════
 @app.route("/api/dsc")

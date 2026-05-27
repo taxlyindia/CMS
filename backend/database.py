@@ -941,6 +941,20 @@ def ensure_columns():
         cur = raw.cursor()
         # companies → parent_company_id, group_role
         existing = {row[1] for row in cur.execute("PRAGMA table_info(companies)")}
+        # shareholders distinctive_no columns (migration)
+        sh_existing = {r[1] for r in cur.execute("PRAGMA table_info(shareholders)")}
+        if "distinctive_no_from" not in sh_existing:
+            cur.execute("ALTER TABLE shareholders ADD COLUMN distinctive_no_from INTEGER")
+        if "distinctive_no_to" not in sh_existing:
+            cur.execute("ALTER TABLE shareholders ADD COLUMN distinctive_no_to INTEGER")
+        # share_transfers table (migration)
+        try:
+            cur.execute("CREATE TABLE IF NOT EXISTS share_transfers ("
+                        "id TEXT PRIMARY KEY, company_id TEXT, transferor_id TEXT, transferee_id TEXT,"
+                        "shares_transferred INTEGER, transfer_date TEXT, distinctive_no_from INTEGER,"
+                        "distinctive_no_to INTEGER, remarks TEXT, tenant_id TEXT, created_at TEXT)")
+        except Exception: pass
+
         if "parent_company_id" not in existing:
             cur.execute("ALTER TABLE companies ADD COLUMN parent_company_id TEXT")
         if "group_role" not in existing:
