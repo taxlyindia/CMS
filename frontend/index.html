@@ -6302,7 +6302,7 @@ async function loadShareholders() {
       </tr></thead>
       <tbody>${shs.map(s => {
         const pct = total ? ((s.shares_held / total) * 100).toFixed(2) : '0.00';
-        const isHistorical = s.is_active === 0 || s.is_active === '0';
+        const isHistorical = s.is_historical === true || s.is_historical === 1 || s.is_active === 0 || s.is_active === '0';
         return `
         <tr style="${isHistorical ? 'opacity:0.72;background:rgba(251,191,36,0.06);' : ''}">
           <td style="font-weight:600">
@@ -6313,7 +6313,10 @@ async function loadShareholders() {
           <td><code>${s.pan || '—'}</code></td>
           <td style="white-space:nowrap">${s.mobile || '—'}</td>
           <td><span class="badge b-blue">${s.share_class}</span></td>
-          <td style="font-weight:700;font-family:var(--font-mono)">${(s.shares_held || 0).toLocaleString('en-IN')}</td>
+          <td style="font-weight:700;font-family:var(--font-mono)">
+            ${(s.shares_held || 0).toLocaleString('en-IN')}
+            ${isHistorical ? '<div style="font-size:9.5px;font-weight:600;color:#92400e;margin-top:1px">period shares</div>' : ''}
+          </td>
           <td style="font-family:var(--font-mono);font-size:12px">${s.distinctive_no_from || '—'}</td>
           <td style="font-family:var(--font-mono);font-size:12px">${s.distinctive_no_to || '—'}</td>
           <td style="font-family:var(--font-mono)">${pct}%</td>
@@ -6330,7 +6333,7 @@ async function loadShareholders() {
       </tbody>
     </table>
     <div class="tfoot" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <span>Total: <strong>${total.toLocaleString('en-IN')}</strong> shares across <strong>${shs.length}</strong> holder(s)
+      <span>${(PB.from||PB.to) ? 'Period total:' : 'Total:'} <strong>${total.toLocaleString('en-IN')}</strong> shares across <strong>${shs.length}</strong> holder(s)
         ${shs.some(s=>s.is_active===0||s.is_active==='0') ? '<span style="margin-left:10px;font-size:11px;color:#92400e;background:#fef3c7;padding:2px 8px;border-radius:4px;border:1px solid #fde68a">⚡ Includes historical holders for selected period</span>' : ''}
       </span>
       ${capMatchBadge}
