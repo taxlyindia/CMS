@@ -5939,7 +5939,7 @@ async function downloadKYCExcel() {
 }
 
 
-async function openDirModal(id = null, cid = null) {
+async async function openDirModal(id = null, cid = null) {
   let ed = {};
   if (id) {
     const allDirs = await api('/api/directors');
@@ -5994,7 +5994,7 @@ async function saveDir(id) {
   const rd = id
     ? await api(`/api/directors/${id}`, { method: 'PUT', body: b })
     : await api('/api/directors', { method: 'POST', body: b });
-  if (!rd) return;
+  if (!rd || rd.error) { toast(rd?.error || 'Failed to save director', 'err'); return; }
   toast(id ? 'Director updated ✓' : 'Director added ✓', 'ok');
   closeModal(); loadDirectors();
 }
