@@ -6302,9 +6302,13 @@ async function loadShareholders() {
       </tr></thead>
       <tbody>${shs.map(s => {
         const pct = total ? ((s.shares_held / total) * 100).toFixed(2) : '0.00';
+        const isHistorical = s.is_active === 0 || s.is_active === '0';
         return `
-        <tr>
-          <td style="font-weight:600">${s.name}</td>
+        <tr style="${isHistorical ? 'opacity:0.72;background:rgba(251,191,36,0.06);' : ''}">
+          <td style="font-weight:600">
+            ${s.name}
+            ${isHistorical ? '<span style="display:inline-block;margin-left:6px;padding:1px 7px;background:#fef3c7;color:#92400e;border-radius:4px;font-size:10px;font-weight:700;border:1px solid #fde68a">Transferred</span>' : ''}
+          </td>
           <td><code>${s.folio_no || '—'}</code></td>
           <td><code>${s.pan || '—'}</code></td>
           <td style="white-space:nowrap">${s.mobile || '—'}</td>
@@ -6325,8 +6329,10 @@ async function loadShareholders() {
       }).join('')}
       </tbody>
     </table>
-    <div class="tfoot" style="display:flex;align-items:center;justify-content:space-between">
-      <span>Total: <strong>${total.toLocaleString('en-IN')}</strong> shares across <strong>${shs.length}</strong> holder(s)</span>
+    <div class="tfoot" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <span>Total: <strong>${total.toLocaleString('en-IN')}</strong> shares across <strong>${shs.length}</strong> holder(s)
+        ${shs.some(s=>s.is_active===0||s.is_active==='0') ? '<span style="margin-left:10px;font-size:11px;color:#92400e;background:#fef3c7;padding:2px 8px;border-radius:4px;border:1px solid #fde68a">⚡ Includes historical holders for selected period</span>' : ''}
+      </span>
       ${capMatchBadge}
     </div></div>`;
 }
@@ -14331,7 +14337,7 @@ async function openTransferShareModal(shId, cid) {
       </div>
       <div class="fg">
         <label class="fl">Transfer Date</label>
-        <input class="fc" id="tr-date" type="date" value="${new Date().toISOString().split('T')[0]}">
+        <input class="fc" id="tr-date" type="date" placeholder="Select transfer date" required>
       </div>
     </div>
     <div class="fg2">
@@ -14369,6 +14375,7 @@ async function doTransferShare(shId, cid) {
   const remarks    = document.getElementById('tr-remarks')?.value || '';
 
   if (!shares || shares <= 0) { toast('Enter number of shares to transfer', 'err'); return; }
+  if (!trDate) { toast('Select a transfer date', 'err'); return; }
 
   let payload = { transferor_id: shId, company_id: cid, shares_to_transfer: shares,
                   transfer_date: trDate, distinctive_no_from: distFrom, distinctive_no_to: distTo,
