@@ -1147,15 +1147,91 @@ def list_shareholders(cid):
     conn=get_db(); c=conn.cursor()
     date_from = request.args.get('date_from','')
     date_to   = request.args.get('date_to','')
-    sql = "SELECT * FROM shareholders WHERE company_id=%s AND is_active=1"
-    params = [cid]
-    if date_from:
-        sql += " AND date_of_entry >= %s"; params.append(date_from)
-    if date_to:
-        sql += " AND date_of_entry <= %s"; params.append(date_to)
-    sql += " ORDER BY name"
-    c.execute(sql, params)
-    result = rows(c.fetchall())
+
+    if not date_from and not date_to:
+        # No period filter — show only current active holders (snapshot view)
+        c.execute("SELECT * FROM shareholders WHERE company_id=%s AND is_active=1 ORDER BY name", (cid,))
+        result = rows(c.fetchall())
+        conn.close()
+        return jsonify(result)
+
+    # Period filter applied — show shareholders whose tenure OVERLAPS the requested window.
+    # A shareholder's tenure: [date_of_entry .. transfer_date (or today if still active)]
+    # We include a record if: date_of_entry <= date_to  AND  (is_active=1 OR transfer_date >= date_from)
+    # We get transfer_date from the share_transfers table (max transfer_date for each transferor).
+    try:
+        sql = """
+            SELECT s.*,
+                   COALESCE(
+                       (SELECT MAX(t.transfer_date)
+                        FROM share_transfers t
+                        WHERE t.transferor_id = s.id
+                        ORDER BY t.transfer_date DESC LIMIT 1),
+                       NULL
+                   ) AS transfer_date
+            FROM shareholders s
+            WHERE s.company_id = %s
+              AND (
+                  -- Active holders who existed at some point in or before the window
+                  (s.is_active = 1 {date_to_clause})
+                  OR
+                  -- Inactive (transferred) holders whose tenure overlaps the window:
+                  -- they entered before/on date_to AND were transferred on/after date_from
+                  (s.is_active = 0
+                   {inactive_entry_clause}
+                   AND (
+                       -- transfer happened on or after window start (so they held shares during the window)
+                       EXISTS (
+                           SELECT 1 FROM share_transfers t2
+                           WHERE t2.transferor_id = s.id
+                           {transfer_from_clause}
+                       )
+                       -- or no transfer record but entry date is in window (fallback)
+                       OR NOT EXISTS (SELECT 1 FROM share_transfers t3 WHERE t3.transferor_id = s.id)
+                   )
+                  )
+              )
+            ORDER BY s.name, s.date_of_entry
+        """
+        # Build clause fragments
+        params = [cid]
+        date_to_clause = ""
+        inactive_entry_clause = ""
+        transfer_from_clause  = ""
+
+        if date_to:
+            date_to_clause = "AND s.date_of_entry <= %s"
+            params.append(date_to)
+            inactive_entry_clause = "AND s.date_of_entry <= %s"
+            params.append(date_to)
+        if date_from:
+            transfer_from_clause = "AND t2.transfer_date >= %s"
+            params.append(date_from)
+
+        # Substitute clause fragments into SQL
+        final_sql = sql.format(
+            date_to_clause=date_to_clause,
+            inactive_entry_clause=inactive_entry_clause,
+            transfer_from_clause=transfer_from_clause,
+        )
+        c.execute(final_sql, params)
+        result = rows(c.fetchall())
+    except Exception as _e:
+        # Fallback: simple query showing active + inactive records in date range
+        app.logger.warning(f"list_shareholders advanced query failed: {_e}")
+        sql2 = "SELECT * FROM shareholders WHERE company_id=%s AND ("
+        sql2 += "is_active=1"
+        params2 = [cid]
+        if date_to:
+            sql2 += " OR (is_active=0 AND date_of_entry <= %s)"
+            params2.append(date_to)
+        if date_from:
+            sql2 += " AND date_of_entry >= %s"
+            params2.append(date_from)
+        sql2 += ") ORDER BY name"
+        c.execute(sql2, params2)
+        result = rows(c.fetchall())
+
     conn.close()
     return jsonify(result)
 
