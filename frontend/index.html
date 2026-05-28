@@ -5752,11 +5752,13 @@ async function loadDirectors() {
           <td style="font-size:12.5px;white-space:nowrap">${d.mobile || '—'}</td>
           <td style="font-size:12px">${d.email || '—'}</td>
           <td style="font-size:12px">${fd(d.date_of_appointment)}</td>
+          <td style="font-size:12px">${d.date_of_resignation ? '<span style="color:#dc2626;font-weight:600">' + fd(d.date_of_resignation) + '</span>' : '<span style="color:var(--text3)">—</span>'}</td>
           <td>${d.is_active===0||d.is_active===false ? '<span class="badge b-gray">Resigned</span>' : '<span class="badge b-green">Active</span>'}</td>
           <td>${d.mca_user_id ? credSpan(d.mca_user_id, 'MCA User ID') : '—'}</td>
           <td>${d.mca_password ? credSpan(d.mca_password, 'MCA Password') : '—'}</td>
           <td><div class="td-actions">
             <button class="btn btn-xs btn-ghost" onclick="openDirModal('${d.id}','${d.company_id}')">Edit</button>
+            ${!d.date_of_resignation ? `<button class="btn btn-xs btn-warning" style="background:rgba(220,38,38,.1);color:#dc2626;border-color:#fca5a5" onclick="openResignModal('${d.id}','${d.name}')" title="Resign this director">🚪 Resign</button>` : `<span style="font-size:10.5px;color:#dc2626;font-weight:600;padding:2px 7px;background:#fee2e2;border-radius:4px;border:1px solid #fca5a5">Resigned ${fd(d.date_of_resignation)}</span>`}
             <button class="btn btn-xs btn-warning" onclick="deactivateDir('${d.id}')" title="Deactivate">⏸ Off</button>
             <button class="btn btn-xs btn-danger" onclick="hardDeleteDir('${d.id}')" title="Permanently delete">🗑 Del</button>
           </div></td>
@@ -5969,6 +5971,7 @@ async function openDirModal(id = null, cid = null) {
     </div>
     <div class="fg"><label class="fl">MCA Notes</label>
       <textarea class="fc" id="dir-mca-notes" placeholder="e.g. OTP linked to mobile 98XXXXXX10, password changed April 2024">${ed.mca_notes||''}</textarea></div>
+    <div id="dir-resign-info" style="display:none;margin-top:8px"></div>
   `, `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveDir(${id ? `'${id}'` : 'null'})">${id ? 'Update Director' : 'Add Director'}</button>`, 'lg');
 }
@@ -5998,6 +6001,49 @@ async function saveDir(id) {
   toast(id ? 'Director updated ✓' : 'Director added ✓', 'ok');
   closeModal(); loadDirectors();
 }
+
+// ── Director Resignation ─────────────────────────────────────────────────
+function openResignModal(dirId, dirName) {
+  openModal('🚪 Director Resignation — ' + dirName, `
+    <div style="background:rgba(220,38,38,0.06);border:1px solid #fca5a5;border-radius:var(--r);padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:12.5px;font-weight:700;color:#dc2626">⚠️ Resignation</div>
+      <div style="font-size:12px;color:#7f1d1d;margin-top:3px">
+        This will mark <strong>${dirName}</strong> as resigned.
+        Their record will be preserved for historical period searches.
+        They will be removed from DIR-KYC if not active in any other company.
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Resignation Date <span class="req">*</span></label>
+      <input class="fc" id="resign-date" type="date" required>
+    </div>
+    <div class="fg">
+      <label class="fl">Reason / Remarks (optional)</label>
+      <textarea class="fc" id="resign-reason" placeholder="e.g. Resigned voluntarily, Change of business, End of tenure..." style="min-height:70px"></textarea>
+    </div>
+  `, [
+    { text: '🚪 Confirm Resignation', cls: 'btn-danger', fn: "doResignDirector('" + dirId + "')" },
+    { text: 'Cancel', cls: 'btn-outline', fn: 'closeModal()' }
+  ]);
+}
+
+async function doResignDirector(dirId) {
+  const resignDate = document.getElementById('resign-date')?.value;
+  const reason     = document.getElementById('resign-reason')?.value || '';
+  if (!resignDate) { toast('Select a resignation date', 'err'); return; }
+  const r = await api(`/api/directors/${dirId}/resign`, {
+    method: 'POST',
+    body: { date_of_resignation: resignDate, resignation_reason: reason }
+  });
+  if (r?.success) {
+    toast('Director resigned ✓', 'ok');
+    closeModal();
+    loadDirectors();
+  } else {
+    toast(r?.error || 'Failed to process resignation', 'err');
+  }
+}
+
 
 function openKYCModal(did, name, lastFiled, currentDue) {
   // Default due date: Sept 30 of next financial year
