@@ -880,9 +880,48 @@ def all_directors():
 @login_required
 def list_directors(cid):
     conn=get_db(); c=conn.cursor()
-    c.execute("""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status FROM directors d
-                 LEFT JOIN director_kyc k ON d.id=k.director_id WHERE d.company_id=%s ORDER BY d.name""",(cid,))
-    return jsonify(rows(c.fetchall()))
+    date_from = request.args.get('date_from','').strip()
+    date_to   = request.args.get('date_to','').strip()
+    try:
+        c.execute(
+            "SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status FROM directors d "
+            "LEFT JOIN director_kyc k ON d.id=k.director_id "
+            "WHERE d.company_id=%s ORDER BY d.name",
+            (cid,))
+        all_dirs = rows(c.fetchall()) or []
+        conn.close()
+
+        if not date_from and not date_to:
+            # No filter: show only active (not resigned/ceased)
+            result = [r for r in all_dirs if int(r.get('is_active',1) or 1) != 0]
+        else:
+            # Period filter: show directors whose tenure overlaps the window
+            result = []
+            for r in all_dirs:
+                entry = str(r.get('date_of_appointment') or r.get('created_at') or '').split('T')[0]
+                # Exit = resignation date OR cessation date, whichever is set
+                resign = str(r.get('date_of_resignation') or r.get('date_of_cessation') or '').split('T')[0]
+                active = int(r.get('is_active',1) or 1)
+
+                if active == 1:
+                    # Still active: include if appointed before window ends
+                    if date_to and entry and entry > date_to:
+                        continue
+                    result.append(r)
+                else:
+                    # Resigned/ceased: include if tenure overlaps window
+                    if date_to and entry and entry > date_to:
+                        continue   # joined after window closes
+                    if date_from and resign and resign < date_from:
+                        continue   # left before window opens
+                    r = dict(r); r['is_historical'] = True
+                    result.append(r)
+        return jsonify(result)
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        app.logger.error(f"list_directors error: {e}")
+        return jsonify([])
 
 
 @app.route("/api/dir-kyc", methods=["GET","POST"])
@@ -902,29 +941,67 @@ def dir_kyc_list():
                    d.get("mobile"), d.get("email"), d.get("address"), g.tenant_id))
         conn.commit(); conn.close()
         return jsonify({"id": eid, "success": True}), 201
-    """Return one KYC record per DIN — deduped across companies."""
+    """Return one KYC record per DIN — deduped across companies.
+    Excludes directors who are resigned/inactive in ALL their companies.
+    A director only appears if they are still active in at least one company.
+    """
     conn=get_db(); c=conn.cursor()
-    c.execute("""
-        SELECT d.id, d.name, d.din, d.mobile, d.email,
-               MAX(k.last_kyc_date) AS last_kyc_date,
-               MIN(k.next_due_date) AS next_due_date,
-               k.kyc_status,
-               GROUP_CONCAT(DISTINCT co.name) AS company_names
-        FROM directors d
-        LEFT JOIN director_kyc k ON d.id=k.director_id
-        LEFT JOIN companies co ON d.company_id=co.id
-        WHERE d.is_active=1
-        GROUP BY d.din, d.name, d.mobile, d.email
-        ORDER BY d.name
-    """)
-    results = []
-    for r in c.fetchall():
-        rec = dict(r)
-        cos = rec.pop('company_names','') or ''
-        rec['companies'] = [c.strip() for c in cos.split('|||') if c.strip()]
-        results.append(rec)
-    conn.close()
-    return jsonify(results)
+    try:
+        # Fetch all directors for this tenant (active AND inactive)
+        # Then exclude those whose DIN has NO active record in any company
+        c.execute(
+            "SELECT d.id, d.name, d.din, d.mobile, d.email, d.is_active, "
+            "       d.date_of_resignation, d.company_id, "
+            "       k.last_kyc_date, k.next_due_date, k.kyc_status, "
+            "       co.name AS company_name "
+            "FROM directors d "
+            "LEFT JOIN director_kyc k ON d.id=k.director_id "
+            "LEFT JOIN companies co ON d.company_id=co.id "
+            "WHERE d.tenant_id=%s "
+            "ORDER BY d.name",
+            (g.tenant_id,))
+        all_dirs = rows(c.fetchall()) or []
+        conn.close()
+
+        # Group by DIN — find which DINs have at least one active record
+        from collections import defaultdict
+        by_din = defaultdict(list)
+        for dr in all_dirs:
+            din_key = (dr.get('din') or dr.get('id',''))
+            by_din[din_key].append(dr)
+
+        results = []
+        seen_dins = set()
+        for din_key, records in by_din.items():
+            if din_key in seen_dins:
+                continue
+            # Check if this DIN has at least one active record
+            has_active = any(int(r.get('is_active',1) or 1) == 1 for r in records)
+            if not has_active:
+                # Director resigned from ALL companies — exclude from DIR-KYC
+                continue
+            seen_dins.add(din_key)
+            # Use the active record(s) for KYC data
+            active_recs = [r for r in records if int(r.get('is_active',1) or 1) == 1]
+            best = active_recs[0] if active_recs else records[0]
+            company_names = list({r.get('company_name','') for r in active_recs if r.get('company_name')})
+            results.append({
+                'id':            best.get('id'),
+                'name':          best.get('name'),
+                'din':           best.get('din'),
+                'mobile':        best.get('mobile'),
+                'email':         best.get('email'),
+                'last_kyc_date': best.get('last_kyc_date'),
+                'next_due_date': best.get('next_due_date'),
+                'kyc_status':    best.get('kyc_status'),
+                'companies':     company_names,
+            })
+        return jsonify(results)
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        app.logger.error(f"dir_kyc_list error: {e}")
+        return jsonify([])
 
 
 @app.route("/api/directors", methods=["POST"])
@@ -965,34 +1042,56 @@ def create_director():
 @login_required
 def update_director(did):
     if not can("director","update"): return jsonify({"error":"Insufficient permissions"}),403
-    d=request.get_json(silent=True, force=True) or {}; conn=get_db(); c=conn.cursor()
-    _rdir = {k:d[k] for k in ["name","din","pan","aadhaar","email","mobile","address","designation",
-             "date_of_appointment","date_of_cessation","is_active","mca_user_id","mca_password","mca_notes"] if k in d}
-    fields = {}
-    for _k,_v in _rdir.items():
-        if _k in ("date_of_appointment","date_of_cessation"): fields[_k] = _dt(_v)
-        elif _k in ("din","pan"): fields[_k] = _str(_v)
-        else: fields[_k] = _v
-    if fields:
-        c.execute(f"UPDATE directors SET {','.join(k+'=%s' for k in fields)} WHERE id=%s",list(fields.values())+[did])
-    # Update KYC record if any KYC field was sent
-    if "last_kyc_date" in d or "next_due_date" in d:
-        # Use manually provided due date if given, else auto-calculate
-        due = _dt(d["next_due_date"]) if d.get("next_due_date") else _kyc_due()
-        st  = _kyc_status(due)
-        last_kyc = _dt(d["last_kyc_date"]) if d.get("last_kyc_date") else None
-        if last_kyc:
-            c.execute("UPDATE director_kyc SET last_kyc_date=%s,next_due_date=%s,kyc_status=%s,updated_at=NOW() WHERE director_id=%s",
-                      (last_kyc, due, st, did))
-        else:
-            # Only due date changed, preserve existing last_kyc_date
-            c.execute("UPDATE director_kyc SET next_due_date=%s,kyc_status=%s,updated_at=NOW() WHERE director_id=%s",
-                      (due, st, did))
-    conn.commit()
-    c.execute("""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status FROM directors d
-                 LEFT JOIN director_kyc k ON d.id=k.director_id WHERE d.id=%s""",(did,))
-    result=row(c.fetchone()); conn.close(); return jsonify(result)
-
+    d = request.get_json(silent=True, force=True) or {}
+    conn = get_db(); c = conn.cursor()
+    try:
+        allowed = ["name","din","pan","aadhaar","email","mobile","address","designation",
+                   "date_of_appointment","date_of_cessation","date_of_resignation",
+                   "resignation_reason","is_active","mca_user_id","mca_password","mca_notes"]
+        _rdir = {k: d[k] for k in allowed if k in d}
+        fields = {}
+        for _k, _v in _rdir.items():
+            if _k in ("date_of_appointment","date_of_cessation","date_of_resignation"):
+                fields[_k] = _dt(_v)
+            elif _k in ("din","pan"):
+                fields[_k] = _str(_v)
+            else:
+                fields[_k] = _v
+        if fields:
+            c.execute(
+                f"UPDATE directors SET {','.join(k+'=%s' for k in fields)} WHERE id=%s",
+                list(fields.values()) + [did]
+            )
+        # Update KYC if KYC fields sent
+        if "last_kyc_date" in d or "next_due_date" in d:
+            import datetime as _dt2
+            due      = _dt(d["next_due_date"]) if d.get("next_due_date") else _kyc_due()
+            st       = _kyc_status(due)
+            last_kyc = _dt(d["last_kyc_date"]) if d.get("last_kyc_date") else None
+            if last_kyc:
+                c.execute(
+                    "UPDATE director_kyc SET last_kyc_date=%s,next_due_date=%s,"
+                    "kyc_status=%s,updated_at=%s WHERE director_id=%s",
+                    (last_kyc, due, st, _dt2.datetime.utcnow().isoformat(), did))
+            else:
+                c.execute(
+                    "UPDATE director_kyc SET next_due_date=%s,kyc_status=%s,"
+                    "updated_at=%s WHERE director_id=%s",
+                    (due, st, _dt2.datetime.utcnow().isoformat(), did))
+        conn.commit()
+        c.execute(
+            "SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status FROM directors d "
+            "LEFT JOIN director_kyc k ON d.id=k.director_id WHERE d.id=%s", (did,))
+        result = row(c.fetchone())
+        conn.close()
+        return jsonify(result)
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
+        try: conn.close()
+        except Exception: pass
+        app.logger.error(f"update_director error: {e}")
+        return jsonify({"error": str(e)}), 500
 @app.route("/api/directors/<did>", methods=["DELETE"])
 @login_required
 def delete_director(did):
@@ -5436,6 +5535,8 @@ def _startup():
         _add_col_safe(_mc, "shareholders", "distinctive_no_from", "BIGINT")
         _add_col_safe(_mc, "shareholders", "mca_notes", "TEXT")
         _add_col_safe(_mc, "shareholders", "distinctive_no_to",   "BIGINT")
+        _add_col_safe(_mc, "directors",    "date_of_resignation",  "TEXT")
+        _add_col_safe(_mc, "directors",    "resignation_reason",   "TEXT")
         _mc_cur = _mc.cursor()
         _mc_cur.execute(
             "CREATE TABLE IF NOT EXISTS share_transfers ("
@@ -6831,6 +6932,41 @@ def debug_shareholders(cid):
         try: conn.close()
         except Exception: pass
         return jsonify({'error':str(e)}),500
+
+
+
+@app.route("/api/directors/<did>/resign", methods=["POST"])
+@login_required
+def resign_director(did):
+    """Mark director as resigned with a resignation date."""
+    if not can("director","update"): return jsonify({"error":"Insufficient permissions"}),403
+    d = request.get_json(silent=True, force=True) or {}
+    resign_date = d.get("date_of_resignation","")
+    reason      = d.get("resignation_reason","")
+    if not resign_date:
+        return jsonify({"error":"Resignation date is required"}), 400
+
+    conn = get_db(); c = conn.cursor()
+    try:
+        # Add columns if they don't exist yet
+        _add_col_safe(conn, "directors", "date_of_resignation", "TEXT")
+        _add_col_safe(conn, "directors", "resignation_reason",  "TEXT")
+
+        c.execute(
+            "UPDATE directors SET is_active=0, date_of_resignation=%s, "
+            "date_of_cessation=%s, resignation_reason=%s WHERE id=%s",
+            (resign_date, resign_date, reason, did))
+        conn.commit()
+        c.execute("SELECT * FROM directors WHERE id=%s", (did,))
+        result = row(c.fetchone())
+        conn.close()
+        write_audit_log(g.user_id, g.tenant_id, "director_resign", did,
+                        {"date": resign_date, "reason": reason})
+        return jsonify({"success": True, "director": result})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({"error": str(e)}), 500
 
 
 # ════════════════════════════════════════════════════════════════════════════
