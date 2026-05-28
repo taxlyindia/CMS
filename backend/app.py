@@ -7553,6 +7553,20 @@ def portal_revoke(link_id):
 # WHATSAPP ENHANCED ENDPOINTS
 # ════════════════════════════════════════════════════════════════════════════
 
+
+@app.route("/api/portal/links/<link_id>", methods=["DELETE"])
+@login_required
+def portal_delete_link(link_id):
+    """Permanently delete a portal link."""
+    db = get_db(); cur = db.cursor()
+    cur.execute("DELETE FROM portal_links WHERE id=%s AND tenant_id=%s",
+                (link_id, g.tenant_id))
+    affected = cur.rowcount
+    db.commit(); db.close()
+    if affected == 0:
+        return jsonify({"error": "Link not found"}), 404
+    return jsonify({"success": True})
+
 @app.route('/api/notifications/wa-templates', methods=['GET', 'POST'])
 @login_required
 def wa_templates():
