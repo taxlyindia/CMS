@@ -6382,9 +6382,11 @@ async function saveSh(id) {
     distinctive_no_to:   document.getElementById('sh-dist-to')?.value   ? parseInt(document.getElementById('sh-dist-to').value)   : null,
   };
   if (!b.name || !b.company_id) { toast('Company and name required', 'err'); return; }
-  if (id) await api(`/api/shareholders/${id}`, { method: 'PUT', body: b });
-  else await api('/api/shareholders', { method: 'POST', body: b });
-  toast(id ? 'Updated' : 'Shareholder added ✓', 'ok');
+  const r = id
+    ? await api(`/api/shareholders/${id}`, { method: 'PUT', body: b })
+    : await api('/api/shareholders', { method: 'POST', body: b });
+  if (!r || r.error) { toast(r?.error || 'Failed to save shareholder', 'err'); return; }
+  toast(id ? 'Shareholder updated ✓' : 'Shareholder added ✓', 'ok');
   closeModal(); loadShareholders();
 }
 
