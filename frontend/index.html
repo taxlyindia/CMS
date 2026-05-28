@@ -13558,6 +13558,8 @@ async function generatePortalLink(coId) {
     linkMeta.textContent = `${exp} · Access: ${access.replace('_',' ')} · ${password?'🔒 Password protected':'🔓 No password'}${client?' · Client: '+client:''}`;
   }
   toast('Portal link generated ✓','ok');
+  loadPortalLinks();
+  closeModal();
 }
 
 async function managePortalLinks(coId) {
@@ -14033,15 +14035,16 @@ async function loadPortalLinks() {
   if (!tbl) return;
   tbl.innerHTML = links.length ? `<table><thead><tr><th>Company</th><th>Client</th><th>Access</th><th>Expires</th><th>Views</th><th>Status</th><th></th></tr></thead><tbody>${
     links.map(l=>`<tr>
-      <td style="font-weight:600">${COMPANIES.find(c=>c.id===l.company_id)?.name||'—'}</td>
+      <td style="font-weight:600">${l.company_name || COMPANIES.find(c=>c.id===l.company_id)?.name||'—'}</td>
       <td>${l.client_name||'—'}</td>
       <td><span class="badge b-blue">${(l.access_level||'').replace('_',' ')}</span></td>
       <td style="font-size:11.5px">${l.expires_at?new Date(l.expires_at).toLocaleDateString('en-IN'):'Never'}</td>
       <td>${l.view_count||0}</td>
       <td><span class="badge ${l.active?'b-green':'b-gray'}">${l.active?'Active':'Revoked'}</span></td>
       <td style="display:flex;gap:4px">
-        <button class="btn btn-xs btn-outline" onclick="navigator.clipboard.writeText('${location.origin}/portal/'+l.token).then(()=>toast('Copied','ok'))">📋</button>
-        <button class="btn btn-xs btn-danger" onclick="revokePortalLink('${l.id}')">Revoke</button>
+        <button class="btn btn-xs btn-outline" onclick="navigator.clipboard.writeText('${location.origin}/portal/'+l.token).then(()=>toast('Copied ✓','ok'))" title="Copy link">📋</button>
+        <a class="btn btn-xs btn-ghost" href="${location.origin}/portal/${l.token}" target="_blank" title="Open portal">🌐</a>
+        ${l.active ? `<button class="btn btn-xs btn-danger" onclick="revokePortalLink('${l.id}')">Revoke</button>` : ''}
       </td>
     </tr>`).join('')
   }</tbody></table>`
