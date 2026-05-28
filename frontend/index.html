@@ -6298,6 +6298,7 @@ async function loadShareholders() {
         <th>Mobile</th><th>Share Class</th>
         <th>Shares Held</th><th>Dist. No. From</th><th>Dist. No. To</th>
         <th>% Holding</th><th>Face Value</th><th>Date of Entry</th>
+        <th>Date of Exit</th>
         <th>Actions</th>
       </tr></thead>
       <tbody>${shs.map(s => {
@@ -6322,6 +6323,7 @@ async function loadShareholders() {
           <td style="font-family:var(--font-mono)">${pct}%</td>
           <td>₹${s.face_value}</td>
           <td style="font-size:12px">${fd(s.date_of_entry)}</td>
+          <td style="font-size:12px">${s.date_of_exit ? '<span style=\"color:var(--red);font-weight:600\">' + fd(s.date_of_exit) + '</span>' : '<span style=\"color:var(--text3)\">—</span>'}</td>
           <td><div class="td-actions">
             <button class="btn btn-xs btn-ghost" onclick="openShModal('${s.id}','${cid}')">Edit</button>
             <button class="btn btn-xs btn-primary" onclick="openTransferShareModal('${s.id}','${cid}')" title="Transfer shares">⇄ Transfer</button>
