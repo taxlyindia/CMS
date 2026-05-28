@@ -31,6 +31,62 @@ from compliance import (run_compliance_checks, generate_document, build_context,
                         generate_company_master_pdf, generate_register_pdf,
                         REGISTER_DEFINITIONS)
 
+# ── Patch REGISTER_DEFINITIONS: add Distinctive No columns ──────────────────
+try:
+    if "MGT-1" in REGISTER_DEFINITIONS:
+        REGISTER_DEFINITIONS["MGT-1"]["columns"] = [
+            "Folio No","Name","PAN","Address","Share Class",
+            "Shares Held","Dist. No. From","Dist. No. To",
+            "Face Value (Rs.)","Date of Entry","Mobile","Email"
+        ]
+        REGISTER_DEFINITIONS["MGT-1"]["query"] = (
+            "SELECT folio_no,name,pan,address,share_class,shares_held,"
+            "distinctive_no_from,distinctive_no_to,face_value,date_of_entry,mobile,email "
+            "FROM shareholders WHERE company_id=%s AND is_active=1 ORDER BY folio_no"
+        )
+    if "MGT-2" in REGISTER_DEFINITIONS:
+        REGISTER_DEFINITIONS["MGT-2"]["columns"] = [
+            "Folio No","Name","PAN","Debenture Type","Amount (Rs.)",
+            "Dist. No. From","Dist. No. To","Face Value","Date of Issue","Mobile","Email"
+        ]
+        REGISTER_DEFINITIONS["MGT-2"]["query"] = (
+            "SELECT folio_no,name,pan,share_class,shares_held,"
+            "distinctive_no_from,distinctive_no_to,face_value,date_of_entry,mobile,email "
+            "FROM shareholders WHERE company_id=%s AND share_class='Debenture' ORDER BY folio_no"
+        )
+except Exception: pass
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── Patch REGISTER_DEFINITIONS with distinctive_no columns ──────────────────
+try:
+    if "MGT-1" in REGISTER_DEFINITIONS:
+        REGISTER_DEFINITIONS["MGT-1"]["columns"] = [
+            "Folio No", "Name", "PAN", "Address", "Share Class",
+            "Shares Held", "Dist. No. From", "Dist. No. To",
+            "Face Value (Rs.)", "Date of Entry", "Mobile", "Email"
+        ]
+        REGISTER_DEFINITIONS["MGT-1"]["query"] = (
+            "SELECT folio_no,name,pan,address,share_class,shares_held,"
+            "distinctive_no_from,distinctive_no_to,face_value,date_of_entry,mobile,email "
+            "FROM shareholders WHERE company_id=%s AND is_active=1 ORDER BY folio_no"
+        )
+    if "MGT-2" in REGISTER_DEFINITIONS:
+        REGISTER_DEFINITIONS["MGT-2"]["columns"] = [
+            "Folio No", "Name", "PAN", "Debenture Type",
+            "Amount (Rs.)", "Dist. No. From", "Dist. No. To",
+            "Face Value", "Date of Issue", "Mobile", "Email"
+        ]
+        REGISTER_DEFINITIONS["MGT-2"]["query"] = (
+            "SELECT folio_no,name,pan,share_class,shares_held,"
+            "distinctive_no_from,distinctive_no_to,face_value,date_of_entry,mobile,email "
+            "FROM shareholders WHERE company_id=%s AND share_class='Debenture' ORDER BY folio_no"
+        )
+except Exception as _rpe:
+    pass
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 BASE_DIR   = Path(__file__).parent
 UPLOAD_DIR = BASE_DIR / "data" / "uploads"
 ALLOWED_EXT = {".pdf",".doc",".docx",".jpg",".jpeg",".png"}
@@ -1953,6 +2009,14 @@ def register_types():
 def get_register(reg_type, cid):
     reg=REGISTER_DEFINITIONS.get(reg_type)
     if not reg: return jsonify({"error":f"Unknown register: {reg_type}"}),400
+    # Pre-flight: ensure distinctive_no columns exist for shareholder registers
+    if reg_type in ("MGT-1","MGT-2"):
+        try:
+            _mc=get_db()
+            _add_col_safe(_mc,"shareholders","distinctive_no_from","BIGINT")
+            _add_col_safe(_mc,"shareholders","distinctive_no_to","BIGINT")
+            _mc.commit(); _mc.close()
+        except Exception: pass
     conn=get_db(); c=conn.cursor()
     # Run the display query (column-based)
     c.execute(reg["query"],(cid,))
