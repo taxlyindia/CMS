@@ -6332,7 +6332,8 @@ async function loadShareholders() {
 }
 
 
-function openShModal(id = null, cid = null) {
+async function openShModal(id, cid) {
+  id = id || null; cid = cid || null;
   openModal(id ? '✏️ Edit Shareholder' : '📈 Add Shareholder', `
     <div class="fg"><label class="fl">Company <span class="req">*</span></label>
       <select class="fc" id="sh-co">${coOptions(cid || '', 'Select Company')}</select></div>
@@ -6360,7 +6361,29 @@ function openShModal(id = null, cid = null) {
       <textarea class="fc" id="sh-mca-notes" placeholder="e.g. Registered mobile for OTP: 98XXXXXX10"></textarea></div>
   `, `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveSh(${id ? `'${id}'` : 'null'})">${id ? 'Update' : 'Add Shareholder'}</button>`, 'lg');
+  if (!id) return;
+  var _d = await api('/api/shareholders/' + id);
+  if (!_d || _d.error) { toast(_d && _d.error ? _d.error : 'Failed to load shareholder', 'err'); return; }
+  function _sf(eid, val) { var el=document.getElementById(eid); if(el) el.value=(val!==null&&val!==undefined)?String(val):''; }
+  function _ss(eid, val) { var el=document.getElementById(eid); if(!el||val==null) return; var v=String(val); var o=Array.from(el.options).find(function(x){return x.value===v||x.text===v;}); if(o) el.value=o.value; }
+  _ss('sh-co',    _d.company_id);
+  _sf('sh-name',  _d.name);
+  _sf('sh-folio', _d.folio_no);
+  _sf('sh-pan',   _d.pan);
+  _sf('sh-mob',   _d.mobile);
+  _sf('sh-email', _d.email);
+  _sf('sh-addr',  _d.address);
+  _sf('sh-shares',_d.shares_held!=null?_d.shares_held:0);
+  _sf('sh-fv',    _d.face_value!=null?_d.face_value:10);
+  _sf('sh-dist-from', _d.distinctive_no_from!=null?_d.distinctive_no_from:'');
+  _sf('sh-dist-to',   _d.distinctive_no_to!=null?_d.distinctive_no_to:'');
+  if (_d.date_of_entry) _sf('sh-date', String(_d.date_of_entry).split('T')[0]);
+  _ss('sh-class', _d.share_class||'Equity');
+  _sf('sh-mca-uid',   _d.mca_user_id);
+  _sf('sh-mca-pwd',   _d.mca_password);
+  _sf('sh-mca-notes', _d.mca_notes);
 }
+
 
 async function saveSh(id) {
   const b = {
@@ -6382,11 +6405,9 @@ async function saveSh(id) {
     distinctive_no_to:   document.getElementById('sh-dist-to')?.value   ? parseInt(document.getElementById('sh-dist-to').value)   : null,
   };
   if (!b.name || !b.company_id) { toast('Company and name required', 'err'); return; }
-  const r = id
-    ? await api(`/api/shareholders/${id}`, { method: 'PUT', body: b })
-    : await api('/api/shareholders', { method: 'POST', body: b });
-  if (!r || r.error) { toast(r?.error || 'Failed to save shareholder', 'err'); return; }
-  toast(id ? 'Shareholder updated ✓' : 'Shareholder added ✓', 'ok');
+  if (id) await api(`/api/shareholders/${id}`, { method: 'PUT', body: b });
+  else await api('/api/shareholders', { method: 'POST', body: b });
+  toast(id ? 'Updated' : 'Shareholder added ✓', 'ok');
   closeModal(); loadShareholders();
 }
 
