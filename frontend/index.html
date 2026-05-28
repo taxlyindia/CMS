@@ -3104,115 +3104,88 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
     <!-- ── DOC TEMPLATES ── -->
     <div class="page" id="page-templates">
-      <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start">
 
-        <!-- Left: template list -->
-        <div>
-          <div class="filter-bar" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
-            <div class="sbar" style="width:260px;min-width:160px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="tpl-search" placeholder="Search template name…" oninput="debounce(loadTemplates,300)()"></div>
-            <select class="fc" style="flex:1;min-width:140px" id="tpl-cat-f" onchange="loadTemplates()">
-              <option value="">All Categories</option>
-              <option value="resolution">Resolutions</option>
-              <option value="notice">Notices</option>
-              <option value="minutes">Minutes</option>
-              <option value="report">Reports</option>
-              <option value="letter">Letters</option>
-              <option value="other">Other</option>
-            </select>
-            <button class="btn btn-primary btn-sm" onclick="newTemplate()">+ New</button>
-          </div>
-          <div id="tpl-list"><div class="loading"><div class="spin"></div></div></div>
-        </div>
-
-        <!-- Right: editor with placeholder helper -->
-        <div id="tpl-editor" style="display:none">
-          <div class="card" style="margin-bottom:12px">
-            <div class="card-header">
-              <div class="card-title" id="tpl-ed-title">✏️ Template Editor</div>
-              <div style="display:flex;gap:6px">
-                <button class="btn btn-xs btn-success" onclick="saveTpl()">💾 Save</button>
-                <button class="btn btn-xs btn-danger" id="tpl-del-btn" onclick="deleteTpl()" style="display:none">🗑️ Delete</button>
-              </div>
-            </div>
-            <div class="card-body">
-              <input type="hidden" id="tpl-ed-id">
-              <input type="hidden" id="tpl-ed-system" value="0">
-              <div class="fg2">
-                <div class="fg"><label class="fl">Template Name <span class="req">*</span></label>
-                  <input class="fc" id="tpl-ed-name" placeholder="e.g. Board Resolution — Loan Approval"></div>
-                <div class="fg"><label class="fl">Category</label>
-                  <select class="fc" id="tpl-ed-cat">
-                    <option value="resolution">Resolution</option><option value="notice">Notice</option>
-                    <option value="minutes">Minutes</option><option value="report">Report</option>
-                    <option value="letter">Letter</option><option value="other">Other</option>
-                  </select></div>
-              </div>
-              <div class="fg"><label class="fl">Description</label>
-                <input class="fc" id="tpl-ed-desc" placeholder="Brief description of this template's purpose"></div>
-
-              <!-- Placeholder helper panel -->
-              <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
-                <div style="font-size:11px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">
-                  📌 Click a placeholder to insert it at cursor
-                </div>
-                <div style="margin-bottom:8px">
-                  <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px">✓ AUTO-FILLED from CRM (no manual input needed)</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:4px" id="ph-auto-chips"></div>
-                </div>
-                <div>
-                  <div style="font-size:10px;font-weight:700;color:var(--orange);margin-bottom:4px">✏️ MANUAL — user fills these when generating document</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:4px" id="ph-manual-chips"></div>
-                </div>
-                <div style="margin-top:8px">
-                  <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:4px">⚡ DYNAMIC — auto-fetch all records in period (no fixed count limit)</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:4px">
-                    <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('board_meetings_list')" title="All board meetings in period, formatted list">{{board_meetings_list}}</span>
-                    <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('board_meetings_numbered')" title="Board meetings as numbered list">{{board_meetings_numbered}}</span>
-                    <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('board_meetings_count')" title="Total number of board meetings">{{board_meetings_count}}</span>
-                    <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('all_meetings_list')" title="All meetings (board + AGM)">{{all_meetings_list}}</span>
-                    <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('agm_meetings_list')" title="All AGMs in period">{{agm_meetings_list}}</span>
-                    <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('director_kyc_list')" title="Director KYC status list">{{director_kyc_list}}</span>
-                    <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('charges_list')" title="All charges in period">{{charges_list}}</span>
-                    <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('dsc_list')" title="DSC records">{{dsc_list}}</span>
-                    <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('period_from')" title="Period start date">{{period_from}}</span>
-                    <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('period_to')" title="Period end date">{{period_to}}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="fg">
-                <label class="fl" style="display:flex;align-items:center;justify-content:space-between">
-                  <span>Template Body <span class="req">*</span></span>
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <span id="tpl-ph-count" style="font-size:10.5px;color:var(--text3);font-weight:400"></span>
-                    <button class="btn btn-xs btn-outline" onclick="openCustomPhModal()" title="Create custom placeholder">+ Custom {{placeholder}}</button>
-                    <button class="btn btn-xs btn-ghost" onclick="toggleEditorMode()" id="editor-mode-btn">📝 Plain Text</button>
-                  </div>
-                </label>
-                <!-- Rich text editor (Quill) -->
-                <div id="tpl-quill-wrap">
-                  <div id="tpl-quill-editor" style="min-height:360px"></div>
-                </div>
-                <!-- Plain text fallback -->
-                <textarea class="fc" id="tpl-ed-body"
-                  style="display:none;height:380px;font-family:var(--font-mono);font-size:12px;line-height:1.8;resize:vertical"
-                  oninput="onTplBodyChange()"
-                  placeholder="Type your template here. Use {{placeholder}} syntax."></textarea>
-              </div>
-
-              <!-- Live placeholder status -->
-              <div id="tpl-ph-status" style="display:none;background:var(--bg3);border-radius:7px;padding:10px 12px;font-size:11.5px">
-                <div style="font-weight:600;color:var(--text);margin-bottom:6px">Placeholders detected in this template:</div>
-                <div id="tpl-ph-auto-list"></div>
-                <div id="tpl-ph-manual-list"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <!-- ── Tab bar ──────────────────────────────────────────────────── -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px">
+        <button id="tpl-tab-html" onclick="switchTplTab('html')"
+          style="padding:9px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid var(--primary);color:var(--primary);margin-bottom:-2px;cursor:pointer">
+          📝 HTML Templates
+        </button>
+        <button id="tpl-tab-word" onclick="switchTplTab('word')"
+          style="padding:9px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid transparent;color:var(--text3);margin-bottom:-2px;cursor:pointer">
+          📄 Word Templates (.docx)
+        </button>
       </div>
-    </div>
 
+      <!-- ══ HTML TEMPLATES PANEL ══════════════════════════════════════ -->
+      <div id="tpl-panel-html">
+        <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start">
+          <!-- Left: list -->
+          <div>
+            <div class="filter-bar" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
+              <div class="sbar" style="width:260px;min-width:160px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="tpl-search" placeholder="Search template name…" oninput="debounce(loadTemplates,300)()"></div>
+              <select class="fc" style="flex:1;min-width:140px" id="tpl-cat-f" onchange="loadTemplates()">
+                <option value="">All Categories</option>
+                <option value="resolution">Resolutions</option>
+                <option value="notice">Notices</option>
+                <option value="minutes">Minutes</option>
+                <option value="report">Reports</option>
+                <option value="letter">Letters</option>
+                <option value="other">Other</option>
+              </select>
+              <button class="btn btn-primary btn-sm" onclick="openNewTemplateModal()">+ New</button>
+            </div>
+            <div id="tpl-list"><div class="loading"><div class="spin"></div></div></div>
+          </div>
+          <!-- Right: editor/preview -->
+          <div id="tpl-editor-panel">
+            <div class="empty-state" style="padding:48px 24px">
+              <div class="empty-icon">📝</div>
+              <div class="empty-title">Select a template</div>
+              <div class="empty-sub">Choose a template from the list to view, edit or generate documents</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ WORD TEMPLATES PANEL ═══════════════════════════════════════ -->
+      <div id="tpl-panel-word" style="display:none">
+
+        <!-- Toolbar -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+          <div class="sbar" style="width:260px"><span style="color:var(--text3);font-size:13px">🔍</span>
+            <input id="wtpl-search" placeholder="Search Word templates…" oninput="debounce(loadWordTemplates,300)()">
+          </div>
+          <select class="fc" style="width:160px" id="wtpl-cat-f" onchange="loadWordTemplates()">
+            <option value="">All Categories</option>
+            <option value="notices">Notices</option>
+            <option value="resolutions">Resolutions</option>
+            <option value="agreements">Agreements</option>
+            <option value="reports">Reports</option>
+            <option value="letters">Letters</option>
+            <option value="minutes">Minutes</option>
+            <option value="others">Others</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="openUploadWordTplModal()">⬆ Upload .docx Template</button>
+          <div style="margin-left:auto;font-size:12px;color:var(--text3)">
+            Design in Word → insert <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">{{placeholder}}</code> → upload here → generate filled docs
+          </div>
+        </div>
+
+        <!-- Placeholder Reference Panel -->
+        <div id="wtpl-ph-ref" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-weight:700;font-size:13px">📋 Available Placeholders — paste these into your Word file</div>
+            <button onclick="document.getElementById('wtpl-ph-ref').style.display='none'" style="border:none;background:none;cursor:pointer;font-size:16px;color:var(--text3)">✕</button>
+          </div>
+          <div id="wtpl-ph-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px"></div>
+        </div>
+
+        <!-- Templates grid -->
+        <div id="wtpl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+          <div class="loading"><div class="spin"></div></div>
+        </div>
+      </div>
     <!-- ── USERS ── -->
     <div class="page" id="page-users">
       <!-- Role Guide -->
@@ -10443,6 +10416,342 @@ const PH_DESCRIPTIONS = {
 };
 
 let ALL_TEMPLATES = [];
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WORD TEMPLATE ENGINE — JS
+// ═══════════════════════════════════════════════════════════════════════════
+
+let WORD_TEMPLATES = [];
+const ALL_PLACEHOLDERS = [
+  // Company
+  "company_name","cin","pan","tan","gstin","incorporation_date","registered_office",
+  "company_email","phone","financial_year","place","authorized_capital","paid_up_capital",
+  // Directors
+  "director_name","designation","din","director_address","director_pan","director_mobile",
+  "director_email","date_of_appointment",
+  "director2_name","din2","designation2",
+  // Dates
+  "resolution_date","notice_date","letter_date","signing_date","current_year",
+  "financial_year_end","year_ended_on",
+  // Auditor
+  "auditor_name","auditor_firm_name","frn","auditor_membership",
+  "auditor_start_date","auditor_end_date",
+  // Shareholders
+  "shareholder1_name","share1_no","share1_nv","total_shares","total_paid_up",
+];
+
+function switchTplTab(tab) {
+  document.getElementById('tpl-panel-html').style.display  = tab === 'html'  ? '' : 'none';
+  document.getElementById('tpl-panel-word').style.display  = tab === 'word'  ? '' : 'none';
+  const btnH = document.getElementById('tpl-tab-html');
+  const btnW = document.getElementById('tpl-tab-word');
+  btnH.style.borderBottomColor = tab==='html'  ? 'var(--primary)' : 'transparent';
+  btnH.style.color             = tab==='html'  ? 'var(--primary)' : 'var(--text3)';
+  btnW.style.borderBottomColor = tab==='word'  ? 'var(--primary)' : 'transparent';
+  btnW.style.color             = tab==='word'  ? 'var(--primary)' : 'var(--text3)';
+  if (tab === 'word') loadWordTemplates();
+}
+
+async function loadWordTemplates() {
+  const q   = document.getElementById('wtpl-search')?.value || '';
+  const cat = document.getElementById('wtpl-cat-f')?.value || '';
+  const qs  = new URLSearchParams();
+  if (q)   qs.set('q', q);
+  if (cat) qs.set('category', cat);
+  const grid = document.getElementById('wtpl-grid');
+  if (grid) grid.innerHTML = '<div style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto 10px"></div>Loading…</div>';
+
+  const data = await api('/api/word-templates' + (qs.toString() ? '?' + qs.toString() : ''));
+  WORD_TEMPLATES = data || [];
+
+  if (!grid) return;
+  if (!WORD_TEMPLATES.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:60px">
+      <div class="empty-icon">📄</div>
+      <div class="empty-title">No Word templates yet</div>
+      <div class="empty-sub">Upload a professionally designed .docx file with <code>{{placeholders}}</code> to get started</div>
+      <button class="btn btn-primary" style="margin-top:16px" onclick="openUploadWordTplModal()">⬆ Upload First Template</button>
+    </div>`;
+    return;
+  }
+
+  const catColors = {
+    notices:'#3b82f6', resolutions:'#8b5cf6', agreements:'#10b981',
+    reports:'#f59e0b', letters:'#f97316', minutes:'#06b6d4', others:'#94a3b8'
+  };
+
+  grid.innerHTML = WORD_TEMPLATES.map(t => {
+    const phs = (() => { try { return JSON.parse(t.placeholders||'[]'); } catch{return [];} })();
+    const col = catColors[t.category] || '#94a3b8';
+    const dt  = t.created_at ? t.created_at.split('T')[0] : '';
+    return `<div class="card" style="padding:0;overflow:hidden;border:1px solid var(--border);border-top:3px solid ${col};transition:box-shadow .15s" onmouseenter="this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'" onmouseleave="this.style.boxShadow=''">
+      <!-- Header -->
+      <div style="padding:14px 16px 10px">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="width:36px;height:36px;background:${col}18;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📄</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.name}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.description||''}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:600;background:${col}18;color:${col}">${t.category}</span>
+          <span style="font-size:10.5px;color:var(--text3)">${phs.length} placeholder${phs.length!==1?'s':''}</span>
+          ${dt ? `<span style="font-size:10px;color:var(--text3);margin-left:auto">${dt}</span>` : ''}
+        </div>
+      </div>
+
+      <!-- Placeholders preview -->
+      ${phs.length ? `<div style="padding:6px 14px 10px;display:flex;gap:4px;flex-wrap:wrap;max-height:56px;overflow:hidden">
+        ${phs.slice(0,6).map(p => `<code style="font-size:9.5px;background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--primary)">{{${p}}}</code>`).join('')}
+        ${phs.length>6?`<span style="font-size:10px;color:var(--text3)">+${phs.length-6} more</span>`:''}
+      </div>` : ''}
+
+      <!-- Actions -->
+      <div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-xs" style="flex:1" onclick="openWordGenModal('${t.id}','${t.name.replace(/'/g,"\\'")}')">⚡ Generate</button>
+        <button class="btn btn-outline btn-xs" onclick="showWordTplPlaceholders('${t.id}')" title="View placeholders">📋 Placeholders</button>
+        <button class="btn btn-xs" style="color:#ef4444;border-color:#fca5a5;background:rgba(239,68,68,.05)" onclick="deleteWordTpl('${t.id}','${t.name.replace(/'/g,"\\'")}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openUploadWordTplModal() {
+  openModal('⬆ Upload Word Template (.docx)', `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">
+      <strong>How it works:</strong> Design your document in Microsoft Word → insert
+      <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">{{placeholder_name}}</code> tags where data should appear
+      → upload here → the system replaces placeholders with real CRM data when generating.
+      <div style="margin-top:6px">
+        <button class="btn btn-xs btn-outline" onclick="document.getElementById('wtpl-ph-ref').style.display='';document.getElementById('wtpl-ph-grid').innerHTML=renderAllPlaceholders()">
+          📋 View all available placeholders
+        </button>
+      </div>
+    </div>
+    <div class="fg"><label class="fl">Template Name <span class="req">*</span></label>
+      <input class="fc" id="wtpl-up-name" placeholder="e.g. Board Resolution — Director Appointment"></div>
+    <div class="fg2">
+      <div class="fg"><label class="fl">Category</label>
+        <select class="fc" id="wtpl-up-cat">
+          <option value="resolutions">Resolutions</option>
+          <option value="notices">Notices</option>
+          <option value="minutes">Minutes</option>
+          <option value="agreements">Agreements</option>
+          <option value="reports">Reports</option>
+          <option value="letters">Letters</option>
+          <option value="others">Others</option>
+        </select></div>
+      <div class="fg"><label class="fl">Description</label>
+        <input class="fc" id="wtpl-up-desc" placeholder="Brief description…"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">.docx File <span class="req">*</span></label>
+      <div id="wtpl-drop-zone" style="border:2px dashed var(--border);border-radius:var(--r);padding:28px;text-align:center;cursor:pointer;transition:border-color .2s;background:var(--bg2)"
+        onclick="document.getElementById('wtpl-file-inp').click()"
+        ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
+        ondragleave="this.style.borderColor='var(--border)'"
+        ondrop="event.preventDefault();this.style.borderColor='var(--border)';handleWtplDrop(event)">
+        <div style="font-size:28px;margin-bottom:8px">📄</div>
+        <div style="font-weight:600;font-size:13px">Drag & drop .docx file here</div>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:4px">or click to browse</div>
+        <div id="wtpl-file-name" style="margin-top:8px;font-size:12px;color:var(--primary);font-weight:600"></div>
+      </div>
+      <input type="file" id="wtpl-file-inp" accept=".docx" style="display:none" onchange="document.getElementById('wtpl-file-name').textContent=this.files[0]?.name||''">
+    </div>
+  `, [
+    { text: '⬆ Upload Template', cls: 'btn-primary', fn: 'doUploadWordTemplate()' },
+    { text: 'Cancel', cls: 'btn-outline', fn: 'closeModal()' }
+  ]);
+}
+
+function handleWtplDrop(e) {
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.name.endsWith('.docx')) { toast('Please drop a .docx file', 'err'); return; }
+  const inp = document.getElementById('wtpl-file-inp');
+  const dt  = new DataTransfer(); dt.items.add(file); inp.files = dt.files;
+  document.getElementById('wtpl-file-name').textContent = file.name;
+}
+
+async function doUploadWordTemplate() {
+  const name = document.getElementById('wtpl-up-name')?.value.trim();
+  const cat  = document.getElementById('wtpl-up-cat')?.value;
+  const desc = document.getElementById('wtpl-up-desc')?.value.trim();
+  const file = document.getElementById('wtpl-file-inp')?.files[0];
+  if (!name) { toast('Template name is required', 'err'); return; }
+  if (!file) { toast('Please select a .docx file', 'err'); return; }
+  const fd = new FormData();
+  fd.append('name', name); fd.append('category', cat);
+  fd.append('description', desc); fd.append('file', file);
+  try {
+    const resp = await fetch('/api/word-templates', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token')||'') },
+      body: fd
+    });
+    const r = await resp.json();
+    if (r.error) { toast(r.error, 'err'); return; }
+    toast('Template uploaded ✓  —  ' + (JSON.parse(r.placeholders||'[]').length) + ' placeholders detected', 'ok');
+    closeModal(); loadWordTemplates();
+  } catch(e) { toast('Upload failed: ' + e.message, 'err'); }
+}
+
+function renderAllPlaceholders() {
+  const groups = {
+    '🏢 Company': ['company_name','cin','pan','tan','gstin','incorporation_date','registered_office','company_email','phone','financial_year','place','authorized_capital','paid_up_capital'],
+    '👤 Director': ['director_name','designation','din','director_address','director_pan','director_mobile','director_email','date_of_appointment','director2_name','din2','designation2'],
+    '📅 Dates': ['resolution_date','notice_date','letter_date','signing_date','current_year','financial_year_end','year_ended_on'],
+    '🔍 Auditor': ['auditor_name','auditor_firm_name','frn','auditor_membership','auditor_start_date','auditor_end_date'],
+    '📈 Shareholders': ['shareholder1_name','share1_no','share1_nv','total_shares','total_paid_up'],
+  };
+  return Object.entries(groups).map(([grp, phs]) =>
+    `<div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--text3);margin:6px 0 2px">${grp}</div>` +
+    phs.map(p =>
+      `<div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer" onclick="navigator.clipboard.writeText('{{${p}}}').then(()=>toast('Copied {{${p}}}','ok'))">
+        <code style="font-size:10px;color:var(--primary);flex:1">{{${p}}}</code>
+        <span style="font-size:10px;color:var(--text3)">📋</span>
+      </div>`
+    ).join('')
+  ).join('');
+}
+
+async function showWordTplPlaceholders(tid) {
+  const data = await api('/api/word-templates/' + tid + '/placeholders');
+  if (!data) return;
+  const phs = data.all || [];
+  if (!phs.length) { toast('No placeholders found in this template', 'err'); return; }
+  openModal('📋 Placeholders in Template', `
+    <div style="margin-bottom:10px;font-size:12.5px;color:var(--text2)">
+      Click any placeholder to copy it. Paste into your Word file as-is.
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px">
+      ${phs.map(p => {
+        const isAuto = data.auto_filled?.includes(p);
+        return `<div style="display:flex;align-items:center;gap:6px;background:${isAuto?'rgba(34,197,94,.06)':'var(--bg2)'};border:1px solid ${isAuto?'#86efac':'var(--border)'};border-radius:5px;padding:5px 9px;cursor:pointer" onclick="navigator.clipboard.writeText('{{${p}}}').then(()=>toast('Copied','ok'))">
+          <code style="font-size:10.5px;color:var(--primary);flex:1">{{${p}}}</code>
+          <span style="font-size:9px;${isAuto?'color:#16a34a':'color:var(--text3)'}">
+            ${isAuto?'🤖 auto':'✏️ manual'}
+          </span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--text3)">
+      🤖 <strong>Auto-filled</strong> — pulled from CRM data automatically &nbsp;|&nbsp;
+      ✏️ <strong>Manual</strong> — you enter these during generation
+    </div>
+  `);
+}
+
+async function openWordGenModal(tid, tplName) {
+  const data = await api('/api/word-templates/' + tid + '/placeholders');
+  const manualPhs = data?.manual || [];
+  const companies = COMPANIES || [];
+
+  openModal('⚡ Generate Document — ' + tplName, `
+    <div class="fg">
+      <label class="fl">Company <span class="req">*</span></label>
+      <select class="fc" id="wgen-co" onchange="loadWgenEntities()">
+        <option value="">— Select company —</option>
+        ${companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fg2">
+      <div class="fg"><label class="fl">Director 1 (optional)</label>
+        <select class="fc" id="wgen-dir1"><option value="">— auto / first active —</option></select></div>
+      <div class="fg"><label class="fl">Director 2 (optional)</label>
+        <select class="fc" id="wgen-dir2"><option value="">— none —</option></select></div>
+    </div>
+    <div class="fg"><label class="fl">Auditor (optional)</label>
+      <select class="fc" id="wgen-aud"><option value="">— auto / current auditor —</option></select></div>
+    ${manualPhs.length ? `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-top:6px">
+      <div style="font-weight:700;font-size:12px;margin-bottom:10px;color:var(--text2)">✏️ Manual Placeholders (fill these in)</div>
+      ${manualPhs.map(p =>
+        `<div class="fg" style="margin-bottom:8px">
+          <label class="fl" style="font-size:11px"><code style="background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--primary)">{{${p}}}</code></label>
+          <input class="fc" id="wgen-ph-${p}" placeholder="${p.replace(/_/g,' ')}…">
+        </div>`
+      ).join('')}
+    </div>` : ''}
+    <div class="fg2" style="margin-top:14px">
+      <button class="btn btn-primary" onclick="doGenerateWordDoc('${tid}','docx')" style="flex:1">⬇ Download .docx</button>
+      <button class="btn btn-outline" onclick="doGenerateWordDoc('${tid}','pdf')" style="flex:1">⬇ Download PDF</button>
+    </div>
+  `);
+}
+
+async function loadWgenEntities() {
+  const cid = document.getElementById('wgen-co')?.value;
+  if (!cid) return;
+  const data = await api('/api/companies/' + cid + '/active-entities');
+  if (!data) return;
+  const dirs = data.directors || [];
+  const auds = data.auditors  || [];
+  const optD = dirs.map(d => `<option value="${d.id}">${d.name} (${d.designation||'Director'})</option>`).join('');
+  const optA = auds.map(a => `<option value="${a.id}">${a.firm_name||a.name}</option>`).join('');
+  const d1 = document.getElementById('wgen-dir1');
+  const d2 = document.getElementById('wgen-dir2');
+  const au = document.getElementById('wgen-aud');
+  if (d1) d1.innerHTML = '<option value="">— auto / first active —</option>' + optD;
+  if (d2) d2.innerHTML = '<option value="">— none —</option>' + optD;
+  if (au) au.innerHTML = '<option value="">— auto / current auditor —</option>' + optA;
+}
+
+async function doGenerateWordDoc(tid, fmt) {
+  const cid     = document.getElementById('wgen-co')?.value;
+  const dir1    = document.getElementById('wgen-dir1')?.value;
+  const dir2    = document.getElementById('wgen-dir2')?.value;
+  const aud     = document.getElementById('wgen-aud')?.value;
+  if (!cid) { toast('Select a company', 'err'); return; }
+
+  // Collect manual placeholder values
+  const extra = {};
+  document.querySelectorAll('[id^="wgen-ph-"]').forEach(el => {
+    const key = el.id.replace('wgen-ph-','');
+    if (el.value.trim()) extra[key] = el.value.trim();
+  });
+
+  const body = { company_id: cid, extra_context: extra };
+  if (dir1) body.director_id  = dir1;
+  if (dir2) body.director2_id = dir2;
+  if (aud)  body.auditor_id   = aud;
+
+  const endpoint = fmt === 'pdf'
+    ? `/api/word-templates/${tid}/generate-pdf`
+    : `/api/word-templates/${tid}/generate`;
+
+  toast(`Generating ${fmt.toUpperCase()}…`, 'ok');
+  try {
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + (localStorage.getItem('token')||'')
+      },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) { const e = await resp.json(); toast(e.error||'Generation failed','err'); return; }
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    const cd   = resp.headers.get('Content-Disposition') || '';
+    a.download = cd.match(/filename="?([^"]+)"?/)?.[1] || `document.${fmt}`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast(`Document downloaded ✓`, 'ok');
+    closeModal();
+  } catch(e) { toast('Download failed: ' + e.message, 'err'); }
+}
+
+async function deleteWordTpl(tid, name) {
+  if (!confirm(`Delete template "${name}"?`)) return;
+  const r = await api('/api/word-templates/' + tid, { method: 'DELETE' });
+  if (r?.success) { toast('Template deleted', 'ok'); loadWordTemplates(); }
+  else toast(r?.error || 'Delete failed', 'err');
+}
 
 async function loadTemplates() {
   const _tpl_srch = document.getElementById('tpl-search')?.value || '';
