@@ -2396,6 +2396,9 @@ def gen_document_pdf():
     # ── Letterhead ─────────────────────────────────────────────────────────
     if co:
         story.append(Paragraph(co["name"].upper(), sty("ln", 15, True, NAVY, TA_CENTER)))
+        _co_cin = co.get("cin") or ""
+        if _co_cin:
+            story.append(Paragraph(f"CIN: {_co_cin}", sty("cin", 8, True, BLUE, TA_CENTER)))
         lh = co.get("letterhead_address") or co.get("registered_office", "")
         if lh:
             for lh_part in [p.strip() for p in lh.replace(" | ","|").split("|") if p.strip()]:
@@ -2639,6 +2642,18 @@ def gen_document_docx():
         run.bold      = True
         run.font.size = Pt(16)
         run.font.color.rgb = NAVY_RGB
+
+        # CIN line
+        _dcin = co.get("cin") or ""
+        if _dcin:
+            p_cin = docx.add_paragraph(f"CIN: {_dcin}")
+            p_cin.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_cin.paragraph_format.space_before = Pt(0)
+            p_cin.paragraph_format.space_after  = Pt(1)
+            for _r in p_cin.runs:
+                _r.bold = True
+                _r.font.size = Pt(9)
+                _r.font.color.rgb = RGBColor(0x1a, 0x56, 0xdb)
 
         # Address
         lh = co.get("letterhead_address") or co.get("registered_office", "")
