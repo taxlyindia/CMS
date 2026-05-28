@@ -1160,19 +1160,17 @@ def list_shareholders(cid):
             conn.close()
             return jsonify(result)
 
-        # ── Period filter: show shareholders active during the window ─────────
-        # Include a shareholder if their tenure overlaps [date_from, date_to]:
-        #   Active (is_active=1):   entry_date <= date_to  (existed before window ends)
-        #   Inactive (is_active=0): entry_date <= date_to  AND  transfer_date >= date_from
-        #
-        # Use LEFT JOIN on share_transfers to get the latest transfer date per holder.
-        # Build WHERE clause in Python — NO string.format() on parameterised SQL.
+        # ── Period filter: show shareholders active during the window ──────────
+        # Include a shareholder if their tenure overlaps [date_from, date_to].
+        # For inactive (transferred) holders, restore their shares_held to what
+        # they held BEFORE the transfer (sum of shares they transferred out).
 
-        # Step 1: get all shareholders for this company (active + inactive)
         c.execute(
             "SELECT s.*, "
             "    (SELECT MAX(st.transfer_date) FROM share_transfers st "
-            "     WHERE st.transferor_id = s.id) AS last_transfer_date "
+            "     WHERE st.transferor_id = s.id) AS last_transfer_date, "
+            "    (SELECT COALESCE(SUM(st2.shares_transferred), 0) FROM share_transfers st2 "
+            "     WHERE st2.transferor_id = s.id) AS total_shares_transferred "
             "FROM shareholders s "
             "WHERE s.company_id = %s "
             "ORDER BY s.name, s.date_of_entry",
@@ -1181,30 +1179,37 @@ def list_shareholders(cid):
         all_shs = rows(c.fetchall()) or []
         conn.close()
 
-        # Step 2: filter in Python — avoids PostgreSQL dynamic SQL complexity
         result = []
         for s in all_shs:
-            entry = str(s.get('date_of_entry') or '').split('T')[0]  # YYYY-MM-DD
-            xfer  = str(s.get('last_transfer_date') or '').split('T')[0]
-            active = int(s.get('is_active', 1))
+            entry  = str(s.get('date_of_entry') or '').split('T')[0]
+            xfer   = str(s.get('last_transfer_date') or '').split('T')[0]
+            active = int(s.get('is_active', 1) or 1)
 
             if active == 1:
-                # Active holder: include if they existed at or before date_to
+                # Active holder: include if entry is on/before window end
                 if date_to and entry and entry > date_to:
-                    continue   # joined after window closes — skip
+                    continue
                 result.append(s)
+
             else:
-                # Inactive (transferred) holder: include if tenure overlaps window
-                # Tenure: [entry_date, xfer_date]
-                # Overlaps if: entry_date <= date_to AND xfer_date >= date_from
+                # Inactive holder: include if tenure overlaps [date_from, date_to]
                 if date_to and entry and entry > date_to:
-                    continue   # joined after window closes — skip
+                    continue   # joined after window closes
                 if date_from and xfer and xfer < date_from:
-                    continue   # transferred before window opens — skip
-                # If no transfer date recorded, include if entry is in window
-                if not xfer:
-                    if date_from and entry and entry < date_from:
-                        continue
+                    continue   # left before window opens
+                if not xfer and date_from and entry and entry < date_from:
+                    continue   # no transfer record, entry before window
+
+                # ── Restore shares held for this period ──────────────────────
+                # After full transfer shares_held=0, but during the period they
+                # held: shares_transferred_out = what they owned before transfer.
+                # Use total_shares_transferred as the period shares_held value.
+                s = dict(s)  # make mutable copy
+                historical_shares = int(s.get('total_shares_transferred') or 0)
+                if historical_shares > 0:
+                    s['shares_held'] = historical_shares
+                # Also mark it clearly as a historical record
+                s['is_historical'] = True
                 result.append(s)
 
         return jsonify(result)
@@ -1213,7 +1218,6 @@ def list_shareholders(cid):
         app.logger.error(f"list_shareholders error: {_e}")
         try: conn.close()
         except Exception: pass
-        # Return empty list rather than crashing — frontend shows empty state
         return jsonify([])
 @app.route("/api/shareholders", methods=["GET","POST"])
 @login_required
