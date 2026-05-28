@@ -861,21 +861,57 @@ def upload_director_file(did):
 @app.route("/api/directors")
 @login_required
 def all_directors():
-    conn=get_db(); c=conn.cursor()
-    ia = request.args.get("is_active", "")
-    # is_active="" → all, "1" → active only, "0" → resigned/ceased
-    if ia == "1":
-        where = "WHERE d.is_active=1"
-    elif ia == "0":
-        where = "WHERE d.is_active=0"
-    else:
-        where = "WHERE 1=1"   # return all (active + resigned)
-    c.execute(f"""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status,
-                        co.name as company_name,co.cin as company_cin
-                 FROM directors d LEFT JOIN director_kyc k ON d.id=k.director_id
-                 LEFT JOIN companies co ON d.company_id=co.id {where} ORDER BY d.name""")
-    return jsonify(rows(c.fetchall()))
+    # Pre-flight: ensure new columns exist before SELECT d.*
+    try:
+        _mc = get_db()
+        for _col in ["date_of_resignation","resignation_reason","date_of_cessation",
+                     "mca_user_id","mca_password","mca_notes"]:
+            _add_col_safe(_mc, "directors", _col, "TEXT")
+        _mc.commit(); _mc.close()
+    except Exception: pass
 
+    conn = get_db(); c = conn.cursor()
+    date_from = request.args.get('date_from','').strip()
+    date_to   = request.args.get('date_to','').strip()
+    ia = request.args.get("is_active","")
+    try:
+        if ia == "1":
+            where = "WHERE d.tenant_id=%s AND d.is_active=1"
+        elif ia == "0":
+            where = "WHERE d.tenant_id=%s AND d.is_active=0"
+        else:
+            where = "WHERE d.tenant_id=%s"
+        c.execute(f"""SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status,
+                            co.name as company_name,co.cin as company_cin
+                     FROM directors d LEFT JOIN director_kyc k ON d.id=k.director_id
+                     LEFT JOIN companies co ON d.company_id=co.id
+                     {where} ORDER BY d.name""", (g.tenant_id,))
+        all_dirs = rows(c.fetchall()) or []
+        conn.close()
+
+        if not date_from and not date_to:
+            return jsonify(all_dirs)
+
+        # Period filter
+        result = []
+        for r in all_dirs:
+            entry  = str(r.get('date_of_appointment') or r.get('created_at') or '').split('T')[0]
+            resign = str(r.get('date_of_resignation') or r.get('date_of_cessation') or '').split('T')[0]
+            active = int(r.get('is_active',1) or 1)
+            if active == 1:
+                if date_to and entry and entry > date_to: continue
+                result.append(r)
+            else:
+                if date_to and entry and entry > date_to: continue
+                if date_from and resign and resign < date_from: continue
+                r = dict(r); r['is_historical'] = True
+                result.append(r)
+        return jsonify(result)
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        app.logger.error(f"all_directors error: {e}")
+        return jsonify([])
 @app.route("/api/companies/<cid>/directors")
 @login_required
 def list_directors(cid):
