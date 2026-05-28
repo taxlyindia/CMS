@@ -5984,7 +5984,7 @@ async function openDirModal(id = null, cid = null) {
       <textarea class="fc" id="dir-mca-notes" placeholder="e.g. OTP linked to mobile 98XXXXXX10, password changed April 2024">${ed.mca_notes||''}</textarea></div>
     <div id="dir-resign-info" style="display:none;margin-top:8px"></div>
   `, `<button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveDir(${id ? `'${id}'` : 'null'})">${id ? 'Update Director' : 'Add Director'}</button>`, 'lg');
+      <button class="btn btn-primary" onclick="saveDir(` + (id ? "'" + id + "'" : 'null') + `)">${id ? 'Update Director' : 'Add Director'}</button>`, 'lg');
 }
 
 async function saveDir(id) {
