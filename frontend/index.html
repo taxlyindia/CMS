@@ -3105,22 +3105,23 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     <!-- ── DOC TEMPLATES ── -->
     <div class="page" id="page-templates">
 
-      <!-- ── Tab bar ──────────────────────────────────────────────────── -->
+      <!-- ── Tab bar ─────────────────────────────────────────────────────── -->
       <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px">
         <button id="tpl-tab-html" onclick="switchTplTab('html')"
-          style="padding:9px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid var(--primary);color:var(--primary);margin-bottom:-2px;cursor:pointer">
+          style="padding:9px 22px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:3px solid var(--primary);color:var(--primary);margin-bottom:-2px;cursor:pointer;transition:all .15s">
           📝 HTML Templates
         </button>
         <button id="tpl-tab-word" onclick="switchTplTab('word')"
-          style="padding:9px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid transparent;color:var(--text3);margin-bottom:-2px;cursor:pointer">
+          style="padding:9px 22px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:3px solid transparent;color:var(--text3);margin-bottom:-2px;cursor:pointer;transition:all .15s">
           📄 Word Templates (.docx)
         </button>
       </div>
 
-      <!-- ══ HTML TEMPLATES PANEL ══════════════════════════════════════ -->
+      <!-- ══ HTML TEMPLATES (restored exactly as original) ════════════════ -->
       <div id="tpl-panel-html">
         <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start">
-          <!-- Left: list -->
+
+          <!-- Left: template list -->
           <div>
             <div class="filter-bar" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
               <div class="sbar" style="width:260px;min-width:160px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="tpl-search" placeholder="Search template name…" oninput="debounce(loadTemplates,300)()"></div>
@@ -3137,20 +3138,95 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
             </div>
             <div id="tpl-list"><div class="loading"><div class="spin"></div></div></div>
           </div>
-          <!-- Right: editor/preview -->
-          <div id="tpl-editor-panel">
-            <div class="empty-state" style="padding:48px 24px">
-              <div class="empty-icon">📝</div>
-              <div class="empty-title">Select a template</div>
-              <div class="empty-sub">Choose a template from the list to view, edit or generate documents</div>
+
+          <!-- Right: editor with placeholder helper -->
+          <div id="tpl-editor" style="display:none">
+            <div class="card" style="margin-bottom:12px">
+              <div class="card-header">
+                <div class="card-title" id="tpl-ed-title">✏️ Template Editor</div>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-xs btn-success" onclick="saveTpl()">💾 Save</button>
+                  <button class="btn btn-xs btn-danger" id="tpl-del-btn" onclick="deleteTpl()" style="display:none">🗑️ Delete</button>
+                </div>
+              </div>
+              <div class="card-body">
+                <input type="hidden" id="tpl-ed-id">
+                <input type="hidden" id="tpl-ed-system" value="0">
+                <div class="fg2">
+                  <div class="fg"><label class="fl">Template Name <span class="req">*</span></label>
+                    <input class="fc" id="tpl-ed-name" placeholder="e.g. Board Resolution — Loan Approval"></div>
+                  <div class="fg"><label class="fl">Category</label>
+                    <select class="fc" id="tpl-ed-cat">
+                      <option value="resolution">Resolution</option><option value="notice">Notice</option>
+                      <option value="minutes">Minutes</option><option value="report">Report</option>
+                      <option value="letter">Letter</option><option value="other">Other</option>
+                    </select></div>
+                </div>
+                <div class="fg"><label class="fl">Description</label>
+                  <input class="fc" id="tpl-ed-desc" placeholder="Brief description of this template's purpose"></div>
+
+                <!-- Placeholder helper panel -->
+                <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px">
+                  <div style="font-size:11px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">
+                    📌 Click a placeholder to insert it at cursor
+                  </div>
+                  <div style="margin-bottom:8px">
+                    <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px">✓ AUTO-FILLED from CRM (no manual input needed)</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:4px" id="ph-auto-chips"></div>
+                  </div>
+                  <div>
+                    <div style="font-size:10px;font-weight:700;color:var(--orange);margin-bottom:4px">✏️ MANUAL — user fills these when generating document</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:4px" id="ph-manual-chips"></div>
+                  </div>
+                  <div style="margin-top:8px">
+                    <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:4px">⚡ DYNAMIC — auto-fetch all records in period</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:4px">
+                      <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('board_meetings_list')">{{board_meetings_list}}</span>
+                      <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('board_meetings_numbered')">{{board_meetings_numbered}}</span>
+                      <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('board_meetings_count')">{{board_meetings_count}}</span>
+                      <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('all_meetings_list')">{{all_meetings_list}}</span>
+                      <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('agm_meetings_list')">{{agm_meetings_list}}</span>
+                      <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('director_kyc_list')">{{director_kyc_list}}</span>
+                      <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('charges_list')">{{charges_list}}</span>
+                      <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('dsc_list')">{{dsc_list}}</span>
+                      <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('period_from')">{{period_from}}</span>
+                      <span class="ql-ph-chip ql-ph-dynamic" onclick="insertPlaceholder('period_to')">{{period_to}}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="fg">
+                  <label class="fl" style="display:flex;align-items:center;justify-content:space-between">
+                    <span>Template Body <span class="req">*</span></span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span id="tpl-ph-count" style="font-size:10.5px;color:var(--text3);font-weight:400"></span>
+                      <button class="btn btn-xs btn-outline" onclick="openCustomPhModal()" title="Create custom placeholder">+ Custom {{placeholder}}</button>
+                      <button class="btn btn-xs btn-ghost" onclick="toggleEditorMode()" id="editor-mode-btn">📝 Plain Text</button>
+                    </div>
+                  </label>
+                  <div id="tpl-quill-wrap">
+                    <div id="tpl-quill-editor" style="min-height:360px"></div>
+                  </div>
+                  <textarea class="fc" id="tpl-ed-body"
+                    style="display:none;height:380px;font-family:var(--font-mono);font-size:12px;line-height:1.8;resize:vertical"
+                    oninput="onTplBodyChange()"
+                    placeholder="Type your template here. Use {{placeholder}} syntax."></textarea>
+                </div>
+
+                <div id="tpl-ph-status" style="display:none;background:var(--bg3);border-radius:7px;padding:10px 12px;font-size:11.5px">
+                  <div style="font-weight:600;color:var(--text);margin-bottom:6px">Placeholders detected in this template:</div>
+                  <div id="tpl-ph-auto-list"></div>
+                  <div id="tpl-ph-manual-list"></div>
+                </div>
+              </div>
             </div>
           </div>
+
         </div>
       </div>
 
-      <!-- ══ WORD TEMPLATES PANEL ═══════════════════════════════════════ -->
+      <!-- ══ WORD TEMPLATES ════════════════════════════════════════════════ -->
       <div id="tpl-panel-word" style="display:none">
-
         <!-- Toolbar -->
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
           <div class="sbar" style="width:260px"><span style="color:var(--text3);font-size:13px">🔍</span>
@@ -3167,25 +3243,17 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
             <option value="others">Others</option>
           </select>
           <button class="btn btn-primary btn-sm" onclick="openUploadWordTplModal()">⬆ Upload .docx Template</button>
-          <div style="margin-left:auto;font-size:12px;color:var(--text3)">
-            Design in Word → insert <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">{{placeholder}}</code> → upload here → generate filled docs
+          <div style="margin-left:auto;font-size:11.5px;color:var(--text3)">
+            Design in Word → insert <code style="background:var(--bg3);padding:1px 5px;border-radius:3px;font-size:11px">{{placeholder}}</code> tags → upload → generate filled docs
           </div>
         </div>
-
-        <!-- Placeholder Reference Panel -->
-        <div id="wtpl-ph-ref" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:16px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <div style="font-weight:700;font-size:13px">📋 Available Placeholders — paste these into your Word file</div>
-            <button onclick="document.getElementById('wtpl-ph-ref').style.display='none'" style="border:none;background:none;cursor:pointer;font-size:16px;color:var(--text3)">✕</button>
-          </div>
-          <div id="wtpl-ph-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px"></div>
-        </div>
-
-        <!-- Templates grid -->
-        <div id="wtpl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">
+        <!-- Grid -->
+        <div id="wtpl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
           <div class="loading"><div class="spin"></div></div>
         </div>
       </div>
+
+    </div>
     <!-- ── USERS ── -->
     <div class="page" id="page-users">
       <!-- Role Guide -->
@@ -10446,11 +10514,16 @@ function switchTplTab(tab) {
   document.getElementById('tpl-panel-word').style.display  = tab === 'word'  ? '' : 'none';
   const btnH = document.getElementById('tpl-tab-html');
   const btnW = document.getElementById('tpl-tab-word');
-  btnH.style.borderBottomColor = tab==='html'  ? 'var(--primary)' : 'transparent';
-  btnH.style.color             = tab==='html'  ? 'var(--primary)' : 'var(--text3)';
-  btnW.style.borderBottomColor = tab==='word'  ? 'var(--primary)' : 'transparent';
-  btnW.style.color             = tab==='word'  ? 'var(--primary)' : 'var(--text3)';
+  if (btnH) {
+    btnH.style.borderBottomColor = tab==='html'  ? 'var(--primary)' : 'transparent';
+    btnH.style.color             = tab==='html'  ? 'var(--primary)' : 'var(--text3)';
+  }
+  if (btnW) {
+    btnW.style.borderBottomColor = tab==='word'  ? 'var(--primary)' : 'transparent';
+    btnW.style.color             = tab==='word'  ? 'var(--primary)' : 'var(--text3)';
+  }
   if (tab === 'word') loadWordTemplates();
+  if (tab === 'html')  loadTemplates();
 }
 
 async function loadWordTemplates() {
@@ -10652,42 +10725,123 @@ async function showWordTplPlaceholders(tid) {
 }
 
 async function openWordGenModal(tid, tplName) {
-  const data = await api('/api/word-templates/' + tid + '/placeholders');
-  const manualPhs = data?.manual || [];
-  const companies = COMPANIES || [];
+  // Load placeholder info + companies
+  const [data, entities_init] = await Promise.all([
+    api('/api/word-templates/' + tid + '/placeholders'),
+    Promise.resolve(null)
+  ]);
+  const manualPhs  = data?.manual    || [];
+  const autoPhs    = data?.auto_filled || [];
+  const allPhs     = data?.all        || [];
+  const companies  = COMPANIES || [];
 
-  openModal('⚡ Generate Document — ' + tplName, `
-    <div class="fg">
-      <label class="fl">Company <span class="req">*</span></label>
-      <select class="fc" id="wgen-co" onchange="loadWgenEntities()">
-        <option value="">— Select company —</option>
-        ${companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
-      </select>
+  // Group manual placeholders by type for better UX
+  const dateKeys    = manualPhs.filter(p => p.includes('date') || p.includes('day') || p.includes('year') || p.includes('_on'));
+  const amountKeys  = manualPhs.filter(p => p.includes('amount') || p.includes('capital') || p.includes('value') || p.includes('fee') || p.includes('price') || p.includes('sum'));
+  const nameKeys    = manualPhs.filter(p => p.includes('name') || p.includes('person') || p.includes('party'));
+  const otherKeys   = manualPhs.filter(p => !dateKeys.includes(p) && !amountKeys.includes(p) && !nameKeys.includes(p));
+
+  function renderPhGroup(label, icon, keys, inputType='text') {
+    if (!keys.length) return '';
+    return `<div style="margin-bottom:14px">
+      <div style="font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${icon} ${label}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+        ${keys.map(p => {
+          const label = p.replace(/_/g,' ').replace(/\w/g, l => l.toUpperCase());
+          const itype = dateKeys.includes(p) ? 'date' : amountKeys.includes(p) ? 'number' : 'text';
+          return `<div>
+            <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">
+              <code style="background:var(--bg3);padding:1px 5px;border-radius:3px;font-size:10px;color:var(--primary)">{{${p}}}</code>
+            </label>
+            <input class="fc" id="wgen-ph-${p}" type="${itype}"
+              placeholder="${label}…"
+              style="font-size:12.5px">
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  openModal('⚡ Generate Document', `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div style="grid-column:1/-1;background:linear-gradient(135deg,rgba(26,86,219,.06),rgba(139,92,246,.06));border:1px solid rgba(26,86,219,.15);border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:10px">
+        <div style="font-size:22px">📄</div>
+        <div>
+          <div style="font-weight:700;font-size:13px">${tplName}</div>
+          <div style="font-size:11px;color:var(--text3)">${allPhs.length} placeholder${allPhs.length!==1?'s':''} · ${autoPhs.length} auto-filled · ${manualPhs.length} manual</div>
+        </div>
+      </div>
+
+      <!-- Company -->
+      <div style="grid-column:1/-1" class="fg">
+        <label class="fl">Company <span class="req">*</span></label>
+        <select class="fc" id="wgen-co" onchange="loadWgenEntities()">
+          <option value="">— Select company —</option>
+          ${companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+        </select>
+      </div>
+
+      <!-- Director + Auditor selectors -->
+      <div class="fg">
+        <label class="fl" style="font-size:11px">Director 1</label>
+        <select class="fc" id="wgen-dir1" style="font-size:12px"><option value="">— first active —</option></select>
+      </div>
+      <div class="fg">
+        <label class="fl" style="font-size:11px">Director 2 (if needed)</label>
+        <select class="fc" id="wgen-dir2" style="font-size:12px"><option value="">— none —</option></select>
+      </div>
+      <div class="fg" style="grid-column:1/-1">
+        <label class="fl" style="font-size:11px">Auditor (if needed)</label>
+        <select class="fc" id="wgen-aud" style="font-size:12px"><option value="">— current auditor —</option></select>
+      </div>
     </div>
-    <div class="fg2">
-      <div class="fg"><label class="fl">Director 1 (optional)</label>
-        <select class="fc" id="wgen-dir1"><option value="">— auto / first active —</option></select></div>
-      <div class="fg"><label class="fl">Director 2 (optional)</label>
-        <select class="fc" id="wgen-dir2"><option value="">— none —</option></select></div>
-    </div>
-    <div class="fg"><label class="fl">Auditor (optional)</label>
-      <select class="fc" id="wgen-aud"><option value="">— auto / current auditor —</option></select></div>
+
     ${manualPhs.length ? `
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px;margin-top:6px">
-      <div style="font-weight:700;font-size:12px;margin-bottom:10px;color:var(--text2)">✏️ Manual Placeholders (fill these in)</div>
-      ${manualPhs.map(p =>
-        `<div class="fg" style="margin-bottom:8px">
-          <label class="fl" style="font-size:11px"><code style="background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--primary)">{{${p}}}</code></label>
-          <input class="fc" id="wgen-ph-${p}" placeholder="${p.replace(/_/g,' ')}…">
-        </div>`
-      ).join('')}
-    </div>` : ''}
-    <div class="fg2" style="margin-top:14px">
-      <button class="btn btn-primary" onclick="doGenerateWordDoc('${tid}','docx')" style="flex:1">⬇ Download .docx</button>
-      <button class="btn btn-outline" onclick="doGenerateWordDoc('${tid}','pdf')" style="flex:1">⬇ Download PDF</button>
+    <!-- Manual placeholders section -->
+    <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+      <div style="background:linear-gradient(90deg,rgba(245,158,11,.08),rgba(239,68,68,.05));padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px">✏️</span>
+        <div>
+          <div style="font-weight:700;font-size:12.5px">Manual Placeholders</div>
+          <div style="font-size:11px;color:var(--text3)">These are not auto-filled — please provide values before generating</div>
+        </div>
+        <span style="margin-left:auto;background:var(--orange);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">${manualPhs.length} field${manualPhs.length!==1?'s':''}</span>
+      </div>
+      <div style="padding:14px">
+        ${renderPhGroup('Date Fields', '📅', dateKeys)}
+        ${renderPhGroup('Amount / Number Fields', '💰', amountKeys)}
+        ${renderPhGroup('Name / Party Fields', '👤', nameKeys)}
+        ${renderPhGroup('Other Fields', '📝', otherKeys)}
+      </div>
+    </div>` : `
+    <div style="background:rgba(34,197,94,.06);border:1px solid #86efac;border-radius:var(--r);padding:10px 14px;margin-bottom:14px;font-size:12px;color:#15803d">
+      ✅ All placeholders are auto-filled from CRM data. Just select the company above.
+    </div>`}
+
+    <!-- Auto-filled preview (collapsed) -->
+    ${autoPhs.length ? `
+    <details style="margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:11.5px;color:var(--text3);user-select:none;padding:4px 0">
+        🤖 ${autoPhs.length} auto-filled placeholder${autoPhs.length!==1?'s':''} (click to preview)
+      </summary>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;padding:8px;background:var(--bg2);border-radius:5px">
+        ${autoPhs.map(p => `<code style="font-size:10px;background:rgba(34,197,94,.08);color:#16a34a;padding:2px 7px;border-radius:3px;border:1px solid #86efac">{{${p}}}</code>`).join('')}
+      </div>
+    </details>` : ''}
+
+    <!-- Download buttons -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+      <button class="btn btn-primary" onclick="doGenerateWordDoc('${tid}','docx')" style="gap:6px">
+        <span>⬇</span> Download Word (.docx)
+      </button>
+      <button class="btn btn-outline" onclick="doGenerateWordDoc('${tid}','pdf')"
+        style="border-color:var(--primary);color:var(--primary);gap:6px">
+        <span>⬇</span> Download PDF
+      </button>
     </div>
-  `);
+  `, null, 'lg');
 }
+
 
 async function loadWgenEntities() {
   const cid = document.getElementById('wgen-co')?.value;
