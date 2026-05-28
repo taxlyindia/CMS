@@ -13588,9 +13588,15 @@ async function managePortalLinks(coId) {
 
 async function revokePortalLink(linkId) {
   if (!confirm('Revoke this portal link? Client will lose access immediately.')) return;
-  await api(`/api/portal/links/${linkId}/revoke`, { method:'POST' });
-  toast('Portal link revoked','ok');
-  closeModal();
+  const r = await api(`/api/portal/links/${linkId}/revoke`, { method:'POST' });
+  if (r?.success) { toast('Portal link revoked ✓','ok'); loadPortalLinks(); }
+}
+
+async function deletePortalLink(linkId) {
+  if (!confirm('Permanently delete this portal link? This cannot be undone.')) return;
+  const r = await api(`/api/portal/links/${linkId}`, { method:'DELETE' });
+  if (r?.success) { toast('Portal link deleted ✓','ok'); loadPortalLinks(); }
+  else toast(r?.error || 'Delete failed','err');
 }
 
 function copyPortalLink() {
@@ -14044,7 +14050,8 @@ async function loadPortalLinks() {
       <td style="display:flex;gap:4px">
         <button class="btn btn-xs btn-outline" onclick="navigator.clipboard.writeText('${location.origin}/portal/'+l.token).then(()=>toast('Copied ✓','ok'))" title="Copy link">📋</button>
         <a class="btn btn-xs btn-ghost" href="${location.origin}/portal/${l.token}" target="_blank" title="Open portal">🌐</a>
-        ${l.active ? `<button class="btn btn-xs btn-danger" onclick="revokePortalLink('${l.id}')">Revoke</button>` : ''}
+        ${l.active ? `<button class="btn btn-xs btn-warning" style="font-size:10.5px" onclick="revokePortalLink('${l.id}')">⏸ Revoke</button>` : ''}
+        <button class="btn btn-xs btn-danger" style="font-size:10.5px" onclick="deletePortalLink('${l.id}')" title="Permanently delete">🗑 Delete</button>
       </td>
     </tr>`).join('')
   }</tbody></table>`
