@@ -5939,7 +5939,7 @@ async function downloadKYCExcel() {
 }
 
 
-async async function openDirModal(id = null, cid = null) {
+async function openDirModal(id = null, cid = null) {
   let ed = {};
   if (id) {
     const allDirs = await api('/api/directors');
