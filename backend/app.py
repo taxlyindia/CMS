@@ -1150,35 +1150,44 @@ def list_shareholders(cid):
 
     try:
         if not date_from and not date_to:
+            # ── No filter: current snapshot of active holders only ──────────
             c.execute("SELECT * FROM shareholders WHERE company_id=%s AND is_active=1 ORDER BY name", (cid,))
-            result = rows(c.fetchall())
-            conn.close()
+            result = rows(c.fetchall()); conn.close()
             return jsonify(result)
 
-        # Step 1: fetch all shareholders (any schema)
+        # ── Period filter ────────────────────────────────────────────────────
+        # Step 1: all shareholders
         c.execute("SELECT * FROM shareholders WHERE company_id=%s ORDER BY name, date_of_entry", (cid,))
         all_shs = rows(c.fetchall()) or []
 
-        # Step 2: try new columns if they exist
-        extra = {}
+        # Step 2: new columns (may not exist yet)
+        extra = {}  # id -> {shares_before, xfer_date}
         try:
             c.execute("SELECT id, shares_held_before_transfer, transfer_date_actual FROM shareholders WHERE company_id=%s", (cid,))
             for r2 in (c.fetchall() or []):
-                d2 = r2 if isinstance(r2, dict) else dict(zip([x[0] for x in c.description], r2))
+                d2 = r2 if isinstance(r2,dict) else dict(zip([x[0] for x in c.description],r2))
                 extra[d2['id']] = {'shares_before': d2.get('shares_held_before_transfer'), 'xfer_date': d2.get('transfer_date_actual')}
         except Exception: pass
 
-        # Step 3: try share_transfers log
-        xfer_map = {}
+        # Step 3: share_transfers log  — each transfer event
+        xfer_events = []  # list of {transferor_id, shares_transferred, transfer_date, dist_from, dist_to}
+        xfer_map    = {}  # transferor_id -> {total, last_date}
         try:
-            c.execute("SELECT transferor_id, SUM(shares_transferred) AS t, MAX(transfer_date) AS d FROM share_transfers WHERE company_id=%s GROUP BY transferor_id", (cid,))
+            c.execute("SELECT transferor_id, shares_transferred, transfer_date, distinctive_no_from, distinctive_no_to FROM share_transfers WHERE company_id=%s ORDER BY transfer_date", (cid,))
             for r3 in (c.fetchall() or []):
-                d3 = r3 if isinstance(r3, dict) else dict(zip([x[0] for x in c.description], r3))
-                xfer_map[d3['transferor_id']] = {'total': int(d3.get('t') or 0), 'last_date': str(d3.get('d') or '')}
+                d3 = r3 if isinstance(r3,dict) else dict(zip([x[0] for x in c.description],r3))
+                xfer_events.append(d3)
+            for ev in xfer_events:
+                tid = ev.get('transferor_id','')
+                if tid not in xfer_map:
+                    xfer_map[tid] = {'total':0,'last_date':''}
+                xfer_map[tid]['total'] += int(ev.get('shares_transferred') or 0)
+                if ev.get('transfer_date'):
+                    xfer_map[tid]['last_date'] = str(ev['transfer_date'])
         except Exception: pass
 
-        # Step 4: get company paid_up_capital for inference
-        co_paid = 0
+        # Step 4: company paid_up_capital
+        co_paid = 0; co_fv = 10
         try:
             c.execute("SELECT paid_up_capital FROM companies WHERE id=%s", (cid,))
             cr = c.fetchone()
@@ -1187,40 +1196,35 @@ def list_shareholders(cid):
 
         conn.close()
 
-        # Step 5: reconstruct shares for inactive holders with 0 shares
-        # Strategy A: shares_held_before_transfer column
-        # Strategy B: share_transfers SUM
-        # Strategy C: sum of active rows created AFTER date_to (transferred after period)
-        # Strategy D: company total - pre-period active (single inactive holder)
-        recon_map  = {}   # sid -> historical_shares
-        xfer_dates = {}   # sid -> transfer_date (for Date of Exit column)
+        # Step 5: reconstruct historical shares for inactive holders with shares=0
+        recon_map   = {}  # sid -> reconstructed_shares
+        recon_xdate = {}  # sid -> transfer_date (Date of Exit)
 
-        zero_inactive = [s for s in all_shs if int(s.get('is_active',1) or 1)==0 and int(s.get('shares_held') or 0)==0]
-        for zi in zero_inactive:
-            zi_id    = zi.get('id','')
+        inactive_zero = [s for s in all_shs if str(s.get('is_active',1)) in ('0','False','false') and int(s.get('shares_held') or 0)==0]
+        for zi in inactive_zero:
+            sid      = zi.get('id','')
             zi_fv    = float(zi.get('face_value') or 10) or 10
             zi_entry = str(zi.get('date_of_entry') or '').split('T')[0]
-            recon    = 0
-            xd       = ''
+            recon = 0; xd = ''
 
-            # Strategy A
-            sb = int(extra.get(zi_id,{}).get('shares_before') or 0)
+            # Strategy A: shares_held_before_transfer column
+            sb = int(extra.get(sid,{}).get('shares_before') or 0)
             if sb > 0:
                 recon = sb
-                xd    = str(extra.get(zi_id,{}).get('xfer_date') or '')
+                xd    = str(extra.get(sid,{}).get('xfer_date') or '').split('T')[0]
 
-            # Strategy B
+            # Strategy B: share_transfers SUM
             if recon == 0:
-                xm_t = int(xfer_map.get(zi_id,{}).get('total') or 0)
+                xm_t = int(xfer_map.get(sid,{}).get('total') or 0)
                 if xm_t > 0:
                     recon = xm_t
-                    xd    = xfer_map.get(zi_id,{}).get('last_date','')
+                    xd    = xfer_map.get(sid,{}).get('last_date','').split('T')[0]
 
-            # Strategy C: active rows created AFTER date_to
+            # Strategy C: active rows created AFTER date_to (those shares came from this inactive holder)
             if recon == 0 and date_to:
                 post = [s for s in all_shs
-                        if int(s.get('is_active',1) or 1)==1
-                        and s.get('id') != zi_id
+                        if str(s.get('is_active',1)) not in ('0','False','false')
+                        and s.get('id') != sid
                         and str(s.get('date_of_entry') or '').split('T')[0] > date_to]
                 if post:
                     recon = sum(int(s.get('shares_held') or 0) for s in post)
@@ -1228,63 +1232,84 @@ def list_shareholders(cid):
                         earliest = min(post, key=lambda s: str(s.get('date_of_entry') or ''))
                         xd = str(earliest.get('date_of_entry') or '').split('T')[0]
 
-            # Strategy D: company total - pre-period active
-            if recon == 0 and len(zero_inactive) == 1 and co_paid > 0:
+            # Strategy D: company total - pre-period active (single inactive with 0 shares)
+            if recon == 0 and len(inactive_zero) == 1 and co_paid > 0:
                 pre_active = sum(int(s.get('shares_held') or 0) for s in all_shs
-                                 if int(s.get('is_active',1) or 1)==1
+                                 if str(s.get('is_active',1)) not in ('0','False','false')
                                  and (not date_to or str(s.get('date_of_entry') or '').split('T')[0] <= date_to))
-                total_co   = int(co_paid / zi_fv)
-                inferred   = total_co - pre_active
+                inferred = int(co_paid / zi_fv) - pre_active
                 if inferred > 0:
                     recon = inferred
 
             if recon > 0:
-                recon_map[zi_id] = recon
+                recon_map[sid]   = recon
             if xd:
-                xfer_dates[zi_id] = xd
+                recon_xdate[sid] = xd
 
-        # Step 6: build xfer_dates for ALL inactive holders
-        for s in all_shs:
-            sid = s.get('id','')
-            if int(s.get('is_active',1) or 1) == 0 and sid not in xfer_dates:
-                xd = (str(extra.get(sid,{}).get('xfer_date') or '')
-                      or xfer_map.get(sid,{}).get('last_date',''))
-                if xd:
-                    xfer_dates[sid] = xd.split('T')[0]
-
-        # Step 7: filter and build result with date_of_exit
+        # Step 6: filter and build result with bifurcation for partial transfers
         result = []
         for s in all_shs:
             sid    = s.get('id','')
             entry  = str(s.get('date_of_entry') or '').split('T')[0]
-            active = int(s.get('is_active',1) or 1)
+            active = 0 if str(s.get('is_active',1)) in ('0','False','false') else 1
             ex     = extra.get(sid,{})
             xm     = xfer_map.get(sid,{})
-            xfer   = xfer_dates.get(sid,'') or str(ex.get('xfer_date') or xm.get('last_date') or '').split('T')[0]
+
+            # Best transfer date: column > xfer_map > recon
+            xfer = (str(ex.get('xfer_date') or '').split('T')[0]
+                    or xm.get('last_date','').split('T')[0]
+                    or recon_xdate.get(sid,''))
 
             if active == 1:
                 if date_to and entry and entry > date_to:
-                    continue
-                s = dict(s)
-                s['date_of_exit'] = None
+                    continue  # joined after window closes
+                s = dict(s); s['date_of_exit'] = None
                 result.append(s)
+
             else:
+                # ── Inactive holder ──────────────────────────────────────────
                 if date_to and entry and entry > date_to:
                     continue
                 if date_from and xfer and xfer < date_from:
                     continue
                 if not xfer and date_from and entry and entry < date_from:
                     continue
+
                 s = dict(s)
-                # Restore historical shares
+                # Get original (before-transfer) shares
                 hist = (int(recon_map.get(sid) or 0)
                         or int(ex.get('shares_before') or 0)
                         or int(xm.get('total') or 0))
-                if hist > 0:
-                    s['shares_held'] = hist
-                s['is_historical'] = True
-                s['date_of_exit']  = xfer or None
-                result.append(s)
+
+                # Current remaining shares (what they kept after partial transfer)
+                current = int(s.get('shares_held') or 0)
+
+                if hist > 0 and current > 0:
+                    # ── PARTIAL TRANSFER: bifurcate into two rows ────────────
+                    # Row 1: remaining shares (still held, no exit date)
+                    row_kept = dict(s)
+                    row_kept['shares_held']  = current
+                    row_kept['date_of_exit'] = None
+                    row_kept['is_historical'] = True
+                    row_kept['_row_type']    = 'kept'
+                    result.append(row_kept)
+                    # Row 2: transferred portion (with exit date)
+                    transferred = hist - current
+                    if transferred > 0:
+                        row_xfrd = dict(s)
+                        row_xfrd['shares_held']  = transferred
+                        row_xfrd['date_of_exit'] = xfer or None
+                        row_xfrd['is_historical'] = True
+                        row_xfrd['_row_type']    = 'transferred'
+                        row_xfrd['_note']        = f'Transferred {transferred:,} shares'
+                        result.append(row_xfrd)
+                else:
+                    # Full transfer (shares_held=0) — single row with restored hist shares
+                    if hist > 0:
+                        s['shares_held'] = hist
+                    s['date_of_exit']  = xfer or None
+                    s['is_historical'] = True
+                    result.append(s)
 
         return jsonify(result)
 
@@ -6762,6 +6787,50 @@ def repair_historical_shares():
     except Exception as e:
         conn.rollback(); conn.close()
         return jsonify({'error': str(e)}), 500
+
+
+
+@app.route('/api/companies/<cid>/shareholders/debug')
+@login_required
+def debug_shareholders(cid):
+    """Debug endpoint — shows raw data used in period filtering."""
+    conn = get_db(); c = conn.cursor()
+    try:
+        c.execute("SELECT id,name,is_active,shares_held,date_of_entry,folio_no,face_value FROM shareholders WHERE company_id=%s ORDER BY name,date_of_entry",(cid,))
+        all_shs = rows(c.fetchall()) or []
+        extra = {}
+        try:
+            c.execute("SELECT id,shares_held_before_transfer,transfer_date_actual FROM shareholders WHERE company_id=%s",(cid,))
+            for r in (c.fetchall() or []):
+                d = r if isinstance(r,dict) else dict(zip([x[0] for x in c.description],r))
+                extra[d['id']] = {'before':d.get('shares_held_before_transfer'),'xfer_date':d.get('transfer_date_actual')}
+        except Exception as e:
+            extra = {'error':str(e)}
+        xfer_log = []
+        try:
+            c.execute("SELECT transferor_id,shares_transferred,transfer_date FROM share_transfers WHERE company_id=%s",(cid,))
+            xfer_log = rows(c.fetchall()) or []
+        except Exception as e:
+            xfer_log = [{'error':str(e)}]
+        co_paid = 0
+        try:
+            c.execute("SELECT paid_up_capital FROM companies WHERE id=%s",(cid,))
+            cr = c.fetchone(); co_paid = float((cr['paid_up_capital'] if isinstance(cr,dict) else cr[0]) if cr else 0)
+        except Exception: pass
+        conn.close()
+        inactive_zero = [s for s in all_shs if int(s.get('is_active',1) or 1)==0 and int(s.get('shares_held') or 0)==0]
+        return jsonify({
+            'all_shareholders': all_shs,
+            'extra_columns': extra,
+            'share_transfers_log': xfer_log,
+            'paid_up_capital': co_paid,
+            'inactive_zero_count': len(inactive_zero),
+            'inactive_zero_names': [s.get('name') for s in inactive_zero],
+        })
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'error':str(e)}),500
 
 
 # ════════════════════════════════════════════════════════════════════════════
