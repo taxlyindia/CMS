@@ -1150,7 +1150,7 @@ def list_shareholders(cid):
 
     try:
         if not date_from and not date_to:
-            # ── No period filter: current snapshot (active holders only) ──────
+            # ── No period filter: current snapshot ──────────────────────────
             c.execute(
                 "SELECT * FROM shareholders "
                 "WHERE company_id=%s AND is_active=1 ORDER BY name",
@@ -1160,56 +1160,82 @@ def list_shareholders(cid):
             conn.close()
             return jsonify(result)
 
-        # ── Period filter: show shareholders active during the window ──────────
-        # Fetch all shareholders with:
-        #   shares_held_before_transfer — stored directly on row during transfer
-        #   total_shares_transferred    — from share_transfers log (backup)
-        #   last_transfer_date          — from share_transfers log OR transfer_date_actual
+        # ── Period filter ────────────────────────────────────────────────────
+        # Step 1: fetch ALL shareholders with base columns only (safe for any schema)
         c.execute(
-            "SELECT s.*, "
-            "  COALESCE(s.shares_held_before_transfer, "
-            "    (SELECT COALESCE(SUM(st.shares_transferred),0) FROM share_transfers st "
-            "     WHERE st.transferor_id = s.id)) AS historical_shares, "
-            "  COALESCE(s.transfer_date_actual, "
-            "    (SELECT MAX(st2.transfer_date) FROM share_transfers st2 "
-            "     WHERE st2.transferor_id = s.id)) AS last_transfer_date "
-            "FROM shareholders s "
-            "WHERE s.company_id = %s "
-            "ORDER BY s.name, s.date_of_entry",
+            "SELECT * FROM shareholders WHERE company_id=%s ORDER BY name, date_of_entry",
             (cid,)
         )
         all_shs = rows(c.fetchall()) or []
+
+        # Step 2: try to get shares_held_before_transfer and transfer_date_actual
+        # These columns are added by migration — may not exist in older DBs
+        extra = {}  # {shareholder_id: {shares_before, xfer_date}}
+        try:
+            c.execute(
+                "SELECT id, shares_held_before_transfer, transfer_date_actual "
+                "FROM shareholders WHERE company_id=%s",
+                (cid,)
+            )
+            for r2 in (c.fetchall() or []):
+                r2d = r2 if isinstance(r2, dict) else dict(zip([desc[0] for desc in c.description], r2))
+                extra[r2d['id']] = {
+                    'shares_before': r2d.get('shares_held_before_transfer'),
+                    'xfer_date':     r2d.get('transfer_date_actual'),
+                }
+        except Exception:
+            pass  # columns don't exist yet — use fallback
+
+        # Step 3: try to get transfer info from share_transfers table
+        xfer_map = {}  # {transferor_id: {total_xferred, last_xfer_date}}
+        try:
+            c.execute(
+                "SELECT transferor_id, SUM(shares_transferred) AS total, MAX(transfer_date) AS last_date "
+                "FROM share_transfers WHERE company_id=%s GROUP BY transferor_id",
+                (cid,)
+            )
+            for r3 in (c.fetchall() or []):
+                r3d = r3 if isinstance(r3, dict) else dict(zip([desc[0] for desc in c.description], r3))
+                xfer_map[r3d['transferor_id']] = {
+                    'total':     int(r3d.get('total') or 0),
+                    'last_date': str(r3d.get('last_date') or ''),
+                }
+        except Exception:
+            pass  # share_transfers table may not exist yet
+
         conn.close()
 
+        # Step 4: Python-side filtering with tenure overlap logic
         result = []
         for s in all_shs:
-            entry  = str(s.get('date_of_entry') or '').split('T')[0]
-            xfer   = str(s.get('last_transfer_date') or '').split('T')[0]
-            active = int(s.get('is_active', 1) or 1)
+            sid    = s.get('id','')
+            entry  = str(s.get('date_of_entry')  or '').split('T')[0]
+            active = int(s.get('is_active', 1)   or 1)
+
+            # Determine transfer date: prefer column, then share_transfers log
+            ex   = extra.get(sid, {})
+            xm   = xfer_map.get(sid, {})
+            xfer = str(ex.get('xfer_date') or xm.get('last_date') or '').split('T')[0]
 
             if active == 1:
+                # Active holder: include if they existed on or before date_to
                 if date_to and entry and entry > date_to:
-                    continue  # joined after window closes
+                    continue
                 result.append(s)
             else:
-                # Inactive holder: include if tenure overlaps [date_from, date_to]
+                # Inactive (transferred) holder: include if tenure overlaps window
                 if date_to and entry and entry > date_to:
-                    continue  # joined after window closes
+                    continue   # joined after window closes
                 if date_from and xfer and xfer < date_from:
-                    continue  # left before window opens
+                    continue   # left before window opens
                 if not xfer and date_from and entry and entry < date_from:
-                    continue  # no xfer record, entry before window
+                    continue   # no xfer record, assume they left before window
 
-                # Restore shares_held to what they held during the period
+                # Restore historical shares
                 s = dict(s)
-                hist = int(s.get('historical_shares') or 0)
+                hist = int(ex.get('shares_before') or xm.get('total') or 0)
                 if hist > 0:
                     s['shares_held'] = hist
-                elif int(s.get('shares_held') or 0) == 0:
-                    # No transfer record AND shares_held=0:
-                    # Try to infer from the transferee row (shares received)
-                    # This covers Ankur's case where transfer was done before this fix
-                    pass  # will still show 0 if no data available
                 s['is_historical'] = True
                 result.append(s)
 
@@ -1219,7 +1245,14 @@ def list_shareholders(cid):
         app.logger.error(f"list_shareholders error: {_e}")
         try: conn.close()
         except Exception: pass
-        return jsonify([])
+        # Fallback: return all active shareholders ignoring date filter
+        try:
+            conn2 = get_db(); c2 = conn2.cursor()
+            c2.execute("SELECT * FROM shareholders WHERE company_id=%s AND is_active=1 ORDER BY name", (cid,))
+            result2 = rows(c2.fetchall()); conn2.close()
+            return jsonify(result2)
+        except Exception:
+            return jsonify([])
 @app.route("/api/shareholders", methods=["GET","POST"])
 @login_required
 def create_shareholder():
