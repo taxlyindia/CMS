@@ -1202,6 +1202,17 @@ def create_shareholder():
     c.execute("SELECT * FROM shareholders WHERE id=%s",(sid,)); result=row(c.fetchone()); conn.close()
     return jsonify(result),201
 
+@app.route("/api/shareholders/<sid>", methods=["GET"])
+@login_required
+def get_shareholder(sid):
+    """Fetch a single shareholder by ID."""
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM shareholders WHERE id=%s", (sid,))
+    result = row(c.fetchone()); conn.close()
+    if not result:
+        return jsonify({"error": "Shareholder not found"}), 404
+    return jsonify(result)
+
 @app.route("/api/shareholders/<sid>", methods=["PUT"])
 @login_required
 def update_shareholder(sid):
