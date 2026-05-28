@@ -10585,14 +10585,22 @@ async function doUploadWordTemplate() {
   fd.append('name', name); fd.append('category', cat);
   fd.append('description', desc); fd.append('file', file);
   try {
+    // Build headers: Auth + CSRF (same as api() helper — required for all POST)
+    const headers = {};
+    if (TOKEN) headers['Authorization'] = `Bearer ${TOKEN}`;
+    const csrfTok = (typeof _readCsrfCookie === 'function' ? _readCsrfCookie() : null) || _CSRF_TOKEN;
+    if (csrfTok) headers['X-CSRF-Token'] = csrfTok;
+    // NOTE: Do NOT set Content-Type for FormData — browser sets it with boundary automatically
     const resp = await fetch('/api/word-templates', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token')||'') },
+      headers,
       body: fd
     });
+    if (resp.status === 401) { toast('Session expired — please sign in again', 'err'); _showLogin(); return; }
     const r = await resp.json();
-    if (r.error) { toast(r.error, 'err'); return; }
-    toast('Template uploaded ✓  —  ' + (JSON.parse(r.placeholders||'[]').length) + ' placeholders detected', 'ok');
+    if (!resp.ok || r.error) { toast(r.error || `Upload failed (HTTP ${resp.status})`, 'err'); return; }
+    const phCount = (() => { try { return JSON.parse(r.placeholders||'[]').length; } catch { return 0; } })();
+    toast(`Template uploaded ✓ — ${phCount} placeholder${phCount!==1?'s':''} detected`, 'ok');
     closeModal(); loadWordTemplates();
   } catch(e) { toast('Upload failed: ' + e.message, 'err'); }
 }
@@ -10723,12 +10731,13 @@ async function doGenerateWordDoc(tid, fmt) {
 
   toast(`Generating ${fmt.toUpperCase()}…`, 'ok');
   try {
+    const _genHeaders = { 'Content-Type': 'application/json' };
+    if (TOKEN) _genHeaders['Authorization'] = `Bearer ${TOKEN}`;
+    const _genCsrf = (typeof _readCsrfCookie === 'function' ? _readCsrfCookie() : null) || _CSRF_TOKEN;
+    if (_genCsrf) _genHeaders['X-CSRF-Token'] = _genCsrf;
     const resp = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + (localStorage.getItem('token')||'')
-      },
+      headers: _genHeaders,
       body: JSON.stringify(body)
     });
     if (!resp.ok) { const e = await resp.json(); toast(e.error||'Generation failed','err'); return; }
