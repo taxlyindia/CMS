@@ -6,6 +6,59 @@ except ImportError:
 """
 app.py — Companies Ac
 
+t 2013 Compliance CRM  v2.0
+Flask REST API + JWT + RBAC
+All 7 new features: Company Master PDF, MCA Credentials, DSC Records,
+  Auditor Nature, All Statutory Registers, Document Template Store
+"""
+import os, uuid, json, io
+import xlsxwriter
+import openpyxl
+from pathlib import Path
+from datetime import datetime, date, timedelta
+try:
+    from flask_cors import CORS
+    _CORS_AVAILABLE = True
+except ImportError:
+    _CORS_AVAILABLE = False
+    class CORS:  # stub
+        def __init__(self, *a, **kw): pass
+from flask import Flask, request, jsonify, send_file, g, send_from_directory
+from werkzeug.utils import secure_filename
+
+from database import get_db, row, rows, hash_pw, init_db, write_audit_log, ensure_custom_placeholders_table, ensure_permission_tables
+from auth import login_required, require_role, platform_admin_required, make_token, hash_pw as auth_hash, verify_pw, can, get_token, DEFAULT_PERMISSIONS, ALL_MODULES, tenant_scope, rate_limit_login
+from compliance import (run_compliance_checks, generate_document, build_context,
+                        extract_placeholders, get_active_entities, AUTO_FILLED,
+                        generate_company_master_pdf, generate_register_pdf,
+                        REGISTER_DEFINITIONS)
+
+# ── Patch REGISTER_DEFINITIONS: add Distinctive No columns ──────────────────
+try:
+    if "MGT-1" in REGISTER_DEFINITIONS:
+        REGISTER_DEFINITIONS["MGT-1"]["columns"] = [
+            "Folio No","Name","PAN","Address","Share Class",
+            "Shares Held","Dist. No. From","Dist. No. To",
+            "Face Value (Rs.)","Date of Entry","Mobile","Email"
+        ]
+        REGISTER_DEFINITIONS["MGT-1"]["query"] = (
+            "SELECT folio_no,name,pan,address,share_class,shares_held,"
+            "distinctive_no_from,distinctive_no_to,face_value,date_of_entry,mobile,email "
+            "FROM shareholders WHERE company_id=%s AND is_active=1 ORDER BY folio_no"
+        )
+    if "MGT-2" in REGISTER_DEFINITIONS:
+        REGISTER_DEFINITIONS["MGT-2"]["columns"] = [
+            "Folio No","Name","PAN","Debenture Type","Amount (Rs.)",
+            "Dist. No. From","Dist. No. To","Face Value","Date of Issue","Mobile","Email"
+        ]
+        REGISTER_DEFINITIONS["MGT-2"]["query"] = (
+            "SELECT folio_no,name,pan,share_class,shares_held,"
+            "distinctive_no_from,distinctive_no_to,face_value,date_of_entry,mobile,email "
+            "FROM shareholders WHERE company_id=%s AND share_class='Debenture' ORDER BY folio_no"
+        )
+except Exception: pass
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ── Override generate_register_pdf: add CIN to letterhead header ────────────
 def generate_register_pdf(company_id: str, register_type: str) -> bytes:
     import io as _io
@@ -155,58 +208,6 @@ def generate_register_pdf(company_id: str, register_type: str) -> bytes:
     doc.build(story)
     buf.seek(0)
     return buf.read()
-# ─────────────────────────────────────────────────────────────────────────────
-t 2013 Compliance CRM  v2.0
-Flask REST API + JWT + RBAC
-All 7 new features: Company Master PDF, MCA Credentials, DSC Records,
-  Auditor Nature, All Statutory Registers, Document Template Store
-"""
-import os, uuid, json, io
-import xlsxwriter
-import openpyxl
-from pathlib import Path
-from datetime import datetime, date, timedelta
-try:
-    from flask_cors import CORS
-    _CORS_AVAILABLE = True
-except ImportError:
-    _CORS_AVAILABLE = False
-    class CORS:  # stub
-        def __init__(self, *a, **kw): pass
-from flask import Flask, request, jsonify, send_file, g, send_from_directory
-from werkzeug.utils import secure_filename
-
-from database import get_db, row, rows, hash_pw, init_db, write_audit_log, ensure_custom_placeholders_table, ensure_permission_tables
-from auth import login_required, require_role, platform_admin_required, make_token, hash_pw as auth_hash, verify_pw, can, get_token, DEFAULT_PERMISSIONS, ALL_MODULES, tenant_scope, rate_limit_login
-from compliance import (run_compliance_checks, generate_document, build_context,
-                        extract_placeholders, get_active_entities, AUTO_FILLED,
-                        generate_company_master_pdf, generate_register_pdf,
-                        REGISTER_DEFINITIONS)
-
-# ── Patch REGISTER_DEFINITIONS: add Distinctive No columns ──────────────────
-try:
-    if "MGT-1" in REGISTER_DEFINITIONS:
-        REGISTER_DEFINITIONS["MGT-1"]["columns"] = [
-            "Folio No","Name","PAN","Address","Share Class",
-            "Shares Held","Dist. No. From","Dist. No. To",
-            "Face Value (Rs.)","Date of Entry","Mobile","Email"
-        ]
-        REGISTER_DEFINITIONS["MGT-1"]["query"] = (
-            "SELECT folio_no,name,pan,address,share_class,shares_held,"
-            "distinctive_no_from,distinctive_no_to,face_value,date_of_entry,mobile,email "
-            "FROM shareholders WHERE company_id=%s AND is_active=1 ORDER BY folio_no"
-        )
-    if "MGT-2" in REGISTER_DEFINITIONS:
-        REGISTER_DEFINITIONS["MGT-2"]["columns"] = [
-            "Folio No","Name","PAN","Debenture Type","Amount (Rs.)",
-            "Dist. No. From","Dist. No. To","Face Value","Date of Issue","Mobile","Email"
-        ]
-        REGISTER_DEFINITIONS["MGT-2"]["query"] = (
-            "SELECT folio_no,name,pan,share_class,shares_held,"
-            "distinctive_no_from,distinctive_no_to,face_value,date_of_entry,mobile,email "
-            "FROM shareholders WHERE company_id=%s AND share_class='Debenture' ORDER BY folio_no"
-        )
-except Exception: pass
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -8955,4 +8956,188 @@ def compliance_report_pdf(cid):
     buf.seek(0)
     fname = f"{co['name'].replace(' ','_')}_Compliance_{today.strftime('%Y%m%d')}.pdf"
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=fname)
+
+
+@app.route("/api/registers/<reg_type>/<cid>/docx", methods=["GET"])
+@login_required
+def download_register_docx(reg_type, cid):
+    """Generate a Word (.docx) file for any statutory register."""
+    try:
+        from docx import Document
+        from docx.shared import Pt, RGBColor, Inches, Cm
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.enum.table import WD_TABLE_ALIGNMENT
+        from datetime import date as _date
+        import io as _io
+
+        reg = REGISTER_DEFINITIONS.get(reg_type)
+        if not reg:
+            return jsonify({"error": f"Unknown register: {reg_type}"}), 400
+
+        # Pre-flight for shareholder registers
+        if reg_type in ("MGT-1", "MGT-2"):
+            try:
+                _mc = get_db()
+                _add_col_safe(_mc, "shareholders", "distinctive_no_from", "BIGINT")
+                _add_col_safe(_mc, "shareholders", "distinctive_no_to",   "BIGINT")
+                _mc.commit(); _mc.close()
+            except Exception: pass
+
+        conn = get_db(); c = conn.cursor()
+        c.execute("SELECT * FROM companies WHERE id=%s", (cid,))
+        co = row(c.fetchone())
+        if not co:
+            conn.close()
+            return jsonify({"error": "Company not found"}), 404
+        c.execute(reg["query"], (cid,))
+        data_rows = c.fetchall()
+        conn.close()
+
+        doc  = Document()
+        sect = doc.sections[0]
+        sect.page_width   = Cm(29.7)
+        sect.page_height  = Cm(21.0)   # landscape A4
+        sect.left_margin  = sect.right_margin  = Cm(1.8)
+        sect.top_margin   = sect.bottom_margin = Cm(1.5)
+
+        def _rgb(hex_str):
+            h = hex_str.lstrip("#")
+            return RGBColor(int(h[0:2],16), int(h[2:4],16), int(h[4:6],16))
+
+        NAVY = _rgb("0f2d5c"); BLUE = _rgb("1a56db"); GREY = _rgb("64748b")
+
+        def _para(text, bold=False, size=11, color=None, center=False):
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER if center else WD_ALIGN_PARAGRAPH.LEFT
+            run = p.add_run(text)
+            run.bold = bold
+            run.font.size = Pt(size)
+            if color: run.font.color.rgb = color
+            p.paragraph_format.space_after = Pt(2)
+            p.paragraph_format.space_before = Pt(0)
+            return p
+
+        # ── LETTERHEAD ──────────────────────────────────────────────────────
+        co_name = (co.get("name") or "").upper()
+        co_cin  = co.get("cin") or ""
+        lh_addr = co.get("letterhead_address") or co.get("registered_office") or ""
+
+        _para(co_name, bold=True, size=14, color=NAVY, center=True)
+        if co_cin:
+            _para(f"CIN: {co_cin}", bold=True, size=9, color=BLUE, center=True)
+        if lh_addr:
+            _para(lh_addr, size=8, color=GREY, center=True)
+        co_email = co.get("email") or ""; co_phone = co.get("phone") or ""
+        contact  = "  |  ".join(p for p in [
+            (f"✉ {co_email}" if co_email else ""),
+            (f"☎ {co_phone}" if co_phone else ""),
+        ] if p)
+        if contact:
+            _para(contact, size=8, color=GREY, center=True)
+
+        # Divider
+        p_div = doc.add_paragraph("─" * 90)
+        p_div.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_div.paragraph_format.space_after = Pt(4)
+
+        # Register title
+        _para(reg["name"].upper(), bold=True, size=12, color=BLUE, center=True)
+        _para(f"As required under {reg['section']} of the Companies Act, 2013",
+              size=8, color=GREY, center=True)
+        _para(f"As on {_date.today().strftime('%d %B %Y')}",
+              size=8, color=GREY, center=True)
+
+        doc.add_paragraph()  # spacer
+
+        # ── TABLE ────────────────────────────────────────────────────────────
+        cols = reg["columns"]
+        n    = len(cols)
+        tbl  = doc.add_table(rows=1, cols=n)
+        tbl.style = "Table Grid"
+        tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+        # Header row
+        hdr_cells = tbl.rows[0].cells
+        for i, col_name in enumerate(cols):
+            cell = hdr_cells[i]
+            cell.text = ""
+            run = cell.paragraphs[0].add_run(col_name)
+            run.bold = True; run.font.size = Pt(8); run.font.color.rgb = RGBColor(255,255,255)
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            # Blue background
+            from docx.oxml.ns import qn
+            from docx.oxml import OxmlElement
+            tc_pr = cell._tc.get_or_add_tcPr()
+            shd   = OxmlElement("w:shd")
+            shd.set(qn("w:val"), "clear")
+            shd.set(qn("w:color"), "auto")
+            shd.set(qn("w:fill"), "1a56db")
+            tc_pr.append(shd)
+
+        # Data rows
+        def _cell_str(v):
+            if v is None: return "—"
+            from datetime import date as _d, datetime as _dt
+            if isinstance(v, (_d, _dt)): return str(v)[:10]
+            try:
+                from decimal import Decimal
+                if isinstance(v, Decimal): return f"{float(v):,.2f}"
+            except ImportError: pass
+            s = str(v)
+            return s if s.strip() else "—"
+
+        for row_i, dr in enumerate(data_rows):
+            all_vals = list(dr.values()) if isinstance(dr, dict) else list(dr)
+            row_cells = tbl.add_row().cells
+            bg = "f8fafc" if row_i % 2 == 0 else "ffffff"
+            for ci, val in enumerate(all_vals[:n]):
+                cell = row_cells[ci]
+                cell.text = ""
+                run = cell.paragraphs[0].add_run(_cell_str(val))
+                run.font.size = Pt(8)
+                cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
+                # Alternate row shading
+                from docx.oxml.ns import qn
+                from docx.oxml import OxmlElement
+                tc_pr = cell._tc.get_or_add_tcPr()
+                shd   = OxmlElement("w:shd")
+                shd.set(qn("w:val"), "clear")
+                shd.set(qn("w:color"), "auto")
+                shd.set(qn("w:fill"), bg)
+                tc_pr.append(shd)
+
+        if not data_rows:
+            no_row = tbl.add_row().cells
+            no_row[0].text = "No entries recorded."
+            no_row[0].paragraphs[0].runs[0].font.size = Pt(8)
+
+        # ── FOOTER ───────────────────────────────────────────────────────────
+        doc.add_paragraph()
+        _para("─" * 90, size=8, color=GREY, center=True)
+        _r_pan = co.get("pan") or ""; _r_off = co.get("registered_office") or ""
+        footer_parts = [p for p in [
+            f"CIN: {co_cin}" if co_cin else "",
+            f"PAN: {_r_pan}" if _r_pan else "",
+            _r_off,
+        ] if p]
+        lh_footer = co.get("letterhead_footer") or "  |  ".join(footer_parts)
+        if lh_footer:
+            _para(lh_footer, size=7, color=GREY, center=True)
+        _para("CONFIDENTIAL — Generated by Taxly-CMS | Taxly India Private Limited",
+              size=6.5, color=GREY, center=True)
+
+        buf = _io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+        fname = f"{reg.get('name','Register').replace(' ','_')}_{cid[:8]}.docx"
+        return send_file(buf,
+                         mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                         as_attachment=True,
+                         download_name=fname)
+    except ImportError:
+        return jsonify({"error": "python-docx not installed on server. Run: pip install python-docx"}), 500
+    except Exception as e:
+        app.logger.error(f"download_register_docx error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
