@@ -5727,12 +5727,16 @@ async function loadDirectors() {
   const url = cid ? `/api/companies/${cid}/directors${qs}` : `/api/directors${qs}`;
   const dirTbl = document.getElementById('dir-tbl');
   if (dirTbl) dirTbl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3)"><div class="spinner" style="margin:0 auto 12px"></div>Loading directors...</div>';
-  let dirs = await api(url);
-  if (!dirs) {
-    if (dirTbl) dirTbl.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load directors</div><div class="empty-sub">Check server connection</div></div>';
+  let dirs;
+  try {
+    dirs = await api(url);
+    if (!dirs) throw new Error('Server returned no data');
+  } catch(err) {
+    if (dirTbl) dirTbl.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load directors</div><div class="empty-sub">' + (err.message||'Check server connection') + '</div></div>';
     return;
   }
   // Client-side fallback filter for is_active (handles per-company endpoint which doesn't filter by status)
+  try {
   if (status === 'active')   dirs = dirs.filter(d => d.is_active === 1 || d.is_active === true);
   if (status === 'resigned') dirs = dirs.filter(d => d.is_active === 0 || d.is_active === false);
   // Client-side search: name, DIN, company name
@@ -5782,7 +5786,10 @@ async function loadDirectors() {
       </tbody>
     </table>
     <div class="tfoot">${dirs.length} director(s)</div></div>`;
-
+  } catch(renderErr) {
+    console.error('loadDirectors render error:', renderErr);
+    if (dirTbl) dirTbl.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Error rendering directors</div><div class="empty-sub">' + renderErr.message + '</div></div>';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
