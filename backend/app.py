@@ -9199,40 +9199,158 @@ def _extract_docx_placeholders(file_path: str) -> list:
         full_text = " ".join(text_parts)
         placeholders = list(set(_re.findall(r"\{\{([^}]+)\}\}", full_text)))
         return sorted(placeholders)
+        # Note: {{company_letterhead}} is a special built-in placeholder — always available
     except Exception as e:
         return []
 
 def _replace_docx_placeholders(src_path: str, context: dict) -> bytes:
-    """Replace {{key}} in a .docx file preserving ALL formatting. Returns bytes."""
+    """
+    Replace {{key}} placeholders in a .docx file preserving ALL formatting.
+    Special placeholder: {{company_letterhead}} inserts a fully formatted letterhead block.
+    Returns bytes of the generated document.
+    """
     from docx import Document as _DocxDoc
-    import re as _re
-    import copy, io as _io
+    from docx.shared import Pt, RGBColor, Cm
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    import re as _re, io as _io, copy
 
+    # ── Colour helpers ────────────────────────────────────────────────────
+    NAVY = RGBColor(0x0f, 0x2d, 0x5c)
+    BLUE = RGBColor(0x1a, 0x56, 0xdb)
+    GREY = RGBColor(0x64, 0x74, 0x8b)
+
+    def _set_run_color(run, rgb):
+        run.font.color.rgb = rgb
+
+    def _add_para_border(para, color_hex="1a56db", size=12):
+        """Add a bottom border (horizontal rule) to a paragraph."""
+        pPr  = para._p.get_or_add_pPr()
+        pBdr = OxmlElement("w:pBdr")
+        bot  = OxmlElement("w:bottom")
+        bot.set(qn("w:val"),   "single")
+        bot.set(qn("w:sz"),    str(size))
+        bot.set(qn("w:space"), "1")
+        bot.set(qn("w:color"), color_hex)
+        pBdr.append(bot)
+        pPr.append(pBdr)
+
+    def _cell_shading(cell, fill_hex):
+        tcPr = cell._tc.get_or_add_tcPr()
+        shd  = OxmlElement("w:shd")
+        shd.set(qn("w:val"),   "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"),  fill_hex)
+        tcPr.append(shd)
+
+    def _build_letterhead_paras(doc_ref, co: dict) -> list:
+        """
+        Build a list of paragraph XML elements representing the company letterhead.
+        Returns a list of lxml elements ready to be inserted into the document body.
+        """
+        from lxml import etree
+        paras_xml = []
+
+        def _make_para(text, bold=False, size_pt=11, color=None,
+                        align=WD_ALIGN_PARAGRAPH.CENTER,
+                        space_before=0, space_after=3, border_hex=None, border_size=0):
+            p = doc_ref.add_paragraph()          # temp — we'll detach it
+            p.alignment = align
+            p.paragraph_format.space_before = Pt(space_before)
+            p.paragraph_format.space_after  = Pt(space_after)
+            if text:
+                run = p.add_run(text)
+                run.bold = bold
+                run.font.size = Pt(size_pt)
+                if color: _set_run_color(run, color)
+            if border_hex:
+                _add_para_border(p, border_hex, border_size)
+            elem = copy.deepcopy(p._p)
+            p._p.getparent().remove(p._p)        # detach from doc
+            return elem
+
+        co_name  = (co.get("name") or "").upper()
+        co_cin   = co.get("cin")   or ""
+        co_pan   = co.get("pan")   or ""
+        lh_addr  = co.get("letterhead_address") or co.get("registered_office") or ""
+        co_email = co.get("email") or ""
+        co_phone = co.get("phone") or ""
+
+        # 1. Company name — large, navy, bold
+        paras_xml.append(_make_para(co_name, bold=True, size_pt=16,
+                                     color=NAVY, space_before=2, space_after=2))
+        # 2. CIN — blue, bold
+        if co_cin:
+            paras_xml.append(_make_para(f"CIN: {co_cin}", bold=True, size_pt=9,
+                                         color=BLUE, space_after=1))
+        # 3. PAN
+        if co_pan:
+            paras_xml.append(_make_para(f"PAN: {co_pan}", bold=False, size_pt=8,
+                                         color=GREY, space_after=1))
+        # 4. Address lines
+        if lh_addr:
+            parts = [p.strip() for p in lh_addr.replace(" | ", "|").split("|") if p.strip()]
+            for part in (parts if parts else [lh_addr]):
+                paras_xml.append(_make_para(part, size_pt=8, color=GREY, space_after=1))
+        # 5. Email + Phone
+        contact = "  |  ".join(p for p in [
+            f"✉ {co_email}" if co_email else "",
+            f"☎ {co_phone}" if co_phone else "",
+        ] if p)
+        if contact:
+            paras_xml.append(_make_para(contact, size_pt=8, color=GREY, space_after=3))
+        # 6. Thick blue divider
+        paras_xml.append(_make_para("", space_before=0, space_after=0,
+                                     border_hex="1a56db", border_size=14))
+        # 7. Thin navy divider
+        paras_xml.append(_make_para("", space_before=1, space_after=6,
+                                     border_hex="0f2d5c", border_size=4))
+        return paras_xml
+
+    # ── Simple text replacement in a paragraph ────────────────────────────
     def _replace_in_para(para):
-        """Handle run-split placeholders by joining runs, replacing, then re-splitting."""
-        full_text = "".join(r.text for r in para.runs)
-        if "{{" not in full_text:
-            return
-        # Replace all placeholders in full text
+        """Handle run-split {{placeholders}} by joining runs, replacing, re-splitting."""
+        full = "".join(r.text for r in para.runs)
+        if "{{" not in full:
+            return False
         def _sub(m):
             key = m.group(1).strip()
-            val = context.get(key, m.group(0))  # keep original if no value
+            if key == "company_letterhead":
+                return "__LETTERHEAD_BLOCK__"   # signal — handled separately
+            val = context.get(key, m.group(0))
             return str(val) if val is not None else ""
-        new_text = _re.sub(r"\{\{([^}]+)\}\}", _sub, full_text)
-        if new_text == full_text:
-            return
-        # Put all replaced text into first run, clear the rest
+        new = _re.sub(r"\{\{([^}]+)\}\}", _sub, full)
+        if new == full:
+            return False
         if para.runs:
-            para.runs[0].text = new_text
+            para.runs[0].text = new
             for r in para.runs[1:]:
                 r.text = ""
+        return True
 
+    # ── Inline letterhead expansion helper ───────────────────────────────
+    def _expand_letterhead_in_body(doc, co):
+        """Find any paragraph containing __LETTERHEAD_BLOCK__ and replace it
+        with the multi-paragraph letterhead XML in-place."""
+        body = doc.element.body
+        for i, para in enumerate(doc.paragraphs):
+            if "__LETTERHEAD_BLOCK__" in para.text:
+                lh_paras = _build_letterhead_paras(doc, co)
+                # Insert letterhead paragraphs before the placeholder paragraph
+                for lh_p in reversed(lh_paras):
+                    para._p.addprevious(lh_p)
+                # Remove the placeholder paragraph
+                para._p.getparent().remove(para._p)
+                break   # only one letterhead block expected
+
+    # ── Load document & build company context ────────────────────────────
     doc = _DocxDoc(src_path)
-    # Paragraphs in body
+    co  = context.get("_company") or {}
+
+    # ── Pass 1: replace all text placeholders in body ────────────────────
     for para in doc.paragraphs:
         _replace_in_para(para)
-    # Tables
     for table in doc.tables:
         for trow in table.rows:
             for cell in trow.cells:
@@ -9246,10 +9364,16 @@ def _replace_docx_placeholders(src_path: str, context: dict) -> bytes:
         if section.footer:
             for para in section.footer.paragraphs:
                 _replace_in_para(para)
+
+    # ── Pass 2: expand {{company_letterhead}} → full formatted block ──────
+    if co:
+        _expand_letterhead_in_body(doc, co)
+
     buf = _io.BytesIO()
     doc.save(buf)
     buf.seek(0)
     return buf.read()
+
 
 @app.route("/api/word-templates", methods=["GET"])
 @login_required
@@ -9357,8 +9481,16 @@ def generate_from_word_template(tid):
             )
         except Exception as e:
             app.logger.warning(f"build_context error: {e}")
+        # Attach company record so letterhead can be built
+        try:
+            _lh_conn = get_db(); _lh_c = _lh_conn.cursor()
+            _lh_c.execute("SELECT * FROM companies WHERE id=%s", (company_id,))
+            _co_rec = row(_lh_c.fetchone()); _lh_conn.close()
+            if _co_rec:
+                ctx["_company"] = _co_rec
+        except Exception: pass
     # Merge any manual overrides from client
-    ctx.update(extra_ctx)
+    ctx.update({k: v for k, v in extra_ctx.items() if not k.startswith("_")})
 
     try:
         docx_bytes = _replace_docx_placeholders(tpl["file_path"], ctx)
@@ -9397,7 +9529,13 @@ def generate_word_template_pdf(tid):
                                 director2_id=d.get("director2_id"),
                                 auditor_id=d.get("auditor_id"))
         except Exception: pass
-    ctx.update(extra_ctx)
+        try:
+            _lhc = get_db(); _lhcc = _lhc.cursor()
+            _lhcc.execute("SELECT * FROM companies WHERE id=%s", (company_id,))
+            _cor = row(_lhcc.fetchone()); _lhc.close()
+            if _cor: ctx["_company"] = _cor
+        except Exception: pass
+    ctx.update({k: v for k, v in extra_ctx.items() if not k.startswith("_")})
 
     try:
         docx_bytes = _replace_docx_placeholders(tpl["file_path"], ctx)
