@@ -4,7 +4,159 @@ try:
 except ImportError:
     pass
 """
-app.py — Companies Act 2013 Compliance CRM  v2.0
+app.py — Companies Ac
+
+# ── Override generate_register_pdf: add CIN to letterhead header ────────────
+def generate_register_pdf(company_id: str, register_type: str) -> bytes:
+    import io as _io
+    from datetime import date as _date
+    try:
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.units import inch
+        from reportlab.lib import colors
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    except ImportError:
+        raise RuntimeError("reportlab not installed")
+
+    reg = REGISTER_DEFINITIONS.get(register_type)
+    if not reg: raise ValueError(f"Unknown register: {register_type}")
+
+    # Pre-flight columns for shareholder registers
+    if register_type in ("MGT-1", "MGT-2"):
+        try:
+            _mc = get_db()
+            _add_col_safe(_mc, "shareholders", "distinctive_no_from", "BIGINT")
+            _add_col_safe(_mc, "shareholders", "distinctive_no_to",   "BIGINT")
+            _mc.commit(); _mc.close()
+        except Exception: pass
+
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM companies WHERE id=%s", (company_id,))
+    co = row(c.fetchone())
+    if not co: conn.close(); raise ValueError("Company not found")
+    c.execute(reg["query"], (company_id,))
+    data_rows = c.fetchall()
+    conn.close()
+
+    NAVY = colors.HexColor("#0f2d5c")
+    BLUE = colors.HexColor("#1a56db")
+    GREY = colors.HexColor("#64748b")
+    WHITE = colors.white
+    ROW_ALT = colors.HexColor("#f8fafc")
+
+    use_landscape = len(reg["columns"]) > 6
+    pagesize = landscape(A4) if use_landscape else A4
+    buf = _io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=pagesize,
+                            topMargin=0.6*inch, bottomMargin=0.6*inch,
+                            leftMargin=0.7*inch, rightMargin=0.7*inch)
+    story = []
+
+    def sty(n, sz=9, bold=False, col=None, align=TA_LEFT, leading=None):
+        return ParagraphStyle(n, fontName="Helvetica-Bold" if bold else "Helvetica",
+                               fontSize=sz, textColor=col or colors.HexColor("#1e293b"),
+                               alignment=align, leading=leading or (sz * 1.4))
+
+    # ── LETTERHEAD HEADER ────────────────────────────────────────────────────
+    co_name = (co.get("name") or "").upper()
+    co_cin  = co.get("cin") or ""
+    lh_addr = co.get("letterhead_address") or co.get("registered_office") or ""
+
+    story.append(Spacer(1, 3))
+    # Company Name
+    story.append(Paragraph(co_name, sty("co", 15, True, NAVY, TA_CENTER)))
+    # CIN on its own line — prominent in letterhead
+    if co_cin:
+        story.append(Paragraph(f"CIN: {co_cin}", sty("cin", 8, True, BLUE, TA_CENTER, 12)))
+    # Registered address
+    if lh_addr:
+        addr_parts = [l.strip() for l in lh_addr.replace(" | ", "|").split("|") if l.strip()]
+        for ap in (addr_parts if addr_parts else [lh_addr]):
+            story.append(Paragraph(ap, sty("addr_r", 7, False, GREY, TA_CENTER, 10)))
+    # Contact info
+    _reg_email = co.get("email") or ""
+    _reg_phone = co.get("phone") or ""
+    _reg_contact = "  |  ".join(p for p in [
+        (f"✉ {_reg_email}" if _reg_email else ""),
+        (f"☎ {_reg_phone}" if _reg_phone else ""),
+    ] if p)
+    if _reg_contact:
+        story.append(Paragraph(_reg_contact, sty("rc", 7, False, GREY, TA_CENTER, 10)))
+
+    story.append(Spacer(1, 4))
+    story.append(HRFlowable(width="100%", thickness=2, color=BLUE, spaceAfter=2))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=NAVY, spaceAfter=6))
+
+    # Register title
+    story.append(Paragraph(reg["name"].upper(), sty("t", 12, True, BLUE, TA_CENTER)))
+    story.append(Paragraph(f"As required under {reg['section']} of the Companies Act, 2013",
+                            sty("s", 8, False, GREY, TA_CENTER)))
+    story.append(Paragraph(f"As on {_date.today().strftime('%d %B %Y')}",
+                            sty("dt", 8, False, GREY, TA_CENTER)))
+    story.append(Spacer(1, 12))
+
+    # ── TABLE ────────────────────────────────────────────────────────────────
+    n_cols = len(reg["columns"])
+    col_w  = [doc.width / n_cols] * n_cols
+
+    tdata = [[Paragraph(h, sty("h", 7.5, True, WHITE)) for h in reg["columns"]]]
+    for dr in data_rows:
+        all_vals = list(dr.values()) if isinstance(dr, dict) else list(dr)
+        row_vals = all_vals[:n_cols]
+        def _cs(v):
+            if v is None: return "—"
+            from datetime import date as _d, datetime as _dt
+            if isinstance(v, (_d, _dt)): return str(v)[:10]
+            try:
+                from decimal import Decimal
+                if isinstance(v, Decimal): return f"{float(v):.2f}"
+            except ImportError: pass
+            s = str(v)
+            return s if s.strip() else "—"
+        tdata.append([Paragraph(_cs(v), sty("d", 7.5)) for v in row_vals])
+
+    if not data_rows:
+        tdata.append([Paragraph("No entries recorded.", sty("d", 8, False, GREY))] + [""] * (n_cols - 1))
+
+    ts = TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), BLUE),
+        ("TEXTCOLOR",  (0,0), (-1,0), WHITE),
+        ("FONTNAME",   (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE",   (0,0), (-1,-1), 7.5),
+        ("ROWPADDING", (0,0), (-1,-1), 4),
+        ("GRID",       (0,0), (-1,-1), 0.3, colors.HexColor("#cbd5e1")),
+        ("VALIGN",     (0,0), (-1,-1), "TOP"),
+    ])
+    for i in range(1, len(tdata)):
+        if i % 2 == 0:
+            ts.add("BACKGROUND", (0,i), (-1,i), ROW_ALT)
+    t = Table(tdata, colWidths=col_w)
+    t.setStyle(ts)
+    story.append(t)
+
+    # ── FOOTER ───────────────────────────────────────────────────────────────
+    story.append(Spacer(1, 16))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#94a3b8")))
+    story.append(Spacer(1, 3))
+    _r_pan = co.get("pan") or ""
+    _r_off = co.get("registered_office") or ""
+    lh_footer = co.get("letterhead_footer") or "  |  ".join(p for p in [
+        f"CIN: {co_cin}" if co_cin else "",
+        f"PAN: {_r_pan}" if _r_pan else "",
+        _r_off,
+    ] if p)
+    if lh_footer:
+        story.append(Paragraph(lh_footer, sty("ft", 7, False, GREY, TA_CENTER)))
+    story.append(Paragraph("CONFIDENTIAL — Generated by Taxly-CMS | Taxly India Private Limited",
+                            sty("cf", 6.5, False, GREY, TA_CENTER)))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+# ─────────────────────────────────────────────────────────────────────────────
+t 2013 Compliance CRM  v2.0
 Flask REST API + JWT + RBAC
 All 7 new features: Company Master PDF, MCA Credentials, DSC Records,
   Auditor Nature, All Statutory Registers, Document Template Store
