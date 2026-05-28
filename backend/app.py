@@ -9300,12 +9300,6 @@ def _replace_docx_placeholders(src_path: str, context: dict) -> bytes:
         ] if p)
         if contact:
             paras_xml.append(_make_para(contact, size_pt=8, color=GREY, space_after=3))
-        # 6. Thick blue divider
-        paras_xml.append(_make_para("", space_before=0, space_after=0,
-                                     border_hex="1a56db", border_size=14))
-        # 7. Thin navy divider
-        paras_xml.append(_make_para("", space_before=1, space_after=6,
-                                     border_hex="0f2d5c", border_size=4))
         return paras_xml
 
     # ── Simple text replacement in a paragraph ────────────────────────────
