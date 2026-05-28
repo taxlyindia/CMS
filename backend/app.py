@@ -1177,12 +1177,12 @@ def create_shareholder():
     try:
         c.execute("""INSERT INTO shareholders
             (id,company_id,name,folio_no,pan,email,mobile,address,share_class,shares_held,face_value,
-             date_of_entry,mca_user_id,mca_password,distinctive_no_from,distinctive_no_to,tenant_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+             date_of_entry,mca_user_id,mca_password,mca_notes,distinctive_no_from,distinctive_no_to,tenant_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             (sid,d["company_id"],d["name"],d.get("folio_no"),_str((d.get("pan") or "").upper()),
              d.get("email"),d.get("mobile"),d.get("address"),d.get("share_class","Equity"),
              _num(d.get("shares_held",0),cast=int),_num(d.get("face_value",10),default=10),_dt(d.get("date_of_entry")),
-             d.get("mca_user_id"),d.get("mca_password"),d.get("distinctive_no_from"),d.get("distinctive_no_to"),g.tenant_id))
+             d.get("mca_user_id"),d.get("mca_password"),d.get("mca_notes"),d.get("distinctive_no_from"),d.get("distinctive_no_to"),g.tenant_id))
     except Exception as _ins_err:
         # Column might not exist yet in older DB — run migration then retry
         if "distinctive_no" in str(_ins_err).lower() or "column" in str(_ins_err).lower() or "does not exist" in str(_ins_err).lower():
@@ -1218,9 +1218,12 @@ def get_shareholder(sid):
 def update_shareholder(sid):
     if not can("shareholder","update"): return jsonify({"error":"Insufficient permissions"}),403
     d=request.get_json(silent=True, force=True) or {}
-    fields={k:d[k] for k in ["name","folio_no","pan","email","mobile","address","share_class",
-             "shares_held","face_value","is_active","mca_user_id","mca_password",
-             "distinctive_no_from","distinctive_no_to"] if k in d}
+    fields={k:d[k] for k in [
+                "name","folio_no","pan","email","mobile","address","share_class",
+                "shares_held","face_value","is_active","date_of_entry",
+                "mca_user_id","mca_password","mca_notes",
+                "distinctive_no_from","distinctive_no_to"
+             ] if k in d}
     conn=get_db(); c=conn.cursor()
     c.execute(f"UPDATE shareholders SET {','.join(k+'=%s' for k in fields)} WHERE id=%s",list(fields.values())+[sid])
     conn.commit(); c.execute("SELECT * FROM shareholders WHERE id=%s",(sid,)); result=row(c.fetchone()); conn.close()
@@ -5243,6 +5246,7 @@ def _startup():
     try:
         _mc = get_db()
         _add_col_safe(_mc, "shareholders", "distinctive_no_from", "BIGINT")
+        _add_col_safe(_mc, "shareholders", "mca_notes", "TEXT")
         _add_col_safe(_mc, "shareholders", "distinctive_no_to",   "BIGINT")
         _mc_cur = _mc.cursor()
         _mc_cur.execute(
