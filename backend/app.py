@@ -1043,6 +1043,25 @@ def create_director():
 def update_director(did):
     if not can("director","update"): return jsonify({"error":"Insufficient permissions"}),403
     d = request.get_json(silent=True, force=True) or {}
+
+    # ── Pre-flight: ensure all new columns exist (separate connection) ──────────
+    try:
+        _mc = get_db()
+        for _col, _typ in [
+            ("mca_user_id",         "TEXT"),
+            ("mca_password",        "TEXT"),
+            ("mca_notes",           "TEXT"),
+            ("date_of_resignation", "TEXT"),
+            ("resignation_reason",  "TEXT"),
+            ("date_of_cessation",   "TEXT"),
+        ]:
+            _add_col_safe(_mc, "directors", _col, _typ)
+        _mc.commit(); _mc.close()
+    except Exception as _pe:
+        app.logger.warning(f"update_director pre-flight: {_pe}")
+
+    # ── Main transaction ─────────────────────────────────────────────────────────
+    import datetime as _dt2
     conn = get_db(); c = conn.cursor()
     try:
         allowed = ["name","din","pan","aadhaar","email","mobile","address","designation",
@@ -1064,20 +1083,20 @@ def update_director(did):
             )
         # Update KYC if KYC fields sent
         if "last_kyc_date" in d or "next_due_date" in d:
-            import datetime as _dt2
             due      = _dt(d["next_due_date"]) if d.get("next_due_date") else _kyc_due()
             st       = _kyc_status(due)
             last_kyc = _dt(d["last_kyc_date"]) if d.get("last_kyc_date") else None
+            now_iso  = _dt2.datetime.utcnow().isoformat()
             if last_kyc:
                 c.execute(
                     "UPDATE director_kyc SET last_kyc_date=%s,next_due_date=%s,"
                     "kyc_status=%s,updated_at=%s WHERE director_id=%s",
-                    (last_kyc, due, st, _dt2.datetime.utcnow().isoformat(), did))
+                    (last_kyc, due, st, now_iso, did))
             else:
                 c.execute(
                     "UPDATE director_kyc SET next_due_date=%s,kyc_status=%s,"
                     "updated_at=%s WHERE director_id=%s",
-                    (due, st, _dt2.datetime.utcnow().isoformat(), did))
+                    (due, st, now_iso, did))
         conn.commit()
         c.execute(
             "SELECT d.*,k.last_kyc_date,k.next_due_date,k.kyc_status FROM directors d "
@@ -6946,12 +6965,17 @@ def resign_director(did):
     if not resign_date:
         return jsonify({"error":"Resignation date is required"}), 400
 
+    # ── Pre-flight ───────────────────────────────────────────────────────────────
+    try:
+        _mc = get_db()
+        _add_col_safe(_mc, "directors", "date_of_resignation", "TEXT")
+        _add_col_safe(_mc, "directors", "resignation_reason",  "TEXT")
+        _mc.commit(); _mc.close()
+    except Exception as _pe:
+        app.logger.warning(f"resign pre-flight: {_pe}")
+
     conn = get_db(); c = conn.cursor()
     try:
-        # Add columns if they don't exist yet
-        _add_col_safe(conn, "directors", "date_of_resignation", "TEXT")
-        _add_col_safe(conn, "directors", "resignation_reason",  "TEXT")
-
         c.execute(
             "UPDATE directors SET is_active=0, date_of_resignation=%s, "
             "date_of_cessation=%s, resignation_reason=%s WHERE id=%s",
@@ -6967,12 +6991,6 @@ def resign_director(did):
         try: conn.rollback(); conn.close()
         except Exception: pass
         return jsonify({"error": str(e)}), 500
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# AI DOCUMENT DRAFTING
-# ════════════════════════════════════════════════════════════════════════════
-
 @app.route('/api/ai/draft', methods=['POST'])
 @login_required
 def ai_draft():
