@@ -879,6 +879,15 @@ def all_directors():
 @app.route("/api/companies/<cid>/directors")
 @login_required
 def list_directors(cid):
+    # Pre-flight: ensure new columns exist before SELECT d.*
+    try:
+        _mc = get_db()
+        for _col in ["date_of_resignation","resignation_reason","date_of_cessation",
+                     "mca_user_id","mca_password","mca_notes"]:
+            _add_col_safe(_mc, "directors", _col, "TEXT")
+        _mc.commit(); _mc.close()
+    except Exception: pass
+
     conn=get_db(); c=conn.cursor()
     date_from = request.args.get('date_from','').strip()
     date_to   = request.args.get('date_to','').strip()
@@ -890,30 +899,20 @@ def list_directors(cid):
             (cid,))
         all_dirs = rows(c.fetchall()) or []
         conn.close()
-
         if not date_from and not date_to:
-            # No filter: show only active (not resigned/ceased)
             result = [r for r in all_dirs if int(r.get('is_active',1) or 1) != 0]
         else:
-            # Period filter: show directors whose tenure overlaps the window
             result = []
             for r in all_dirs:
-                entry = str(r.get('date_of_appointment') or r.get('created_at') or '').split('T')[0]
-                # Exit = resignation date OR cessation date, whichever is set
+                entry  = str(r.get('date_of_appointment') or r.get('created_at') or '').split('T')[0]
                 resign = str(r.get('date_of_resignation') or r.get('date_of_cessation') or '').split('T')[0]
                 active = int(r.get('is_active',1) or 1)
-
                 if active == 1:
-                    # Still active: include if appointed before window ends
-                    if date_to and entry and entry > date_to:
-                        continue
+                    if date_to and entry and entry > date_to: continue
                     result.append(r)
                 else:
-                    # Resigned/ceased: include if tenure overlaps window
-                    if date_to and entry and entry > date_to:
-                        continue   # joined after window closes
-                    if date_from and resign and resign < date_from:
-                        continue   # left before window opens
+                    if date_to and entry and entry > date_to: continue
+                    if date_from and resign and resign < date_from: continue
                     r = dict(r); r['is_historical'] = True
                     result.append(r)
         return jsonify(result)
@@ -922,8 +921,6 @@ def list_directors(cid):
         except Exception: pass
         app.logger.error(f"list_directors error: {e}")
         return jsonify([])
-
-
 @app.route("/api/dir-kyc", methods=["GET","POST"])
 @login_required
 def dir_kyc_list():
