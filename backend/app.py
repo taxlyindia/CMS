@@ -9338,7 +9338,9 @@ def _replace_docx_placeholders(src_path: str, context: dict) -> bytes:
             if "__LETTERHEAD_BLOCK__" in para.text:
                 lh_paras = _build_letterhead_paras(doc, co)
                 # Insert letterhead paragraphs before the placeholder paragraph
-                for lh_p in reversed(lh_paras):
+                # NOTE: addprevious always inserts immediately before the anchor node,
+                # so iterating forward produces the correct top-to-bottom order.
+                for lh_p in lh_paras:
                     para._p.addprevious(lh_p)
                 # Remove the placeholder paragraph
                 para._p.getparent().remove(para._p)
