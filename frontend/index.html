@@ -5701,6 +5701,16 @@ async function deleteCo(id, name) {
 // ═══════════════════════════════════════════════════════════════════════════
 // DIRECTORS — with MCA credentials, mobile, email columns
 // ═══════════════════════════════════════════════════════════════════════════
+function dirResignBtn(d) {
+  if (d.date_of_resignation) {
+    return '<span style="font-size:10.5px;color:#dc2626;font-weight:600;padding:2px 7px;background:#fee2e2;border-radius:4px;border:1px solid #fca5a5">✓ Resigned</span>';
+  }
+  const safeId   = (d.id   || '').replace(/'/g, "\'");
+  const safeName = (d.name || '').replace(/'/g, "\'");
+  return '<button class="btn btn-xs" style="background:rgba(220,38,38,.08);color:#dc2626;border:1px solid #fca5a5;font-weight:600" ' +
+         'onclick="openResignModal(\'' + safeId + '\',\'' + safeName + '\')" title="Record resignation">🚪 Resign</button>';
+}
+
 async function loadDirectors() {
   const cid    = PB.company_id || document.getElementById('dir-co-f')?.value || '';
   const status = document.getElementById('dir-status-f')?.value || '';
@@ -5737,7 +5747,7 @@ async function loadDirectors() {
         <th>Director Name</th><th>DIN</th><th>PAN</th>
         ${!cid ? '<th>Company</th>' : ''}
         <th>Designation</th><th>Mobile</th><th>Email</th>
-        <th>Appointed</th>
+        <th>Date of Appointment</th><th>Resignation Date</th>
         <th>Status</th>
         <th>MCA User ID</th><th>MCA Password</th>
         <th>Actions</th>
@@ -5758,7 +5768,7 @@ async function loadDirectors() {
           <td>${d.mca_password ? credSpan(d.mca_password, 'MCA Password') : '—'}</td>
           <td><div class="td-actions">
             <button class="btn btn-xs btn-ghost" onclick="openDirModal('${d.id}','${d.company_id}')">Edit</button>
-            ${!d.date_of_resignation ? `<button class="btn btn-xs btn-warning" style="background:rgba(220,38,38,.1);color:#dc2626;border-color:#fca5a5" onclick="openResignModal('${d.id}','${d.name}')" title="Resign this director">🚪 Resign</button>` : `<span style="font-size:10.5px;color:#dc2626;font-weight:600;padding:2px 7px;background:#fee2e2;border-radius:4px;border:1px solid #fca5a5">Resigned ${fd(d.date_of_resignation)}</span>`}
+            ${dirResignBtn(d)}
             <button class="btn btn-xs btn-warning" onclick="deactivateDir('${d.id}')" title="Deactivate">⏸ Off</button>
             <button class="btn btn-xs btn-danger" onclick="hardDeleteDir('${d.id}')" title="Permanently delete">🗑 Del</button>
           </div></td>
@@ -5851,8 +5861,9 @@ async function loadDirKYC() {
         const coLabel = cos.length > 0
           ? `<div style="font-size:10.5px;color:var(--text3);margin-top:2px" title="Director in: ${cos.join(', ')}">🏢 ${cos.length} compan${cos.length>1?'ies':'y'}</div>`
           : '';
+        const isResigned = !!d.date_of_resignation;
         return `
-        <tr>
+        <tr style="${isResigned ? 'background:rgba(220,38,38,0.04);' : ''}">
           <td>
             <div style="font-weight:600">${d.name}</div>
             ${coLabel}
