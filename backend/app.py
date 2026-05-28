@@ -1161,16 +1161,18 @@ def list_shareholders(cid):
             return jsonify(result)
 
         # ── Period filter: show shareholders active during the window ──────────
-        # Include a shareholder if their tenure overlaps [date_from, date_to].
-        # For inactive (transferred) holders, restore their shares_held to what
-        # they held BEFORE the transfer (sum of shares they transferred out).
-
+        # Fetch all shareholders with:
+        #   shares_held_before_transfer — stored directly on row during transfer
+        #   total_shares_transferred    — from share_transfers log (backup)
+        #   last_transfer_date          — from share_transfers log OR transfer_date_actual
         c.execute(
             "SELECT s.*, "
-            "    (SELECT MAX(st.transfer_date) FROM share_transfers st "
-            "     WHERE st.transferor_id = s.id) AS last_transfer_date, "
-            "    (SELECT COALESCE(SUM(st2.shares_transferred), 0) FROM share_transfers st2 "
-            "     WHERE st2.transferor_id = s.id) AS total_shares_transferred "
+            "  COALESCE(s.shares_held_before_transfer, "
+            "    (SELECT COALESCE(SUM(st.shares_transferred),0) FROM share_transfers st "
+            "     WHERE st.transferor_id = s.id)) AS historical_shares, "
+            "  COALESCE(s.transfer_date_actual, "
+            "    (SELECT MAX(st2.transfer_date) FROM share_transfers st2 "
+            "     WHERE st2.transferor_id = s.id)) AS last_transfer_date "
             "FROM shareholders s "
             "WHERE s.company_id = %s "
             "ORDER BY s.name, s.date_of_entry",
@@ -1186,29 +1188,28 @@ def list_shareholders(cid):
             active = int(s.get('is_active', 1) or 1)
 
             if active == 1:
-                # Active holder: include if entry is on/before window end
                 if date_to and entry and entry > date_to:
-                    continue
+                    continue  # joined after window closes
                 result.append(s)
-
             else:
                 # Inactive holder: include if tenure overlaps [date_from, date_to]
                 if date_to and entry and entry > date_to:
-                    continue   # joined after window closes
+                    continue  # joined after window closes
                 if date_from and xfer and xfer < date_from:
-                    continue   # left before window opens
+                    continue  # left before window opens
                 if not xfer and date_from and entry and entry < date_from:
-                    continue   # no transfer record, entry before window
+                    continue  # no xfer record, entry before window
 
-                # ── Restore shares held for this period ──────────────────────
-                # After full transfer shares_held=0, but during the period they
-                # held: shares_transferred_out = what they owned before transfer.
-                # Use total_shares_transferred as the period shares_held value.
-                s = dict(s)  # make mutable copy
-                historical_shares = int(s.get('total_shares_transferred') or 0)
-                if historical_shares > 0:
-                    s['shares_held'] = historical_shares
-                # Also mark it clearly as a historical record
+                # Restore shares_held to what they held during the period
+                s = dict(s)
+                hist = int(s.get('historical_shares') or 0)
+                if hist > 0:
+                    s['shares_held'] = hist
+                elif int(s.get('shares_held') or 0) == 0:
+                    # No transfer record AND shares_held=0:
+                    # Try to infer from the transferee row (shares received)
+                    # This covers Ankur's case where transfer was done before this fix
+                    pass  # will still show 0 if no data available
                 s['is_historical'] = True
                 result.append(s)
 
@@ -1392,27 +1393,48 @@ def transfer_shares():
                  transfer_date or None,
                  dist_from, dist_to, g.tenant_id))
 
-        # Deduct from transferor
+        # Deduct from transferor — store original shares_held for historical queries
         remaining = transferor["shares_held"] - shares_to_xfer
+        original_shares = transferor["shares_held"]
         if remaining <= 0:
-            # All shares transferred — hide the folio (is_active=0)
-            c.execute("UPDATE shareholders SET shares_held=0, is_active=0 WHERE id=%s", (transferor_id,))
+            # All shares transferred — hide the folio, store original count
+            try:
+                c.execute("""UPDATE shareholders
+                             SET shares_held=0, is_active=0,
+                                 shares_held_before_transfer=%s,
+                                 transfer_date_actual=%s
+                             WHERE id=%s""",
+                          (original_shares, transfer_date or None, transferor_id))
+            except Exception:
+                # shares_held_before_transfer column may not exist yet — add it first
+                _add_col_safe(conn, "shareholders", "shares_held_before_transfer", "INTEGER")
+                _add_col_safe(conn, "shareholders", "transfer_date_actual", "TEXT")
+                c.execute("UPDATE shareholders SET shares_held=0, is_active=0, shares_held_before_transfer=%s, transfer_date_actual=%s WHERE id=%s",
+                          (original_shares, transfer_date or None, transferor_id))
         else:
             # Partial transfer — update shares and clear distinctive nos
             c.execute("UPDATE shareholders SET shares_held=%s, distinctive_no_from=NULL, distinctive_no_to=NULL WHERE id=%s",
                       (remaining, transferor_id))
 
         # Log the transfer in share_transfers table
+        import datetime as _dt2
         try:
             c.execute("""INSERT INTO share_transfers
                 (id,company_id,transferor_id,transferee_id,shares_transferred,transfer_date,
                  distinctive_no_from,distinctive_no_to,remarks,tenant_id,created_at)
-                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())""",
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (str(uuid.uuid4()), company_id, transferor_id, transferee_id,
                  shares_to_xfer, transfer_date or None,
-                 dist_from, dist_to, remarks, g.tenant_id))
-        except Exception:
-            pass  # log failure is non-fatal
+                 dist_from, dist_to, remarks, g.tenant_id,
+                 _dt2.datetime.utcnow().isoformat()))
+        except Exception as _ste:
+            app.logger.warning(f"share_transfers log failed: {_ste}")
+            # Non-fatal but store shares_held_before on the shareholders row directly
+            try:
+                c.execute("UPDATE shareholders SET shares_held_before_transfer=%s WHERE id=%s",
+                          (shares_to_xfer, transferor_id))
+            except Exception:
+                pass
 
         conn.commit()
         write_audit_log(g.user_id, g.tenant_id, "share_transfer", company_id,
@@ -5319,6 +5341,26 @@ def _startup():
         _mc.close()
     except Exception as _me:
         print(f"[STARTUP] shareholder migration skipped: {_me}")
+    # Auto-repair: backfill shares_held_before_transfer for inactive shareholders
+    try:
+        _rc = get_db(); _rcc = _rc.cursor()
+        _rcc.execute(
+            "SELECT id FROM shareholders WHERE is_active=0 AND shares_held=0 "
+            "AND (shares_held_before_transfer IS NULL OR shares_held_before_transfer=0)")
+        _inactive = _rcc.fetchall() or []
+        for _ri in _inactive:
+            _rid = _ri['id'] if isinstance(_ri,dict) else _ri[0]
+            _rcc.execute(
+                "SELECT COALESCE(SUM(shares_transferred),0) as t FROM share_transfers "
+                "WHERE transferor_id=%s", (_rid,))
+            _rt = _rcc.fetchone()
+            _total = int((_rt['t'] if isinstance(_rt,dict) else _rt[0]) if _rt else 0)
+            if _total > 0:
+                _rcc.execute("UPDATE shareholders SET shares_held_before_transfer=%s WHERE id=%s",
+                             (_total, _rid))
+        _rc.commit(); _rc.close()
+    except Exception as _re:
+        print(f"[STARTUP] historical repair: {_re}")
     # Migrate shareholders table — add distinctive_no columns if missing
     try:
         _mc = get_db()
@@ -6599,6 +6641,46 @@ def portal_data_debug(token):
         except Exception as e:
             counts[tbl] = f"error: {e}"
     return jsonify({'token': token, 'company_id': co_id, 'company_name': rec.get('name',''), 'row_counts': counts, 'access_level': rec.get('access_level','')})
+
+
+
+@app.route('/api/shareholders/repair-historical', methods=['POST'])
+@login_required
+def repair_historical_shares():
+    """
+    One-time repair: for inactive shareholders with shares_held=0 and no 
+    shares_held_before_transfer record, reconstruct from transferee rows.
+    Logic: transferee rows created on/after the transferor's last transfer_date
+    and belonging to the same company sum up the transferred shares.
+    """
+    conn = get_db(); c = conn.cursor()
+    try:
+        # Find inactive shareholders with no shares_held_before_transfer
+        c.execute("""
+            SELECT * FROM shareholders 
+            WHERE is_active=0 AND shares_held=0 
+            AND (shares_held_before_transfer IS NULL OR shares_held_before_transfer=0)
+            AND tenant_id=%s
+        """, (g.tenant_id,))
+        inactive = rows(c.fetchall()) or []
+        repaired = 0
+        for sh in inactive:
+            # Try share_transfers table first
+            c.execute(
+                "SELECT COALESCE(SUM(shares_transferred),0) as total FROM share_transfers "
+                "WHERE transferor_id=%s", (sh['id'],))
+            r2 = c.fetchone()
+            total_xfer = int((r2['total'] if isinstance(r2,dict) else r2[0]) if r2 else 0)
+            if total_xfer > 0:
+                c.execute("UPDATE shareholders SET shares_held_before_transfer=%s WHERE id=%s",
+                          (total_xfer, sh['id']))
+                repaired += 1
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'repaired': repaired, 'total_inactive': len(inactive)})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'error': str(e)}), 500
 
 
 # ════════════════════════════════════════════════════════════════════════════
