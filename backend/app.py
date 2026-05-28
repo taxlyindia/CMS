@@ -9141,3 +9141,312 @@ def download_register_docx(reg_type, cid):
         return jsonify({"error": str(e)}), 500
 
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# WORD TEMPLATE ENGINE — upload .docx templates, replace placeholders, generate
+# ══════════════════════════════════════════════════════════════════════════════
+
+import os as _os
+
+WORD_TPL_DIR = _os.path.join(_os.path.dirname(__file__), "data", "word_templates")
+_os.makedirs(WORD_TPL_DIR, exist_ok=True)
+for _cat in ["notices","resolutions","agreements","reports","letters","minutes","others"]:
+    _os.makedirs(_os.path.join(WORD_TPL_DIR, _cat), exist_ok=True)
+
+def _ensure_word_tpl_table():
+    try:
+        mc = get_db(); cur = mc.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS word_templates (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                category    TEXT DEFAULT 'others',
+                description TEXT,
+                file_path   TEXT NOT NULL,
+                placeholders TEXT,
+                created_by  TEXT,
+                tenant_id   TEXT,
+                is_active   INTEGER DEFAULT 1,
+                created_at  TEXT,
+                updated_at  TEXT
+            )
+        """)
+        mc.commit(); mc.close()
+    except Exception: pass
+
+_ensure_word_tpl_table()
+
+def _extract_docx_placeholders(file_path: str) -> list:
+    """Extract all {{placeholder}} tags from a .docx file."""
+    try:
+        from docx import Document as _DocxDoc
+        import re as _re
+        doc = _DocxDoc(file_path)
+        text_parts = []
+        for para in doc.paragraphs:
+            text_parts.append(para.text)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for para in cell.paragraphs:
+                        text_parts.append(para.text)
+        # Also check headers and footers
+        for section in doc.sections:
+            for hdr_para in (section.header.paragraphs if section.header else []):
+                text_parts.append(hdr_para.text)
+            for ftr_para in (section.footer.paragraphs if section.footer else []):
+                text_parts.append(ftr_para.text)
+        full_text = " ".join(text_parts)
+        placeholders = list(set(_re.findall(r"\{\{([^}]+)\}\}", full_text)))
+        return sorted(placeholders)
+    except Exception as e:
+        return []
+
+def _replace_docx_placeholders(src_path: str, context: dict) -> bytes:
+    """Replace {{key}} in a .docx file preserving ALL formatting. Returns bytes."""
+    from docx import Document as _DocxDoc
+    import re as _re
+    import copy, io as _io
+    from docx.oxml.ns import qn
+
+    def _replace_in_para(para):
+        """Handle run-split placeholders by joining runs, replacing, then re-splitting."""
+        full_text = "".join(r.text for r in para.runs)
+        if "{{" not in full_text:
+            return
+        # Replace all placeholders in full text
+        def _sub(m):
+            key = m.group(1).strip()
+            val = context.get(key, m.group(0))  # keep original if no value
+            return str(val) if val is not None else ""
+        new_text = _re.sub(r"\{\{([^}]+)\}\}", _sub, full_text)
+        if new_text == full_text:
+            return
+        # Put all replaced text into first run, clear the rest
+        if para.runs:
+            para.runs[0].text = new_text
+            for r in para.runs[1:]:
+                r.text = ""
+
+    doc = _DocxDoc(src_path)
+    # Paragraphs in body
+    for para in doc.paragraphs:
+        _replace_in_para(para)
+    # Tables
+    for table in doc.tables:
+        for trow in table.rows:
+            for cell in trow.cells:
+                for para in cell.paragraphs:
+                    _replace_in_para(para)
+    # Headers and footers
+    for section in doc.sections:
+        if section.header:
+            for para in section.header.paragraphs:
+                _replace_in_para(para)
+        if section.footer:
+            for para in section.footer.paragraphs:
+                _replace_in_para(para)
+    buf = _io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+@app.route("/api/word-templates", methods=["GET"])
+@login_required
+def list_word_templates():
+    _ensure_word_tpl_table()
+    conn = get_db(); c = conn.cursor()
+    cat = request.args.get("category","")
+    q   = request.args.get("q","").strip()
+    sql = "SELECT * FROM word_templates WHERE is_active=1 AND tenant_id=%s"
+    params = [g.tenant_id]
+    if cat:
+        sql += " AND category=%s"; params.append(cat)
+    if q:
+        sql += " AND (name ILIKE %s OR description ILIKE %s)"
+        params.extend([f"%{q}%", f"%{q}%"])
+    sql += " ORDER BY created_at DESC"
+    c.execute(sql, params)
+    result = rows(c.fetchall()) or []
+    conn.close()
+    return jsonify(result)
+
+@app.route("/api/word-templates", methods=["POST"])
+@login_required
+def upload_word_template():
+    """Upload a .docx template file with metadata."""
+    _ensure_word_tpl_table()
+    name     = request.form.get("name","").strip()
+    category = request.form.get("category","others").strip()
+    desc     = request.form.get("description","").strip()
+    if not name:
+        return jsonify({"error": "Template name is required"}), 400
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    f = request.files["file"]
+    if not f.filename.lower().endswith(".docx"):
+        return jsonify({"error": "Only .docx files are supported"}), 400
+
+    tid       = str(uuid.uuid4())
+    safe_name = re.sub(r"[^a-zA-Z0-9_-]","_", name)[:40]
+    filename  = f"{safe_name}_{tid[:8]}.docx"
+    cat_dir   = _os.path.join(WORD_TPL_DIR, category)
+    _os.makedirs(cat_dir, exist_ok=True)
+    file_path = _os.path.join(cat_dir, filename)
+    f.save(file_path)
+
+    placeholders = _extract_docx_placeholders(file_path)
+
+    conn = get_db(); c = conn.cursor()
+    now  = datetime.utcnow().isoformat()
+    c.execute(
+        "INSERT INTO word_templates "
+        "(id,name,category,description,file_path,placeholders,created_by,tenant_id,is_active,created_at) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1,%s)",
+        (tid, name, category, desc, file_path, json.dumps(placeholders),
+         g.user_id, g.tenant_id, now))
+    conn.commit()
+    c.execute("SELECT * FROM word_templates WHERE id=%s", (tid,))
+    result = row(c.fetchone()); conn.close()
+    write_audit_log(g.user_id, g.tenant_id, "word_template_upload", tid,
+                    {"name": name, "category": category, "placeholders": placeholders})
+    return jsonify(result), 201
+
+@app.route("/api/word-templates/<tid>", methods=["DELETE"])
+@login_required
+def delete_word_template(tid):
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT file_path FROM word_templates WHERE id=%s AND tenant_id=%s",
+              (tid, g.tenant_id))
+    rec = row(c.fetchone())
+    if not rec:
+        conn.close(); return jsonify({"error": "Not found"}), 404
+    # Soft delete
+    c.execute("UPDATE word_templates SET is_active=0 WHERE id=%s", (tid,))
+    conn.commit(); conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/word-templates/<tid>/generate", methods=["POST"])
+@login_required
+def generate_from_word_template(tid):
+    """Generate a filled .docx from a Word template, returning the file."""
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM word_templates WHERE id=%s AND tenant_id=%s AND is_active=1",
+              (tid, g.tenant_id))
+    tpl = row(c.fetchone()); conn.close()
+    if not tpl:
+        return jsonify({"error": "Template not found"}), 404
+    if not _os.path.exists(tpl["file_path"]):
+        return jsonify({"error": "Template file not found on disk"}), 404
+
+    d          = request.get_json(silent=True, force=True) or {}
+    company_id = d.get("company_id","")
+    extra_ctx  = d.get("extra_context", {})
+
+    # Build context from CRM data
+    ctx = {}
+    if company_id:
+        try:
+            ctx = build_context(
+                company_id,
+                extra=extra_ctx,
+                director_id=d.get("director_id"),
+                director2_id=d.get("director2_id"),
+                auditor_id=d.get("auditor_id"),
+            )
+        except Exception as e:
+            app.logger.warning(f"build_context error: {e}")
+    # Merge any manual overrides from client
+    ctx.update(extra_ctx)
+
+    try:
+        docx_bytes = _replace_docx_placeholders(tpl["file_path"], ctx)
+    except Exception as e:
+        return jsonify({"error": f"Generation failed: {e}"}), 500
+
+    fname = f"{tpl['name'].replace(' ','_')[:40]}_filled.docx"
+    return send_file(
+        io.BytesIO(docx_bytes),
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        as_attachment=True,
+        download_name=fname
+    )
+
+@app.route("/api/word-templates/<tid>/generate-pdf", methods=["POST"])
+@login_required
+def generate_word_template_pdf(tid):
+    """Generate filled .docx then convert to PDF via LibreOffice headless."""
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM word_templates WHERE id=%s AND tenant_id=%s AND is_active=1",
+              (tid, g.tenant_id))
+    tpl = row(c.fetchone()); conn.close()
+    if not tpl:
+        return jsonify({"error": "Template not found"}), 404
+    if not _os.path.exists(tpl["file_path"]):
+        return jsonify({"error": "Template file missing on disk"}), 404
+
+    d          = request.get_json(silent=True, force=True) or {}
+    company_id = d.get("company_id","")
+    extra_ctx  = d.get("extra_context", {})
+    ctx = {}
+    if company_id:
+        try:
+            ctx = build_context(company_id, extra=extra_ctx,
+                                director_id=d.get("director_id"),
+                                director2_id=d.get("director2_id"),
+                                auditor_id=d.get("auditor_id"))
+        except Exception: pass
+    ctx.update(extra_ctx)
+
+    try:
+        docx_bytes = _replace_docx_placeholders(tpl["file_path"], ctx)
+    except Exception as e:
+        return jsonify({"error": f"Placeholder replacement failed: {e}"}), 500
+
+    # Write temp docx, convert via LibreOffice
+    import tempfile, subprocess as _sub
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_docx = _os.path.join(tmpdir, "output.docx")
+        with open(tmp_docx, "wb") as fw: fw.write(docx_bytes)
+        # Try LibreOffice headless conversion
+        try:
+            result = _sub.run(
+                ["libreoffice","--headless","--convert-to","pdf","--outdir",tmpdir,tmp_docx],
+                capture_output=True, text=True, timeout=60
+            )
+            tmp_pdf = _os.path.join(tmpdir, "output.pdf")
+            if result.returncode == 0 and _os.path.exists(tmp_pdf):
+                with open(tmp_pdf, "rb") as fp: pdf_bytes = fp.read()
+                fname = f"{tpl['name'].replace(' ','_')[:40]}_filled.pdf"
+                return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf",
+                                 as_attachment=True, download_name=fname)
+        except (FileNotFoundError, _sub.TimeoutExpired):
+            pass
+        # Fallback: return docx if LibreOffice not available
+        fname = f"{tpl['name'].replace(' ','_')[:40]}_filled.docx"
+        return send_file(
+            io.BytesIO(docx_bytes),
+            mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            as_attachment=True,
+            download_name=fname
+        )
+
+@app.route("/api/word-templates/<tid>/placeholders", methods=["GET"])
+@login_required
+def word_template_placeholders(tid):
+    """Return placeholder list for a word template with auto/manual classification."""
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT placeholders, file_path FROM word_templates WHERE id=%s AND tenant_id=%s",
+              (tid, g.tenant_id))
+    rec = row(c.fetchone()); conn.close()
+    if not rec: return jsonify({"error": "Not found"}), 404
+    try:
+        phs = json.loads(rec.get("placeholders") or "[]")
+    except Exception:
+        phs = _extract_docx_placeholders(rec.get("file_path",""))
+    auto_phs   = [p for p in phs if p in AUTO_FILLED]
+    manual_phs = [p for p in phs if p not in AUTO_FILLED]
+    return jsonify({"all": phs, "auto_filled": auto_phs, "manual": manual_phs,
+                    "total": len(phs)})
+
+
