@@ -9288,7 +9288,8 @@ def upload_word_template():
         return jsonify({"error": "Only .docx files are supported"}), 400
 
     tid       = str(uuid.uuid4())
-    safe_name = re.sub(r"[^a-zA-Z0-9_-]","_", name)[:40]
+    import re as _re
+    safe_name = _re.sub(r"[^a-zA-Z0-9_-]","_", name)[:40]
     filename  = f"{safe_name}_{tid[:8]}.docx"
     cat_dir   = _os.path.join(WORD_TPL_DIR, category)
     _os.makedirs(cat_dir, exist_ok=True)
