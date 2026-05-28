@@ -1391,146 +1391,149 @@ def hard_delete_shareholder(sid):
 def transfer_shares():
     """Transfer shares from one shareholder to another (existing or new)."""
     if not can("shareholder","update"): return jsonify({"error":"Insufficient permissions"}),403
-    d = request.get_json(silent=True, force=True) or {}
-    transferor_id    = d.get("transferor_id","")
-    company_id       = d.get("company_id","")
-    shares_to_xfer   = int(d.get("shares_to_transfer",0))
-    transfer_date    = d.get("transfer_date","")
-    dist_from        = d.get("distinctive_no_from")
-    dist_to          = d.get("distinctive_no_to")
-    remarks          = d.get("remarks","")
-    transfer_type    = d.get("transfer_type","existing")  # "existing" or "new"
+    d              = request.get_json(silent=True, force=True) or {}
+    transferor_id  = d.get("transferor_id","")
+    company_id     = d.get("company_id","")
+    shares_to_xfer = int(d.get("shares_to_transfer",0))
+    transfer_date  = d.get("transfer_date","") or None
+    dist_from      = d.get("distinctive_no_from") or None
+    dist_to        = d.get("distinctive_no_to") or None
+    remarks        = d.get("remarks","")
+    transfer_type  = d.get("transfer_type","existing")
 
     if not transferor_id or shares_to_xfer <= 0:
         return jsonify({"error":"Invalid transferor or share count"}), 400
 
+    # ── Pre-flight: ensure new columns exist (separate connection, before main txn) ──
+    try:
+        _mc = get_db()
+        _add_col_safe(_mc, "shareholders", "shares_held_before_transfer", "INTEGER")
+        _add_col_safe(_mc, "shareholders", "transfer_date_actual", "TEXT")
+        _add_col_safe(_mc, "shareholders", "mca_notes", "TEXT")
+        _mc.cursor().execute(
+            "CREATE TABLE IF NOT EXISTS share_transfers ("
+            "id TEXT PRIMARY KEY, company_id TEXT, transferor_id TEXT, transferee_id TEXT, "
+            "shares_transferred INTEGER, transfer_date TEXT, distinctive_no_from BIGINT, "
+            "distinctive_no_to BIGINT, remarks TEXT, tenant_id TEXT, created_at TEXT)"
+        )
+        _mc.commit(); _mc.close()
+    except Exception as _pe:
+        app.logger.warning(f"pre-flight migration: {_pe}")
+
+    # ── Main transaction ─────────────────────────────────────────────────────────────
+    import datetime as _dt2
     conn = get_db(); c = conn.cursor()
     try:
-        # Get transferor
+        # Validate transferor
         c.execute("SELECT * FROM shareholders WHERE id=%s AND is_active=1", (transferor_id,))
         transferor = row(c.fetchone())
         if not transferor:
-            return jsonify({"error":"Transferor not found"}), 404
-        if transferor["shares_held"] < shares_to_xfer:
-            return jsonify({"error":f"Insufficient shares. Available: {transferor['shares_held']}"}), 400
+            conn.close(); return jsonify({"error":"Transferor not found"}), 404
+        if int(transferor.get("shares_held") or 0) < shares_to_xfer:
+            conn.close(); return jsonify({"error":f"Insufficient shares. Available: {transferor['shares_held']}"}), 400
 
-        new_folio_no = None
+        new_folio_no  = None
         transferee_id = None
+        original_shares = int(transferor.get("shares_held") or 0)
 
+        # ── Create transferee row ──────────────────────────────────────────────────
         if transfer_type == "existing":
-            transferee_id = d.get("transferee_id","")
-            if not transferee_id:
-                return jsonify({"error":"Select a transferee shareholder"}), 400
-            c.execute("SELECT * FROM shareholders WHERE id=%s AND is_active=1", (transferee_id,))
+            orig_transferee_id = d.get("transferee_id","")
+            if not orig_transferee_id:
+                conn.close(); return jsonify({"error":"Select a transferee shareholder"}), 400
+            c.execute("SELECT * FROM shareholders WHERE id=%s AND is_active=1", (orig_transferee_id,))
             transferee = row(c.fetchone())
             if not transferee:
-                return jsonify({"error":"Transferee not found"}), 404
-            # Create a NEW line item with the transferred shares (same folio, new record)
-            # Do NOT merge into the existing row
+                conn.close(); return jsonify({"error":"Transferee not found"}), 404
+            # Create NEW line item (same folio as existing shareholder)
             transferee_id = str(uuid.uuid4())
-            new_folio_no = transferee.get("folio_no") or ""
-            c.execute("""INSERT INTO shareholders
-                (id, company_id, name, folio_no, pan, email, mobile, address,
-                 share_class, shares_held, face_value, date_of_entry,
-                 distinctive_no_from, distinctive_no_to, is_active, tenant_id)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,%s)""",
+            new_folio_no  = transferee.get("folio_no") or ""
+            c.execute(
+                "INSERT INTO shareholders "
+                "(id,company_id,name,folio_no,pan,email,mobile,address,"
+                " share_class,shares_held,face_value,date_of_entry,"
+                " distinctive_no_from,distinctive_no_to,is_active,tenant_id) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,%s)",
                 (transferee_id, company_id,
                  transferee.get("name",""), new_folio_no,
                  transferee.get("pan",""), transferee.get("email",""),
                  transferee.get("mobile",""), transferee.get("address",""),
                  transferee.get("share_class", transferor.get("share_class","Equity")),
                  shares_to_xfer,
-                 transferee.get("face_value", transferor.get("face_value", 10)),
-                 transfer_date or None,
-                 dist_from, dist_to,
-                 g.tenant_id))
+                 transferee.get("face_value") or transferor.get("face_value") or 10,
+                 transfer_date, dist_from, dist_to, g.tenant_id))
 
         else:  # new shareholder
             ns = d.get("new_shareholder",{})
             if not ns.get("name"):
-                return jsonify({"error":"New shareholder name required"}), 400
-            # Generate folio number if not provided
-            new_folio_no = ns.get("folio_no","").strip()
+                conn.close(); return jsonify({"error":"New shareholder name required"}), 400
+            new_folio_no = (ns.get("folio_no") or "").strip()
             if not new_folio_no:
                 c.execute("SELECT COUNT(*) as cnt FROM shareholders WHERE company_id=%s", (company_id,))
                 cnt_r = c.fetchone()
-                cnt = (cnt_r["cnt"] if isinstance(cnt_r,dict) else cnt_r[0]) if cnt_r else 0
-                new_folio_no = f"F{int(cnt or 0)+1:04d}"
+                cnt   = int((cnt_r["cnt"] if isinstance(cnt_r,dict) else cnt_r[0]) if cnt_r else 0)
+                new_folio_no = f"F{cnt+1:04d}"
             transferee_id = str(uuid.uuid4())
-            c.execute("""INSERT INTO shareholders
-                (id,company_id,name,folio_no,pan,email,mobile,address,share_class,
-                 shares_held,face_value,date_of_entry,distinctive_no_from,distinctive_no_to,
-                 is_active,tenant_id)
-                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,%s)""",
-                (transferee_id, company_id, ns["name"],
-                 new_folio_no,
+            c.execute(
+                "INSERT INTO shareholders "
+                "(id,company_id,name,folio_no,pan,email,mobile,address,"
+                " share_class,shares_held,face_value,date_of_entry,"
+                " distinctive_no_from,distinctive_no_to,is_active,tenant_id) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,%s)",
+                (transferee_id, company_id, ns["name"], new_folio_no,
                  _str((ns.get("pan") or "").upper()),
                  ns.get("email",""), ns.get("mobile",""), ns.get("address",""),
                  transferor.get("share_class","Equity"),
                  shares_to_xfer, transferor.get("face_value",10),
-                 transfer_date or None,
-                 dist_from, dist_to, g.tenant_id))
+                 transfer_date, dist_from, dist_to, g.tenant_id))
 
-        # Deduct from transferor — store original shares_held for historical queries
-        remaining = transferor["shares_held"] - shares_to_xfer
-        original_shares = transferor["shares_held"]
+        # ── Update transferor ──────────────────────────────────────────────────────
+        remaining = original_shares - shares_to_xfer
         if remaining <= 0:
-            # All shares transferred — hide the folio, store original count
-            try:
-                c.execute("""UPDATE shareholders
-                             SET shares_held=0, is_active=0,
-                                 shares_held_before_transfer=%s,
-                                 transfer_date_actual=%s
-                             WHERE id=%s""",
-                          (original_shares, transfer_date or None, transferor_id))
-            except Exception:
-                # shares_held_before_transfer column may not exist yet — add it first
-                _add_col_safe(conn, "shareholders", "shares_held_before_transfer", "INTEGER")
-                _add_col_safe(conn, "shareholders", "transfer_date_actual", "TEXT")
-                c.execute("UPDATE shareholders SET shares_held=0, is_active=0, shares_held_before_transfer=%s, transfer_date_actual=%s WHERE id=%s",
-                          (original_shares, transfer_date or None, transferor_id))
+            c.execute(
+                "UPDATE shareholders "
+                "SET shares_held=0, is_active=0, "
+                "    shares_held_before_transfer=%s, transfer_date_actual=%s "
+                "WHERE id=%s",
+                (original_shares, transfer_date, transferor_id))
         else:
-            # Partial transfer — update shares and clear distinctive nos
-            c.execute("UPDATE shareholders SET shares_held=%s, distinctive_no_from=NULL, distinctive_no_to=NULL WHERE id=%s",
-                      (remaining, transferor_id))
+            c.execute(
+                "UPDATE shareholders "
+                "SET shares_held=%s, distinctive_no_from=NULL, distinctive_no_to=NULL "
+                "WHERE id=%s",
+                (remaining, transferor_id))
 
-        # Log the transfer in share_transfers table
-        import datetime as _dt2
-        try:
-            c.execute("""INSERT INTO share_transfers
-                (id,company_id,transferor_id,transferee_id,shares_transferred,transfer_date,
-                 distinctive_no_from,distinctive_no_to,remarks,tenant_id,created_at)
-                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                (str(uuid.uuid4()), company_id, transferor_id, transferee_id,
-                 shares_to_xfer, transfer_date or None,
-                 dist_from, dist_to, remarks, g.tenant_id,
-                 _dt2.datetime.utcnow().isoformat()))
-        except Exception as _ste:
-            app.logger.warning(f"share_transfers log failed: {_ste}")
-            # Non-fatal but store shares_held_before on the shareholders row directly
-            try:
-                c.execute("UPDATE shareholders SET shares_held_before_transfer=%s WHERE id=%s",
-                          (shares_to_xfer, transferor_id))
-            except Exception:
-                pass
+        # ── Log in share_transfers ─────────────────────────────────────────────────
+        c.execute(
+            "INSERT INTO share_transfers "
+            "(id,company_id,transferor_id,transferee_id,shares_transferred,"
+            " transfer_date,distinctive_no_from,distinctive_no_to,remarks,tenant_id,created_at) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (str(uuid.uuid4()), company_id, transferor_id, transferee_id,
+             shares_to_xfer, transfer_date, dist_from, dist_to, remarks,
+             g.tenant_id, _dt2.datetime.utcnow().isoformat()))
 
         conn.commit()
         write_audit_log(g.user_id, g.tenant_id, "share_transfer", company_id,
-                        {"transferor_id":transferor_id,"shares":shares_to_xfer,"type":transfer_type})
+                        {"transferor_id": transferor_id, "shares": shares_to_xfer, "type": transfer_type})
         return jsonify({
-            "success": True,
-            "new_folio_no": new_folio_no,
+            "success":          True,
+            "new_folio_no":     new_folio_no,
             "remaining_shares": remaining if remaining > 0 else 0,
-            "transferee_hidden": remaining <= 0
+            "transferee_hidden":remaining <= 0,
         })
+
     except Exception as e:
-        conn.rollback()
+        try: conn.rollback()
+        except Exception: pass
+        try: conn.close()
+        except Exception: pass
+        app.logger.error(f"transfer_shares error: {e}")
         return jsonify({"error": str(e)}), 500
+
     finally:
-        conn.close()
-
-
-
+        try: conn.close()
+        except Exception: pass
 @app.route("/api/companies/<cid>/share-capital-check")
 @login_required
 def share_capital_check(cid):
