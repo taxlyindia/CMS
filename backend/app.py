@@ -2430,6 +2430,28 @@ def gen_document_pdf():
                     story_out.append(Spacer(1, 4))
             return
 
+        # If content has no HTML tags at all → treat as plain text
+        if "<" not in (html_content or ""):
+            for line in html_content.split("\n"):
+                s = line.strip()
+                if s:
+                    story_out.append(Paragraph(s, sty("body")))
+                else:
+                    story_out.append(Spacer(1, 4))
+            return
+
+        # If no HTML tags at all → plain text mode
+        if "<" not in (html_content or ""):
+            for _ln in html_content.split("\n"):
+                _s = _ln.strip()
+                if _s:
+                    story_out.append(Paragraph(
+                        _s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;"),
+                        sty("body", 9.5)))
+                else:
+                    story_out.append(Spacer(1, 4))
+            return
+
         soup = BeautifulSoup(html_content, "html.parser")
 
         # Quill wraps content in <p> tags with alignment classes
@@ -2461,7 +2483,19 @@ def gen_document_pdf():
                 return inner
             return inner
 
-        for tag in soup.find_all(["p", "h1", "h2", "h3", "h4", "li", "br"]):
+        # If soup finds no block-level tags, the content might be text nodes directly
+        all_block_tags = soup.find_all(["p", "h1", "h2", "h3", "h4", "li", "br"])
+        if not all_block_tags:
+            # Fall back to treating whole text as plain paragraphs
+            for line in (soup.get_text("\n") or "").split("\n"):
+                s = line.strip()
+                if s:
+                    story_out.append(Paragraph(s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;"),
+                                               sty("body", 9.5)))
+                else:
+                    story_out.append(Spacer(1, 4))
+            return
+        for tag in all_block_tags:
             if tag.name == "br":
                 story_out.append(Spacer(1, 4))
                 continue
@@ -2491,7 +2525,18 @@ def gen_document_pdf():
             else:
                 story_out.append(Paragraph(inner_text, sty("body", 9.5, False, None, align)))
 
-    _quill_to_story(content, story)
+    # Log content length to debug empty body issues
+    app.logger.info(f"gen_document_pdf: content length={len(content or '')}, "
+                    f"has_html_tags={'<p' in (content or '') or '<div' in (content or '')}")
+    if not content or not content.strip():
+        story.append(Spacer(1, 8))
+        story.append(Paragraph("[Document body is empty — no template content found]",
+                                sty("empty_warn", 10, False, GREY, TA_CENTER)))
+    else:
+        _quill_to_story(content, story)
+    if len(story) <= 4:
+        # Letterhead added ~4 elements; if nothing after that, content didn't render
+        app.logger.warning(f"gen_document_pdf: story has only {len(story)} elements after body — possible parse issue")
 
     # ── Footer ─────────────────────────────────────────────────────────────
     if co:
@@ -2660,7 +2705,27 @@ def gen_document_docx():
             for r in new_runs: r.underline = True
 
     soup = BeautifulSoup(content, "html.parser")
-    for tag in soup.find_all(["p", "h1", "h2", "h3", "h4", "li", "br"]):
+    _docx_tags = soup.find_all(["p", "h1", "h2", "h3", "h4", "li", "br"])
+    # Fallback: plain text if no block tags found
+    if not _docx_tags:
+        if "<" not in (content or ""):
+            # Pure plain text
+            for _line in (content or "").split("\n"):
+                _ls = _line.strip()
+                p = docx.add_paragraph(_ls if _ls else "")
+                p.paragraph_format.space_after = Pt(4)
+                if _ls and p.runs:
+                    p.runs[0].font.size = Pt(10)
+                    p.runs[0].font.color.rgb = BLACK
+        else:
+            # HTML with no recognised tags — render text nodes
+            _raw = soup.get_text("\n") or ""
+            for _line in _raw.split("\n"):
+                _ls = _line.strip()
+                p = docx.add_paragraph(_ls if _ls else "")
+                p.paragraph_format.space_after = Pt(4)
+        _docx_tags = []
+    for tag in _docx_tags:
         if tag.name == "br":
             docx.add_paragraph()
             continue
