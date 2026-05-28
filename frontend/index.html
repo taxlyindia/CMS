@@ -2983,6 +2983,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
         <button class="btn btn-primary btn-sm" onclick="loadRegister()">📋 View</button>
         <button class="btn btn-success btn-sm" id="reg-add-btn" onclick="openRegisterEntryModal()" style="display:none">+ Add Entry</button>
         <button class="btn btn-outline btn-sm" onclick="downloadRegPDF()">⬇️ PDF on Letterhead</button>
+        <button class="btn btn-outline btn-sm" onclick="downloadRegDOCX()" style="border-color:#2563eb;color:#2563eb">📝 Word (.docx)</button>
       </div>
       <div class="card" id="reg-card">
         <div class="empty-state">
@@ -9939,6 +9940,7 @@ async function loadRegister() {
       <div style="display:flex;gap:7px;align-items:center">
         <span class="badge b-green">${records.length} entries</span>
         <button class="btn btn-primary btn-sm" onclick="downloadRegPDF()">⬇️ PDF on Letterhead</button>
+        <button class="btn btn-outline btn-sm" onclick="downloadRegDOCX()" style="border-color:#2563eb;color:#2563eb">📝 Word (.docx)</button>
       </div>
     </div>`;
 
@@ -10009,6 +10011,22 @@ async function downloadRegPDF() {
     toast(msg.length > 120 ? msg.substring(0,120)+'…' : msg, 'err');
   }
 }
+async function downloadRegDOCX() {
+  const cid  = document.getElementById('reg-co').value;
+  const type = document.getElementById('reg-type').value;
+  if (!cid)  { toast('Select a company', 'err'); return; }
+  if (!type) { toast('Select a register type', 'err'); return; }
+  try {
+    toast('Generating Word file…', 'ok');
+    await fetchAndDownload(`/api/registers/${type}/${cid}/docx`, 'GET', null,
+      `${type}_Register.docx`);
+    toast('Register Word file downloaded ✓', 'ok');
+  } catch (e) {
+    const msg = e.message || 'Word generation failed';
+    toast(msg.length > 120 ? msg.substring(0,120)+'…' : msg, 'err');
+  }
+}
+
 
 // ── Register Entry Modals ─────────────────────────────────────────────────────
 
