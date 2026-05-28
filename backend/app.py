@@ -1283,13 +1283,25 @@ def transfer_shares():
             transferee = row(c.fetchone())
             if not transferee:
                 return jsonify({"error":"Transferee not found"}), 404
-            # Add shares to existing shareholder
-            new_shares_te = (transferee["shares_held"] or 0) + shares_to_xfer
-            c.execute("""UPDATE shareholders SET shares_held=%s,
-                         distinctive_no_from=COALESCE(distinctive_no_from,%s),
-                         distinctive_no_to=COALESCE(%s,distinctive_no_to)
-                         WHERE id=%s""",
-                      (new_shares_te, dist_from, dist_to, transferee_id))
+            # Create a NEW line item with the transferred shares (same folio, new record)
+            # Do NOT merge into the existing row
+            transferee_id = str(uuid.uuid4())
+            new_folio_no = transferee.get("folio_no") or ""
+            c.execute("""INSERT INTO shareholders
+                (id, company_id, name, folio_no, pan, email, mobile, address,
+                 share_class, shares_held, face_value, date_of_entry,
+                 distinctive_no_from, distinctive_no_to, is_active, tenant_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1,%s)""",
+                (transferee_id, company_id,
+                 transferee.get("name",""), new_folio_no,
+                 transferee.get("pan",""), transferee.get("email",""),
+                 transferee.get("mobile",""), transferee.get("address",""),
+                 transferee.get("share_class", transferor.get("share_class","Equity")),
+                 shares_to_xfer,
+                 transferee.get("face_value", transferor.get("face_value", 10)),
+                 transfer_date or None,
+                 dist_from, dist_to,
+                 g.tenant_id))
 
         else:  # new shareholder
             ns = d.get("new_shareholder",{})
