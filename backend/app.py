@@ -1186,14 +1186,15 @@ def list_shareholders(cid):
         except Exception:
             pass  # columns don't exist yet — use fallback
 
-        # Step 3: try to get transfer info from share_transfers table
-        xfer_map = {}  # {transferor_id: {total_xferred, last_xfer_date}}
+        # Step 2.5: for inactive shareholders with 0/NULL shares_held_before_transfer,
+        # reconstruct from share_transfers table
         try:
             c.execute(
                 "SELECT transferor_id, SUM(shares_transferred) AS total, MAX(transfer_date) AS last_date "
                 "FROM share_transfers WHERE company_id=%s GROUP BY transferor_id",
                 (cid,)
             )
+            xfer_map = {}
             for r3 in (c.fetchall() or []):
                 r3d = r3 if isinstance(r3, dict) else dict(zip([desc[0] for desc in c.description], r3))
                 xfer_map[r3d['transferor_id']] = {
@@ -1201,7 +1202,91 @@ def list_shareholders(cid):
                     'last_date': str(r3d.get('last_date') or ''),
                 }
         except Exception:
-            pass  # share_transfers table may not exist yet
+            xfer_map = {}
+
+        # Step 3: For inactive shareholders STILL showing 0 shares (no share_transfers record),
+        # reconstruct using three strategies:
+        # A) Same-folio rows created after this holder (same-person transfers)
+        # B) Company total minus pre-period active (single inactive holder case)
+        # C) Sum of active rows created AFTER date_to (those shares were with inactive holder during period)
+        recon_map = {}  # {shareholder_id: reconstructed_shares}
+        try:
+            # Get total active shares (all active shareholders in this company)
+            total_active_shares = sum(
+                int(s.get('shares_held') or 0) for s in all_shs
+                if int(s.get('is_active', 1) or 1) == 1
+            )
+            # Get company paid_up_capital for inference
+            c.execute("SELECT paid_up_capital FROM companies WHERE id=%s", (cid,))
+            co_r = c.fetchone()
+            co_paid = float((co_r['paid_up_capital'] if isinstance(co_r,dict) else co_r[0]) if co_r else 0)
+
+            # Get zero-share inactive holders needing reconstruction
+            zero_inactive = [
+                s for s in all_shs
+                if int(s.get('is_active', 1) or 1) == 0
+                and int(s.get('shares_held') or 0) == 0
+                and not (extra.get(s.get('id',''),{}).get('shares_before'))
+                and not xfer_map.get(s.get('id',''),{}).get('total',0)
+            ]
+
+            for zi in zero_inactive:
+                zi_id    = zi.get('id','')
+                zi_folio = zi.get('folio_no','')
+                zi_entry = str(zi.get('date_of_entry') or '').split('T')[0]
+                zi_fv    = float(zi.get('face_value') or 10) or 10
+                recon    = 0
+
+                # Strategy A: rows with same folio created after this holder
+                same_folio_newer = [
+                    s for s in all_shs
+                    if s.get('folio_no') == zi_folio
+                    and s.get('id') != zi_id
+                    and str(s.get('date_of_entry') or '').split('T')[0] > zi_entry
+                ]
+                if same_folio_newer:
+                    recon = sum(int(s.get('shares_held') or 0) for s in same_folio_newer)
+
+                # Strategy C: sum active rows created AFTER date_to
+                # Those rows were created by transfers that happened AFTER the period end
+                # meaning this inactive holder still had those shares DURING the period
+                if recon == 0 and date_to:
+                    post_period_rows = [
+                        s for s in all_shs
+                        if int(s.get('is_active', 1) or 1) == 1
+                        and s.get('id') != zi_id
+                        and str(s.get('date_of_entry') or '').split('T')[0] > date_to
+                    ]
+                    if post_period_rows:
+                        recon = sum(int(s.get('shares_held') or 0) for s in post_period_rows)
+                        if recon > 0:
+                            xfer_date = str(min(post_period_rows, key=lambda s: str(s.get('date_of_entry') or '')).get('date_of_entry') or '').split('T')[0]
+                            if zi_id not in xfer_map or not xfer_map[zi_id].get('last_date'):
+                                xfer_map[zi_id] = {'total': recon, 'last_date': xfer_date}
+
+                # Strategy B fallback: company total minus pre-period active shares
+                # (pre-period = rows that existed before date_to)
+                if recon == 0 and len(zero_inactive) == 1 and co_paid > 0:
+                    pre_period_active = sum(
+                        int(s.get('shares_held') or 0) for s in all_shs
+                        if int(s.get('is_active', 1) or 1) == 1
+                        and (not date_to or str(s.get('date_of_entry') or '').split('T')[0] <= date_to)
+                    )
+                    total_company_shares = int(co_paid / zi_fv)
+                    inferred = total_company_shares - pre_period_active
+                    if inferred > 0:
+                        recon = inferred
+
+                if recon > 0:
+                    recon_map[zi_id] = recon
+                    # Set transfer date from same-folio newer rows if available
+                    if same_folio_newer:
+                        latest_newer = max(same_folio_newer, key=lambda s: str(s.get('date_of_entry') or ''))
+                        xfer_date = str(latest_newer.get('date_of_entry') or '').split('T')[0]
+                        if zi_id not in xfer_map or not xfer_map[zi_id].get('last_date'):
+                            xfer_map[zi_id] = {'total': recon, 'last_date': xfer_date}
+        except Exception as _re:
+            app.logger.debug(f"recon_map error: {_re}")
 
         conn.close()
 
