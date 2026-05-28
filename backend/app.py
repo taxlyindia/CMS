@@ -6820,7 +6820,7 @@ def portal_view(token):
         (co_id,)) if can_show('alerts') else []
 
     documents_list = qrows(
-        "SELECT doc_name, doc_type, module, created_at "
+        "SELECT id, doc_name, doc_type, module, created_at "
         "FROM documents WHERE company_id=%s ORDER BY created_at DESC LIMIT 20",
         (co_id,)) if can_show('documents') else []
 
@@ -6942,7 +6942,11 @@ def portal_view(token):
 
     # 5. Documents
     doc_rows = ''.join(f'''<tr>
-      <td><strong>{esc(d.get("doc_name",""))}</strong></td>
+      <td><strong>{esc(d.get("doc_name",""))}</strong>
+        <a href="/portal/{token}/document/{d.get("id","")}"
+           style="margin-left:10px;font-size:10.5px;color:#1b4ed8;font-weight:600;text-decoration:none;padding:2px 8px;background:rgba(27,78,216,.08);border-radius:4px;border:1px solid rgba(27,78,216,.2)"
+           download>⬇ Download</a>
+      </td>
       <td>{esc(d.get("doc_type","")) or "—"}</td>
       <td>{esc(d.get("module","")) or "—"}</td>
       <td>{fmt_date(d.get("created_at",""))}</td>
@@ -7459,42 +7463,80 @@ def esign_status(req_id):
 @app.route('/api/portal/generate-link', methods=['POST'])
 @login_required
 def portal_generate_link():
-    import uuid, datetime as _dt
+    import uuid, datetime as _dt, json as _json
     data = request.get_json() or {}
+    if not data.get('company_id'):
+        return jsonify({'error': 'company_id is required'}), 400
+
     token = 'PTL-' + str(uuid.uuid4())[:10].upper()
     expiry_days = int(data.get('expires_days', 30))
     expires_at = None
     if expiry_days > 0:
         expires_at = (_dt.datetime.utcnow() + _dt.timedelta(days=expiry_days)).isoformat()
+
+    modules_json = _json.dumps(data.get('modules') or [])
+    link_id = str(uuid.uuid4())
+    now     = _dt.datetime.utcnow().isoformat()
+
+    # Pre-flight: ensure all columns exist
+    try:
+        _mc = get_db()
+        for _col, _typ in [('view_count','INTEGER'), ('last_accessed','TEXT'),
+                            ('modules','TEXT'), ('password','TEXT')]:
+            _add_col_safe(_mc, 'portal_links', _col, _typ)
+        _mc.commit(); _mc.close()
+    except Exception: pass
+
     db = get_db(); cur = db.cursor()
     try:
-        cur.execute("""INSERT INTO portal_links
-            (id, tenant_id, company_id, token, access_level, client_name, expires_at, active, created_by, created_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,1,%s,%s)""",
-            (str(uuid.uuid4()), g.tenant_id, data.get('company_id'), token,
-             data.get('access_level','full_readonly'), data.get('client_name',''),
-             expires_at, g.user_id, _dt.datetime.utcnow().isoformat()))
-        db.commit()
-    except Exception:
-        db.rollback()
-    write_audit_log(g.user_id, g.tenant_id, 'portal_link_created', None, {'token': token})
-    return jsonify({'success': True, 'token': token,
-                    'url': request.host_url.rstrip('/') + '/portal/' + token})
+        cur.execute(
+            "INSERT INTO portal_links "
+            "(id,tenant_id,company_id,token,access_level,client_name,"
+            " expires_at,active,created_by,created_at,view_count,modules) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,1,%s,%s,0,%s)",
+            (link_id, g.tenant_id, data['company_id'], token,
+             data.get('access_level','full_readonly'),
+             data.get('client_name',''),
+             expires_at, g.user_id, now, modules_json))
+        db.commit(); db.close()
+    except Exception as e:
+        try: db.rollback(); db.close()
+        except Exception: pass
+        app.logger.error(f"portal_generate_link error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+    write_audit_log(g.user_id, g.tenant_id, 'portal_link_created', link_id,
+                    {'token': token, 'company_id': data['company_id'],
+                     'access_level': data.get('access_level')})
+    portal_url = request.host_url.rstrip('/') + '/portal/' + token
+    return jsonify({'success': True, 'id': link_id, 'token': token, 'url': portal_url})
 
 
 @app.route('/api/portal/links', methods=['GET'])
 @login_required
 def portal_links():
     company_id = request.args.get('company_id')
+    conn = get_db(); c = conn.cursor()
     try:
         if company_id:
-            recs = rows("SELECT * FROM portal_links WHERE tenant_id=%s AND company_id=%s ORDER BY created_at DESC",
-                        (g.tenant_id, company_id))
+            c.execute(
+                "SELECT pl.*, co.name as company_name FROM portal_links pl "
+                "LEFT JOIN companies co ON pl.company_id=co.id "
+                "WHERE pl.tenant_id=%s AND pl.company_id=%s ORDER BY pl.created_at DESC",
+                (g.tenant_id, company_id))
         else:
-            recs = rows("SELECT * FROM portal_links WHERE tenant_id=%s ORDER BY created_at DESC LIMIT 100",
-                        (g.tenant_id,))
-        return jsonify({'links': recs or []})
-    except Exception:
+            c.execute(
+                "SELECT pl.*, co.name as company_name FROM portal_links pl "
+                "LEFT JOIN companies co ON pl.company_id=co.id "
+                "WHERE pl.tenant_id=%s ORDER BY pl.created_at DESC LIMIT 100",
+                (g.tenant_id,))
+        recs = rows(c.fetchall()) or []
+        conn.close()
+        return jsonify({'links': recs})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        app.logger.error(f"portal_links error: {e}")
         return jsonify({'links': []})
 
 
@@ -9663,5 +9705,48 @@ def word_template_placeholders(tid):
     manual_phs = [p for p in phs if p not in AUTO_FILLED]
     return jsonify({"all": phs, "auto_filled": auto_phs, "manual": manual_phs,
                     "total": len(phs)})
+
+
+
+@app.route("/portal/<token>/document/<doc_id>")
+def portal_document_download(token, doc_id):
+    """Allow portal clients with documents permission to download a document."""
+    import datetime as _dt
+    conn = get_db(); c = conn.cursor()
+    # Validate portal link
+    c.execute("SELECT * FROM portal_links WHERE token=%s AND active=1", (token,))
+    rec = row(c.fetchone())
+    if not rec:
+        conn.close()
+        return "Invalid or revoked link", 404
+    # Check expiry
+    if rec.get('expires_at'):
+        try:
+            if _dt.datetime.fromisoformat(rec['expires_at']) < _dt.datetime.utcnow():
+                conn.close(); return "Link expired", 410
+        except Exception: pass
+    # Check documents permission
+    access = rec.get('access_level','')
+    if access not in ('documents_only', 'full_readonly', 'custom'):
+        conn.close(); return "Access denied", 403
+    # Fetch document
+    c.execute(
+        "SELECT * FROM documents WHERE id=%s AND company_id=%s",
+        (doc_id, rec['company_id']))
+    doc = row(c.fetchone()); conn.close()
+    if not doc:
+        return "Document not found", 404
+    # Return document content as downloadable HTML/PDF
+    content = doc.get('content') or ''
+    doc_name = doc.get('doc_name') or 'Document'
+    # Return as downloadable HTML file
+    html_content = f"""<!DOCTYPE html><html><head>
+    <meta charset="UTF-8"><title>{doc_name}</title>
+    <style>body{{font-family:Arial,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;line-height:1.7;color:#1e293b}}
+    h1{{color:#0f2d5c;border-bottom:2px solid #1a56db;padding-bottom:10px}}</style>
+    </head><body><h1>{doc_name}</h1><div>{content}</div></body></html>"""
+    from flask import Response
+    return Response(html_content, mimetype='text/html',
+                    headers={'Content-Disposition': f'attachment; filename="{doc_name}.html"'})
 
 
