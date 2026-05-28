@@ -134,6 +134,30 @@ def _set_csrf_cookie(response):
     return response
 
 
+def _add_col_safe(conn, table, col, col_type="TEXT"):
+    """Add a column to a table if it doesn't already exist (PostgreSQL + SQLite safe)."""
+    try:
+        c = conn.cursor()
+        # PostgreSQL: use IF NOT EXISTS
+        try:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}")
+            conn.commit()
+            return
+        except Exception:
+            pass
+        # SQLite: check PRAGMA first
+        try:
+            c.execute(f"PRAGMA table_info({table})")
+            existing = {r["name"] if isinstance(r,dict) else r[1] for r in c.fetchall()}
+            if col not in existing:
+                c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+                conn.commit()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 @app.route('/api/auth/csrf-token', methods=['GET'])
 def get_csrf_token():
     """
@@ -1149,14 +1173,31 @@ def create_shareholder():
         c.execute(q,p); result=rows(c.fetchall()); conn.close()
         return jsonify(result)
     d=request.get_json(silent=True, force=True) or {}; sid=str(uuid.uuid4()); conn=get_db(); c=conn.cursor()
-    c.execute("""INSERT INTO shareholders
-        (id,company_id,name,folio_no,pan,email,mobile,address,share_class,shares_held,face_value,
-         date_of_entry,mca_user_id,mca_password,distinctive_no_from,distinctive_no_to,tenant_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-        (sid,d["company_id"],d["name"],d.get("folio_no"),_str((d.get("pan") or "").upper()),
-         d.get("email"),d.get("mobile"),d.get("address"),d.get("share_class","Equity"),
-         _num(d.get("shares_held",0),cast=int),_num(d.get("face_value",10),default=10),_dt(d.get("date_of_entry")),
-         d.get("mca_user_id"),d.get("mca_password"),d.get("distinctive_no_from"),d.get("distinctive_no_to"),g.tenant_id))
+        # Try INSERT with distinctive_no columns; fall back if they don't exist yet
+    try:
+        c.execute("""INSERT INTO shareholders
+            (id,company_id,name,folio_no,pan,email,mobile,address,share_class,shares_held,face_value,
+             date_of_entry,mca_user_id,mca_password,distinctive_no_from,distinctive_no_to,tenant_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (sid,d["company_id"],d["name"],d.get("folio_no"),_str((d.get("pan") or "").upper()),
+             d.get("email"),d.get("mobile"),d.get("address"),d.get("share_class","Equity"),
+             _num(d.get("shares_held",0),cast=int),_num(d.get("face_value",10),default=10),_dt(d.get("date_of_entry")),
+             d.get("mca_user_id"),d.get("mca_password"),d.get("distinctive_no_from"),d.get("distinctive_no_to"),g.tenant_id))
+    except Exception as _ins_err:
+        # Column might not exist yet in older DB — run migration then retry
+        if "distinctive_no" in str(_ins_err).lower() or "column" in str(_ins_err).lower() or "does not exist" in str(_ins_err).lower():
+            _add_col_safe(conn, "shareholders", "distinctive_no_from", "BIGINT")
+            _add_col_safe(conn, "shareholders", "distinctive_no_to",   "BIGINT")
+            c.execute("""INSERT INTO shareholders
+                (id,company_id,name,folio_no,pan,email,mobile,address,share_class,shares_held,face_value,
+                 date_of_entry,mca_user_id,mca_password,distinctive_no_from,distinctive_no_to,tenant_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (sid,d["company_id"],d["name"],d.get("folio_no"),_str((d.get("pan") or "").upper()),
+                 d.get("email"),d.get("mobile"),d.get("address"),d.get("share_class","Equity"),
+                 _num(d.get("shares_held",0),cast=int),_num(d.get("face_value",10),default=10),_dt(d.get("date_of_entry")),
+                 d.get("mca_user_id"),d.get("mca_password"),d.get("distinctive_no_from"),d.get("distinctive_no_to"),g.tenant_id))
+        else:
+            raise
     conn.commit()
     c.execute("SELECT * FROM shareholders WHERE id=%s",(sid,)); result=row(c.fetchone()); conn.close()
     return jsonify(result),201
@@ -5175,6 +5216,38 @@ def _startup():
         except Exception as _ex:
             print(f"[STARTUP] {_name} failed: {_ex}")
             _tb.print_exc()
+    # ── Startup migration: add distinctive_no columns to shareholders ──────
+    try:
+        _mc = get_db()
+        _add_col_safe(_mc, "shareholders", "distinctive_no_from", "BIGINT")
+        _add_col_safe(_mc, "shareholders", "distinctive_no_to",   "BIGINT")
+        _mc_cur = _mc.cursor()
+        _mc_cur.execute(
+            "CREATE TABLE IF NOT EXISTS share_transfers ("
+            "id TEXT PRIMARY KEY, company_id TEXT, transferor_id TEXT, transferee_id TEXT, "
+            "shares_transferred INTEGER, transfer_date TEXT, distinctive_no_from BIGINT, "
+            "distinctive_no_to BIGINT, remarks TEXT, tenant_id TEXT, created_at TEXT)"
+        )
+        _mc.commit()
+        _mc.close()
+    except Exception as _me:
+        print(f"[STARTUP] shareholder migration skipped: {_me}")
+    # Migrate shareholders table — add distinctive_no columns if missing
+    try:
+        _mc = get_db()
+        _add_col_safe(_mc, "shareholders", "distinctive_no_from", "BIGINT")
+        _add_col_safe(_mc, "shareholders", "distinctive_no_to",   "BIGINT")
+        _cur2 = _mc.cursor()
+        _cur2.execute(
+            "CREATE TABLE IF NOT EXISTS share_transfers ("
+            "id TEXT PRIMARY KEY, company_id TEXT, transferor_id TEXT, transferee_id TEXT, "
+            "shares_transferred INTEGER, transfer_date TEXT, distinctive_no_from BIGINT, "
+            "distinctive_no_to BIGINT, remarks TEXT, tenant_id TEXT, created_at TEXT)"
+        )
+        _mc.commit()
+        _mc.close()
+    except Exception as _me:
+        print(f"[STARTUP] shareholder migration: {_me}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
