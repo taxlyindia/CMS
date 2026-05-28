@@ -10492,6 +10492,8 @@ let ALL_TEMPLATES = [];
 
 let WORD_TEMPLATES = [];
 const ALL_PLACEHOLDERS = [
+  // Special built-in
+  'company_letterhead',
   // Company
   "company_name","cin","pan","tan","gstin","incorporation_date","registered_office",
   "company_email","phone","financial_year","place","authorized_capital","paid_up_capital",
@@ -10595,9 +10597,14 @@ function openUploadWordTplModal() {
   openModal('⬆ Upload Word Template (.docx)', `
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">
       <strong>How it works:</strong> Design your document in Microsoft Word → insert
-      <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">{{placeholder_name}}</code> tags where data should appear
-      → upload here → the system replaces placeholders with real CRM data when generating.
-      <div style="margin-top:6px">
+      <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">{{placeholder_name}}</code> tags → upload → system fills data on generation.
+      <div style="margin-top:8px;padding:8px 10px;background:rgba(26,86,219,.06);border:1px solid rgba(26,86,219,.2);border-radius:6px">
+        <span style="font-weight:700;color:#1a56db">💡 Letterhead tip:</span>
+        Place <code style="background:rgba(26,86,219,.1);padding:1px 6px;border-radius:3px;color:#1a56db;font-size:11px">{{company_letterhead}}</code>
+        anywhere in your Word file — it will be replaced with the full formatted company letterhead
+        (name, CIN, address, divider lines) automatically.
+      </div>
+      <div style="margin-top:8px">
         <button class="btn btn-xs btn-outline" onclick="document.getElementById('wtpl-ph-ref').style.display='';document.getElementById('wtpl-ph-grid').innerHTML=renderAllPlaceholders()">
           📋 View all available placeholders
         </button>
@@ -10688,12 +10695,13 @@ function renderAllPlaceholders() {
   };
   return Object.entries(groups).map(([grp, phs]) =>
     `<div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--text3);margin:6px 0 2px">${grp}</div>` +
-    phs.map(p =>
-      `<div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:4px 8px;cursor:pointer" onclick="navigator.clipboard.writeText('{{${p}}}').then(()=>toast('Copied {{${p}}}','ok'))">
+    phs.map(p => {
+      const isLH = p === 'company_letterhead';
+      return `<div style="display:flex;align-items:center;gap:6px;background:${isLH?'rgba(26,86,219,.06)':'var(--bg)'};border:1px solid ${isLH?'rgba(26,86,219,.3)':'var(--border)'};border-radius:5px;padding:4px 8px;cursor:pointer${isLH?';grid-column:1/-1':''}" onclick="navigator.clipboard.writeText('{{${p}}}').then(()=>toast('Copied {{${p}}}','ok'))">
         <code style="font-size:10px;color:var(--primary);flex:1">{{${p}}}</code>
-        <span style="font-size:10px;color:var(--text3)">📋</span>
-      </div>`
-    ).join('')
+        ${isLH ? '<span style="font-size:9px;color:#1a56db;font-weight:700">📋 Full letterhead block</span>' : '<span style="font-size:10px;color:var(--text3)">📋</span>'}
+      </div>`;
+    }).join('')
   ).join('');
 }
 
@@ -10708,7 +10716,7 @@ async function showWordTplPlaceholders(tid) {
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px">
       ${phs.map(p => {
-        const isAuto = data.auto_filled?.includes(p);
+        const isAuto = data.auto_filled?.includes(p) || p === 'company_letterhead';
         return `<div style="display:flex;align-items:center;gap:6px;background:${isAuto?'rgba(34,197,94,.06)':'var(--bg2)'};border:1px solid ${isAuto?'#86efac':'var(--border)'};border-radius:5px;padding:5px 9px;cursor:pointer" onclick="navigator.clipboard.writeText('{{${p}}}').then(()=>toast('Copied','ok'))">
           <code style="font-size:10.5px;color:var(--primary);flex:1">{{${p}}}</code>
           <span style="font-size:9px;${isAuto?'color:#16a34a':'color:var(--text3)'}">
