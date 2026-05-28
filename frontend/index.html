@@ -6303,12 +6303,17 @@ async function loadShareholders() {
       </tr></thead>
       <tbody>${shs.map(s => {
         const pct = total ? ((s.shares_held / total) * 100).toFixed(2) : '0.00';
-        const isHistorical = s.is_historical === true || s.is_historical === 1 || s.is_active === 0 || s.is_active === '0';
+        const isHistorical  = s.is_historical === true || s.is_historical === 1 || s.is_active === 0 || s.is_active === '0';
+        const isTransferred = s._row_type === 'transferred';
+        const isKept        = s._row_type === 'kept';
         return `
-        <tr style="${isHistorical ? 'opacity:0.72;background:rgba(251,191,36,0.06);' : ''}">
+        <tr style="${isTransferred ? 'background:rgba(239,68,68,0.05);border-left:3px solid rgba(239,68,68,0.4);' : isKept ? 'background:rgba(34,197,94,0.05);border-left:3px solid rgba(34,197,94,0.3);' : isHistorical ? 'background:rgba(251,191,36,0.04);' : ''}">
           <td style="font-weight:600">
             ${s.name}
-            ${isHistorical ? '<span style="display:inline-block;margin-left:6px;padding:1px 7px;background:#fef3c7;color:#92400e;border-radius:4px;font-size:10px;font-weight:700;border:1px solid #fde68a">Transferred</span>' : ''}
+            ${isTransferred ? '<span style="display:inline-block;margin-left:6px;padding:1px 7px;background:#fee2e2;color:#dc2626;border-radius:4px;font-size:10px;font-weight:700;border:1px solid #fca5a5">Transferred Out</span>'
+              : isKept ? '<span style="display:inline-block;margin-left:6px;padding:1px 7px;background:#dcfce7;color:#16a34a;border-radius:4px;font-size:10px;font-weight:700;border:1px solid #86efac">Remaining</span>'
+              : isHistorical ? '<span style="display:inline-block;margin-left:6px;padding:1px 7px;background:#fef3c7;color:#92400e;border-radius:4px;font-size:10px;font-weight:700;border:1px solid #fde68a">Transferred</span>'
+              : ''}
           </td>
           <td><code>${s.folio_no || '—'}</code></td>
           <td><code>${s.pan || '—'}</code></td>
@@ -6316,7 +6321,9 @@ async function loadShareholders() {
           <td><span class="badge b-blue">${s.share_class}</span></td>
           <td style="font-weight:700;font-family:var(--font-mono)">
             ${(s.shares_held || 0).toLocaleString('en-IN')}
-            ${isHistorical ? '<div style="font-size:9.5px;font-weight:600;color:#92400e;margin-top:1px">period shares</div>' : ''}
+            ${isTransferred ? '<div style="font-size:9.5px;font-weight:600;color:#dc2626;margin-top:1px">transferred out</div>'
+              : isKept ? '<div style="font-size:9.5px;font-weight:600;color:#16a34a;margin-top:1px">remaining held</div>'
+              : isHistorical ? '<div style="font-size:9.5px;font-weight:600;color:#92400e;margin-top:1px">period shares</div>' : ''}
           </td>
           <td style="font-family:var(--font-mono);font-size:12px">${s.distinctive_no_from || '—'}</td>
           <td style="font-family:var(--font-mono);font-size:12px">${s.distinctive_no_to || '—'}</td>
