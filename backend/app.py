@@ -664,11 +664,14 @@ def create_user():
 @require_role("superadmin")
 def update_user(uid):
     d = request.get_json(silent=True, force=True) or {}
-    # Prevent superadmin from editing themselves into a lower role
     if uid == g.user_id and "role" in d and d["role"] != "superadmin":
         return jsonify({"error": "Cannot change your own role"}), 400
+    # Pre-flight: ensure phone column exists
+    try:
+        _mc = get_db(); _add_col_safe(_mc, "users", "phone", "TEXT"); _mc.commit(); _mc.close()
+    except Exception: pass
     conn = get_db(); c = conn.cursor()
-    fields = {k: d[k] for k in ["name", "email", "role", "is_active"] if k in d}
+    fields = {k: d[k] for k in ["name","email","role","is_active","phone"] if k in d}
     if "password" in d and d["password"]:
         if len(d["password"]) < 6:
             return jsonify({"error": "Password must be at least 6 characters"}), 400
@@ -679,7 +682,7 @@ def update_user(uid):
         list(fields.values()) + [uid]
     )
     conn.commit()
-    c.execute("SELECT id,name,email,role,is_active,created_at,last_login FROM users WHERE id=%s", (uid,))
+    c.execute("SELECT id,name,email,role,is_active,phone,created_at,last_login FROM users WHERE id=%s",(uid,))
     result = row(c.fetchone()); conn.close()
     return jsonify(result)
 
@@ -5886,6 +5889,7 @@ def _startup():
         _add_col_safe(_mc, "shareholders", "distinctive_no_to",   "BIGINT")
         _add_col_safe(_mc, "directors",    "date_of_resignation",  "TEXT")
         _add_col_safe(_mc, "directors",    "resignation_reason",   "TEXT")
+        _add_col_safe(_mc, "users",        "phone",                "TEXT")
         _mc_cur = _mc.cursor()
         _mc_cur.execute(
             "CREATE TABLE IF NOT EXISTS share_transfers ("
@@ -6757,10 +6761,10 @@ def portal_view(token):
     cs_contact = {'name': '', 'email': '', 'phone': ''}
     try:
         _udb = get_db(); _uc = _udb.cursor()
-        _uc.execute("SELECT name, email FROM users WHERE id=%s", (rec.get('created_by',''),))
+        _uc.execute("SELECT name, email, phone FROM users WHERE id=%s", (rec.get('created_by',''),))
         _u = row(_uc.fetchone()); _udb.close()
         if _u:
-            cs_contact = {'name': _u.get('name','') or '', 'email': _u.get('email','') or '', 'phone': ''}
+            cs_contact = {'name': _u.get('name','') or '', 'email': _u.get('email','') or '', 'phone': _u.get('phone','') or ''}
     except Exception: pass
 
     # ── CS Contact — user who generated this portal link ─────────────────
@@ -6868,7 +6872,7 @@ def portal_view(token):
     # Upcoming tasks (only non-sensitive, status-based)
     tasks_list = qrows(
         "SELECT t.title, t.due_date, t.priority, t.status, t.module, "
-        "       u.name as assignee_name, u.email as assignee_email "
+        "       u.name as assignee_name, u.email as assignee_email, u.phone as assignee_phone "
         "FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id "
         "WHERE t.company_id=%s AND t.status NOT IN ('completed','cancelled') "
         "ORDER BY t.due_date ASC LIMIT 10",
@@ -6893,16 +6897,39 @@ def portal_view(token):
 
     def severity_badge(s):
         s = str(s or '').lower()
-        colors = {'critical':'#dc2626,#fee2e2','high':'#c2410c,#ffedd5','medium':'#b45309,#fef3c7','low':'#059669,#d1fae5'}
-        c,bg = colors.get(s,('#6b7280','#f3f4f6')).split(',')
-        return f'<span style="padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:700;background:{bg};color:{c}">{s.upper()}</span>'
+        colors = {
+            'critical': '#dc2626,#fee2e2',
+            'high':     '#c2410c,#ffedd5',
+            'medium':   '#b45309,#fef3c7',
+            'low':      '#059669,#d1fae5',
+        }
+        val   = colors.get(s, '#6b7280,#f3f4f6')   # always a string
+        parts = val.split(',')
+        c  = parts[0] if len(parts) > 0 else '#6b7280'
+        bg = parts[1] if len(parts) > 1 else '#f3f4f6'
+        return f'<span style="padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:700;background:{bg};color:{c}">{s.upper() or "—"}</span>'
 
     def status_badge(s):
         s = str(s or '').lower()
-        m = {'scheduled':'#2563eb,#dbeafe','completed':'#059669,#d1fae5','pending':'#d97706,#fef3c7',
-             'drafted':'#7c3aed,#ede9fe','active':'#059669,#d1fae5','expired':'#dc2626,#fee2e2'}
-        c,bg = m.get(s,('#6b7280','#f3f4f6')).split(',')
-        return f'<span style="padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:600;background:{bg};color:{c}">{s}</span>'
+        m = {
+            'scheduled':  '#2563eb,#dbeafe',
+            'completed':  '#059669,#d1fae5',
+            'pending':    '#d97706,#fef3c7',
+            'drafted':    '#7c3aed,#ede9fe',
+            'active':     '#059669,#d1fae5',
+            'expired':    '#dc2626,#fee2e2',
+            'overdue':    '#dc2626,#fee2e2',
+            'resolved':   '#059669,#d1fae5',
+            'dismissed':  '#6b7280,#f3f4f6',
+            'open':       '#2563eb,#dbeafe',
+            'cancelled':  '#6b7280,#f3f4f6',
+        }
+        val = m.get(s, '#6b7280,#f3f4f6')   # always a string now
+        parts = val.split(',') if isinstance(val, str) else list(val)
+        c  = parts[0] if len(parts) > 0 else '#6b7280'
+        bg = parts[1] if len(parts) > 1 else '#f3f4f6'
+        label = s.replace('_',' ').title()
+        return f'<span style="padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:600;background:{bg};color:{c}">{label}</span>'
 
     def fmt_date(d):
         if not d: return '—'
@@ -7036,7 +7063,7 @@ def portal_view(token):
       <td>{severity_badge(t.get("priority",""))}</td>
       <td>{status_badge(t.get("status",""))}</td>
       <td>
-        {f'<div style="font-size:12px;font-weight:600">{esc(t.get("assignee_name",""))}</div><div style="font-size:10.5px;color:#7a8aaa">{esc(t.get("assignee_email",""))}</div>' if t.get("assignee_name") else '<span style="color:#7a8aaa">—</span>'}
+        {f'<div style="font-size:12px;font-weight:600">{esc(t.get("assignee_name",""))}</div>' + (f'<div style="font-size:10.5px;color:#1b4ed8;margin-top:1px"><a href="mailto:{esc(t.get("assignee_email",""))}" style="color:#1b4ed8;text-decoration:none">{esc(t.get("assignee_email",""))}</a></div>' if t.get("assignee_email") else '') + (f'<div style="font-size:10.5px;font-weight:600;margin-top:1px"><a href="tel:{esc(t.get("assignee_phone",""))}" style="color:#059669;text-decoration:none">☎ {esc(t.get("assignee_phone",""))}</a></div>' if t.get("assignee_phone") else '') if t.get("assignee_name") else '<span style="color:#7a8aaa">—</span>'}
       </td>
     </tr>''' for t in tasks_list)
     tasks_html = f'''<div class="pt-table-wrap"><table><thead><tr>
