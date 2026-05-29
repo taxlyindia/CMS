@@ -14689,6 +14689,95 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
+
+// ── Integration Settings ──────────────────────────────────────────────────
+function switchIntTab(tab) {
+  ['email','wa'].forEach(t => {
+    const panel = document.getElementById('int-panel-'+t);
+    const btn   = document.getElementById('int-tab-'+t);
+    if (panel) panel.style.display = t===tab ? '' : 'none';
+    if (btn) {
+      btn.style.borderBottomColor = t===tab ? 'var(--primary)' : 'transparent';
+      btn.style.color = t===tab ? 'var(--primary)' : 'var(--text3)';
+    }
+  });
+}
+
+async function loadIntegrationSettings() {
+  const data = await api('/api/settings/integrations');
+  if (!data) return;
+  const set = (id, val) => { const el=document.getElementById(id); if(el && val !== undefined && val !== null) el.value=val; };
+  set('int-mail-server',   data.mail_server);
+  set('int-mail-port',     data.mail_port || '587');
+  set('int-mail-username', data.mail_username);
+  set('int-mail-from',     data.mail_from);
+  const tlsSel = document.getElementById('int-mail-tls');
+  if (tlsSel) tlsSel.value = data.mail_use_tls || '1';
+  set('int-wa-phone-id', data.wa_phone_id);
+  if (data.mail_password && data.mail_password.includes('*')) {
+    const el = document.getElementById('int-mail-password');
+    if (el) el.placeholder = String.fromCharCode(9679).repeat(8) + ' (saved — enter new to change)';
+  }
+  if (data.wa_token && data.wa_token.includes('*')) {
+    const el = document.getElementById('int-wa-token');
+    if (el) el.placeholder = String.fromCharCode(9679).repeat(8) + ' (saved — enter new to change)';
+  }
+  const badge = document.getElementById('int-status-badge');
+  if (badge) {
+    const txt = [data.mail_enabled?'📧 Email ✓':'📧 Not configured', data.wa_enabled?'💬 WA ✓':''].filter(Boolean).join('  ·  ');
+    badge.textContent = txt || '⚙️ Not configured';
+    badge.style.background = (data.mail_enabled||data.wa_enabled) ? 'rgba(5,150,105,.1)' : 'var(--bg3)';
+    badge.style.color = (data.mail_enabled||data.wa_enabled) ? '#059669' : 'var(--text3)';
+  }
+}
+
+async function saveIntegrationSettings(section) {
+  let body = {};
+  if (section === 'email') {
+    body = {
+      mail_server:   document.getElementById('int-mail-server')?.value.trim() || 'smtp.gmail.com',
+      mail_port:     document.getElementById('int-mail-port')?.value.trim()   || '587',
+      mail_use_tls:  document.getElementById('int-mail-tls')?.value           || '1',
+      mail_username: document.getElementById('int-mail-username')?.value.trim(),
+      mail_password: document.getElementById('int-mail-password')?.value,
+      mail_from:     document.getElementById('int-mail-from')?.value.trim(),
+    };
+    if (!body.mail_username) { toast('Email username is required','err'); return; }
+  } else {
+    body = {
+      wa_token:    document.getElementById('int-wa-token')?.value,
+      wa_phone_id: document.getElementById('int-wa-phone-id')?.value.trim(),
+    };
+    if (!body.wa_phone_id) { toast('Phone Number ID is required','err'); return; }
+  }
+  const r = await api('/api/settings/integrations', { method:'POST', body });
+  if (r?.success) {
+    toast(section==='email' ? '📧 Email settings saved ✓' : '💬 WhatsApp settings saved ✓', 'ok');
+    loadIntegrationSettings();
+  } else toast(r?.error || 'Save failed', 'err');
+}
+
+async function testEmailSettings() {
+  const to = document.getElementById('int-test-email')?.value.trim();
+  if (!to) { toast('Enter a recipient email to test','err'); return; }
+  const resultEl = document.getElementById('int-email-result');
+  if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">Sending test email…</span>';
+  const r = await api('/api/settings/integrations/test-email', { method:'POST', body:{ to } });
+  if (resultEl) resultEl.innerHTML = r?.success
+    ? '<span style="color:#059669;font-weight:600">✅ Test email sent successfully!</span>'
+    : '<span style="color:#dc2626;font-weight:600">❌ ' + (r?.message||'Failed — check credentials') + '</span>';
+}
+
+async function testWaSettings() {
+  const phone = document.getElementById('int-test-wa')?.value.trim();
+  if (!phone) { toast('Enter a phone number to test','err'); return; }
+  const resultEl = document.getElementById('int-wa-result');
+  if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">Sending test message…</span>';
+  const r = await api('/api/settings/integrations/test-wa', { method:'POST', body:{ phone } });
+  if (resultEl) resultEl.innerHTML = r?.success
+    ? '<span style="color:#059669;font-weight:600">✅ WhatsApp message sent!</span>'
+    : '<span style="color:#dc2626;font-weight:600">❌ ' + (r?.message||'Failed — check token') + '</span>';
+}
 </script>
 
 <script>
@@ -15397,93 +15486,5 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </body>
 </html
-// ── Integration Settings ──────────────────────────────────────────────────
-function switchIntTab(tab) {
-  ['email','wa'].forEach(t => {
-    const panel = document.getElementById('int-panel-'+t);
-    const btn   = document.getElementById('int-tab-'+t);
-    if (panel) panel.style.display = t===tab ? '' : 'none';
-    if (btn) {
-      btn.style.borderBottomColor = t===tab ? 'var(--primary)' : 'transparent';
-      btn.style.color = t===tab ? 'var(--primary)' : 'var(--text3)';
-    }
-  });
-}
-
-async function loadIntegrationSettings() {
-  const data = await api('/api/settings/integrations');
-  if (!data) return;
-  const set = (id, val) => { const el=document.getElementById(id); if(el && val !== undefined && val !== null) el.value=val; };
-  set('int-mail-server',   data.mail_server);
-  set('int-mail-port',     data.mail_port || '587');
-  set('int-mail-username', data.mail_username);
-  set('int-mail-from',     data.mail_from);
-  const tlsSel = document.getElementById('int-mail-tls');
-  if (tlsSel) tlsSel.value = data.mail_use_tls || '1';
-  set('int-wa-phone-id', data.wa_phone_id);
-  if (data.mail_password && data.mail_password.includes('*')) {
-    const el = document.getElementById('int-mail-password');
-    if (el) el.placeholder = String.fromCharCode(9679).repeat(8) + ' (saved — enter new to change)';
-  }
-  if (data.wa_token && data.wa_token.includes('*')) {
-    const el = document.getElementById('int-wa-token');
-    if (el) el.placeholder = String.fromCharCode(9679).repeat(8) + ' (saved — enter new to change)';
-  }
-  const badge = document.getElementById('int-status-badge');
-  if (badge) {
-    const txt = [data.mail_enabled?'📧 Email ✓':'📧 Not configured', data.wa_enabled?'💬 WA ✓':''].filter(Boolean).join('  ·  ');
-    badge.textContent = txt || '⚙️ Not configured';
-    badge.style.background = (data.mail_enabled||data.wa_enabled) ? 'rgba(5,150,105,.1)' : 'var(--bg3)';
-    badge.style.color = (data.mail_enabled||data.wa_enabled) ? '#059669' : 'var(--text3)';
-  }
-}
-
-async function saveIntegrationSettings(section) {
-  let body = {};
-  if (section === 'email') {
-    body = {
-      mail_server:   document.getElementById('int-mail-server')?.value.trim() || 'smtp.gmail.com',
-      mail_port:     document.getElementById('int-mail-port')?.value.trim()   || '587',
-      mail_use_tls:  document.getElementById('int-mail-tls')?.value           || '1',
-      mail_username: document.getElementById('int-mail-username')?.value.trim(),
-      mail_password: document.getElementById('int-mail-password')?.value,
-      mail_from:     document.getElementById('int-mail-from')?.value.trim(),
-    };
-    if (!body.mail_username) { toast('Email username is required','err'); return; }
-  } else {
-    body = {
-      wa_token:    document.getElementById('int-wa-token')?.value,
-      wa_phone_id: document.getElementById('int-wa-phone-id')?.value.trim(),
-    };
-    if (!body.wa_phone_id) { toast('Phone Number ID is required','err'); return; }
-  }
-  const r = await api('/api/settings/integrations', { method:'POST', body });
-  if (r?.success) {
-    toast(section==='email' ? '📧 Email settings saved ✓' : '💬 WhatsApp settings saved ✓', 'ok');
-    loadIntegrationSettings();
-  } else toast(r?.error || 'Save failed', 'err');
-}
-
-async function testEmailSettings() {
-  const to = document.getElementById('int-test-email')?.value.trim();
-  if (!to) { toast('Enter a recipient email to test','err'); return; }
-  const resultEl = document.getElementById('int-email-result');
-  if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">Sending test email…</span>';
-  const r = await api('/api/settings/integrations/test-email', { method:'POST', body:{ to } });
-  if (resultEl) resultEl.innerHTML = r?.success
-    ? '<span style="color:#059669;font-weight:600">✅ Test email sent successfully!</span>'
-    : '<span style="color:#dc2626;font-weight:600">❌ ' + (r?.message||'Failed — check credentials') + '</span>';
-}
-
-async function testWaSettings() {
-  const phone = document.getElementById('int-test-wa')?.value.trim();
-  if (!phone) { toast('Enter a phone number to test','err'); return; }
-  const resultEl = document.getElementById('int-wa-result');
-  if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">Sending test message…</span>';
-  const r = await api('/api/settings/integrations/test-wa', { method:'POST', body:{ phone } });
-  if (resultEl) resultEl.innerHTML = r?.success
-    ? '<span style="color:#059669;font-weight:600">✅ WhatsApp message sent!</span>'
-    : '<span style="color:#dc2626;font-weight:600">❌ ' + (r?.message||'Failed — check token') + '</span>';
-}
 
 >
