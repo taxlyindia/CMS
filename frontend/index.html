@@ -7571,6 +7571,10 @@ function openUsrModal() {
       <div class="fg"><label class="fl">Email Address <span class="req">*</span></label>
         <input class="fc" id="nu-email" type="email" placeholder="priya@firm.in" autocomplete="off"></div>
     </div>
+    <div class="fg"><label class="fl">Mobile / Phone</label>
+      <input class="fc" id="nu-phone" type="tel" placeholder="e.g. 98XXXXXXXX" style="border-left:3px solid var(--primary)">
+      <div style="font-size:10.5px;color:var(--text3);margin-top:3px">📱 Shown to clients on their portal as contact number</div>
+    </div>
     <div class="fg2">
       <div class="fg"><label class="fl">Password <span class="req">*</span></label>
         <input class="fc" id="nu-pass" type="password" placeholder="Min. 6 characters" autocomplete="new-password"></div>
@@ -7602,12 +7606,12 @@ async function saveNewUser() {
   if (pass.length < 6)                       { toast('Password must be at least 6 characters', 'err'); return; }
   if (pass !== pass2)                        { toast('Passwords do not match', 'err'); return; }
 
-  const r = await api('/api/users', { method: 'POST', body: { name, email, password: pass, role } });
-  if (r) {
-    toast(`User "${r.name || name}" created ✓`, 'ok');
-    closeModal();
-    loadUsers();
-  }
+  const nuPhone = document.getElementById('nu-phone')?.value.trim() || '';
+  const nuBody  = { name, email, password: pass, role };
+  if (nuPhone) nuBody.phone = nuPhone;
+  const r = await api('/api/users', { method: 'POST', body: nuBody });
+  if (r && !r.error) { toast('User created ✓', 'ok'); closeModal(); loadUsers(); }
+  else if (r?.error) toast(r.error, 'err');
 }
 
 // ── Edit User ─────────────────────────────────────────────────────────────────
