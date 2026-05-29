@@ -6088,16 +6088,35 @@ import smtplib, ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-_MAIL_SERVER   = os.environ.get("MAIL_SERVER",   "smtp.gmail.com")
-_MAIL_PORT     = int(os.environ.get("MAIL_PORT",  "587"))
-_MAIL_USE_TLS  = os.environ.get("MAIL_USE_TLS",  "1") == "1"
-_MAIL_USERNAME = os.environ.get("MAIL_USERNAME",  "")
-_MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD",  "")
-_MAIL_FROM     = os.environ.get("MAIL_FROM",      _MAIL_USERNAME or "noreply@taxlycms.in")
+# ── Load central config (config.py) ──────────────────────────────────────
+try:
+    from config import Config as _Cfg, load_dotenv as _load_dotenv
+    _load_dotenv()   # load .env file if present
+except ImportError:
+    class _Cfg:      # fallback if config.py not present
+        MAIL_SERVER="smtp.gmail.com"; MAIL_PORT=587; MAIL_USE_TLS=True
+        MAIL_USERNAME=os.environ.get("MAIL_USERNAME",""); MAIL_PASSWORD=os.environ.get("MAIL_PASSWORD","")
+        MAIL_FROM=os.environ.get("MAIL_FROM","noreply@taxlycms.in"); MAIL_ENABLED=False
+        WA_TOKEN=os.environ.get("WA_TOKEN",""); WA_PHONE_ID=os.environ.get("WA_PHONE_ID","")
+        ANTHROPIC_API_KEY=os.environ.get("ANTHROPIC_API_KEY","")
+        ESIGN_API_KEY=os.environ.get("ESIGN_API_KEY","")
+
+_MAIL_SERVER   = _Cfg.MAIL_SERVER
+_MAIL_PORT     = _Cfg.MAIL_PORT
+_MAIL_USE_TLS  = _Cfg.MAIL_USE_TLS
+_MAIL_USERNAME = _Cfg.MAIL_USERNAME
+_MAIL_PASSWORD = _Cfg.MAIL_PASSWORD
+_MAIL_FROM     = _Cfg.MAIL_FROM
 _MAIL_ENABLED  = bool(_MAIL_USERNAME and _MAIL_PASSWORD)
 
 def _send_email(to: str, subject: str, body_html: str, body_text: str = "") -> bool:
-    """Send an email. Returns True on success. Silent on failure (never crashes the caller)."""
+    """Send an email using DB settings (if configured) or env vars. Never crashes caller."""
+    # Try to reload from DB for the current request tenant
+    try:
+        from flask import g as _g
+        if hasattr(_g, 'tenant_id') and _g.tenant_id:
+            _reload_mail_config(_g.tenant_id)
+    except Exception: pass
     if not _MAIL_ENABLED:
         app.logger.debug(f"[MAIL disabled] Would send to {to}: {subject}")
         return False
@@ -9984,8 +10003,17 @@ def portal_document_download(token, attach_id):
 def _send_wa_message(phone: str, message: str) -> bool:
     """Send a WhatsApp message via Meta Cloud API. Returns True on success."""
     import requests as _req
-    _WA_TOKEN    = os.environ.get('WA_TOKEN', '')
-    _WA_PHONE_ID = os.environ.get('WA_PHONE_ID', '')
+    # Try DB settings first, then Config, then env vars
+    _wa_db_tok = None; _wa_db_pid = None
+    try:
+        from flask import g as _gwt
+        if hasattr(_gwt, 'tenant_id') and _gwt.tenant_id:
+            _s = get_all_tenant_settings(_gwt.tenant_id)
+            _wa_db_tok = _s.get('wa_token','')
+            _wa_db_pid = _s.get('wa_phone_id','')
+    except Exception: pass
+    _WA_TOKEN    = _wa_db_tok or _Cfg.WA_TOKEN    or os.environ.get('WA_TOKEN', '')
+    _WA_PHONE_ID = _wa_db_pid or _Cfg.WA_PHONE_ID or os.environ.get('WA_PHONE_ID', '')
     if not _WA_TOKEN or not _WA_PHONE_ID:
         app.logger.debug(f"[WA disabled] Would send to {phone}: {message[:50]}")
         return False
@@ -10162,5 +10190,179 @@ def esign_cancel(req_id):
               (req_id, g.tenant_id))
     conn.commit(); conn.close()
     return jsonify({'success': True})
+
+
+
+@app.route("/api/config/status", methods=["GET"])
+@login_required
+def config_status():
+    """Return which integrations are enabled (safe — no secrets)."""
+    try:
+        from config import Config as _CfgS
+        return jsonify(_CfgS.summary())
+    except ImportError:
+        return jsonify({
+            "MAIL_ENABLED":   _MAIL_ENABLED,
+            "MAIL_SERVER":    _MAIL_SERVER,
+            "MAIL_FROM":      _MAIL_FROM,
+            "WA_ENABLED":     bool(os.environ.get("WA_TOKEN","")),
+            "ESIGN_PROVIDER": "internal",
+            "ANTHROPIC_KEY":  "set" if os.environ.get("ANTHROPIC_API_KEY","") else "not set",
+        })
+
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TENANT SETTINGS (Email / WhatsApp config stored in DB)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _ensure_settings_table():
+    try:
+        mc = get_db(); cur = mc.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_settings (
+                id         TEXT PRIMARY KEY,
+                tenant_id  TEXT NOT NULL,
+                key        TEXT NOT NULL,
+                value      TEXT,
+                updated_at TEXT,
+                UNIQUE(tenant_id, key)
+            )""")
+        mc.commit(); mc.close()
+    except Exception: pass
+
+_ensure_settings_table()
+
+def get_tenant_setting(tenant_id: str, key: str, default=None):
+    """Read a single setting from DB."""
+    try:
+        conn = get_db(); c = conn.cursor()
+        c.execute("SELECT value FROM tenant_settings WHERE tenant_id=%s AND key=%s",
+                  (tenant_id, key))
+        rec = c.fetchone(); conn.close()
+        if rec:
+            v = rec['value'] if isinstance(rec, dict) else rec[0]
+            return v if v is not None else default
+        return default
+    except Exception:
+        return default
+
+def get_all_tenant_settings(tenant_id: str) -> dict:
+    """Read all settings for a tenant as a dict."""
+    try:
+        conn = get_db(); c = conn.cursor()
+        c.execute("SELECT key, value FROM tenant_settings WHERE tenant_id=%s",
+                  (tenant_id,))
+        rows_data = c.fetchall(); conn.close()
+        return {(r['key'] if isinstance(r,dict) else r[0]):
+                (r['value'] if isinstance(r,dict) else r[1])
+                for r in (rows_data or [])}
+    except Exception:
+        return {}
+
+@app.route("/api/settings/integrations", methods=["GET"])
+@login_required
+def get_integration_settings():
+    """Get integration settings for this tenant (masks passwords)."""
+    s = get_all_tenant_settings(g.tenant_id)
+    # Mask sensitive values
+    def mask(v): return ('*' * (len(v)-4) + v[-4:]) if v and len(v) > 4 else ('****' if v else '')
+    return jsonify({
+        "mail_server":   s.get("mail_server",   ""),
+        "mail_port":     s.get("mail_port",     "587"),
+        "mail_use_tls":  s.get("mail_use_tls",  "1"),
+        "mail_username": s.get("mail_username", ""),
+        "mail_password": mask(s.get("mail_password", "")),
+        "mail_from":     s.get("mail_from",     ""),
+        "mail_enabled":  bool(s.get("mail_username") and s.get("mail_password")),
+        "wa_token":      mask(s.get("wa_token",      "")),
+        "wa_phone_id":   s.get("wa_phone_id",    ""),
+        "wa_enabled":    bool(s.get("wa_token")),
+    })
+
+@app.route("/api/settings/integrations", methods=["POST"])
+@login_required
+def save_integration_settings():
+    """Save integration settings to DB."""
+    d = request.get_json() or {}
+    import datetime as _dts
+    now = _dts.datetime.utcnow().isoformat()
+    conn = get_db(); c = conn.cursor()
+    try:
+        allowed_keys = [
+            "mail_server","mail_port","mail_use_tls","mail_username",
+            "mail_password","mail_from",
+            "wa_token","wa_phone_id",
+        ]
+        for key in allowed_keys:
+            if key not in d: continue
+            val = str(d[key]).strip() if d[key] is not None else ""
+            # Don't overwrite password if client sends back masked value
+            if key == "mail_password" and "*" in val: continue
+            if key == "wa_token"      and "*" in val: continue
+            c.execute(
+                "INSERT INTO tenant_settings (id,tenant_id,key,value,updated_at) "
+                "VALUES (%s,%s,%s,%s,%s) "
+                "ON CONFLICT(tenant_id,key) DO UPDATE SET value=EXCLUDED.value, updated_at=EXCLUDED.updated_at",
+                (str(uuid.uuid4()), g.tenant_id, key, val, now))
+        conn.commit(); conn.close()
+
+        # Reload runtime mail config for this process
+        _reload_mail_config(g.tenant_id)
+        return jsonify({"success": True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/settings/integrations/test-email", methods=["POST"])
+@login_required
+def test_email_settings():
+    """Send a test email using current settings."""
+    d = request.get_json() or {}
+    to = d.get("to") or ""
+    if not to: return jsonify({"error": "Recipient email required"}), 400
+    # Reload settings first
+    _reload_mail_config(g.tenant_id)
+    sent = _send_email(
+        to=to,
+        subject="✅ TaxlyCMS Email Test",
+        body_html=f"""<div style="font-family:Arial;max-width:500px;margin:0 auto;padding:20px">
+            <h2 style="color:#1a56db">✅ Email Configuration Working!</h2>
+            <p>This test email confirms your SMTP settings are correctly configured in TaxlyCMS.</p>
+            <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;margin:16px 0">
+                <strong>Server:</strong> {_MAIL_SERVER}:{_MAIL_PORT}<br>
+                <strong>From:</strong> {_MAIL_FROM}
+            </div>
+            <p style="color:#64748b;font-size:12px">Sent from TaxlyCMS Integration Settings</p>
+        </div>""",
+        body_text="TaxlyCMS email test — configuration is working!"
+    )
+    return jsonify({"success": sent, "message": "Test email sent ✓" if sent else "Failed — check SMTP credentials"})
+
+@app.route("/api/settings/integrations/test-wa", methods=["POST"])
+@login_required
+def test_wa_settings():
+    """Send a test WhatsApp message."""
+    d = request.get_json() or {}
+    phone = d.get("phone") or ""
+    if not phone: return jsonify({"error": "Phone number required"}), 400
+    sent = _send_wa_message(phone, "✅ TaxlyCMS WhatsApp test — configuration is working! 🎉")
+    return jsonify({"success": sent, "message": "Test WA sent ✓" if sent else "Failed — check WA_TOKEN and WA_PHONE_ID"})
+
+def _reload_mail_config(tenant_id: str = None):
+    """Reload mail config from DB settings into global variables."""
+    global _MAIL_SERVER, _MAIL_PORT, _MAIL_USE_TLS, _MAIL_USERNAME
+    global _MAIL_PASSWORD, _MAIL_FROM, _MAIL_ENABLED
+    if tenant_id:
+        s = get_all_tenant_settings(tenant_id)
+        if s.get("mail_username"):
+            _MAIL_SERVER   = s.get("mail_server",   _MAIL_SERVER)
+            _MAIL_PORT     = int(s.get("mail_port",   str(_MAIL_PORT)))
+            _MAIL_USE_TLS  = s.get("mail_use_tls",  "1") == "1"
+            _MAIL_USERNAME = s.get("mail_username", _MAIL_USERNAME)
+            _MAIL_PASSWORD = s.get("mail_password", _MAIL_PASSWORD)
+            _MAIL_FROM     = s.get("mail_from",     _MAIL_USERNAME or _MAIL_FROM)
+            _MAIL_ENABLED  = bool(_MAIL_USERNAME and _MAIL_PASSWORD)
 
 
