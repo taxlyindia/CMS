@@ -5913,6 +5913,41 @@ def _startup():
         _add_col_safe(_mc, "tasks",        "module",               "TEXT")
         _add_col_safe(_mc, "tasks",        "entity_id",            "TEXT")
         _add_col_safe(_mc, "tasks",        "completed_at",         "TEXT")
+        _mc_cur2 = _mc.cursor()
+        _mc_cur2.execute("""
+            CREATE TABLE IF NOT EXISTS esign_requests (
+                id          TEXT PRIMARY KEY,
+                tenant_id   TEXT,
+                doc_title   TEXT,
+                doc_id      TEXT,
+                provider    TEXT DEFAULT 'internal',
+                signatories TEXT,
+                status      TEXT DEFAULT 'pending',
+                deadline    TEXT,
+                message     TEXT,
+                sign_token  TEXT UNIQUE,
+                company_id  TEXT,
+                created_by  TEXT,
+                created_at  TEXT,
+                completed_at TEXT,
+                email_sent  INTEGER DEFAULT 0,
+                wa_sent     INTEGER DEFAULT 0
+            )""")
+        _mc_cur2.execute("""
+            CREATE TABLE IF NOT EXISTS esign_signatures (
+                id          TEXT PRIMARY KEY,
+                request_id  TEXT REFERENCES esign_requests(id),
+                signatory_name  TEXT,
+                signatory_email TEXT,
+                signatory_phone TEXT,
+                role        TEXT,
+                status      TEXT DEFAULT 'pending',
+                sign_token  TEXT UNIQUE,
+                signed_at   TEXT,
+                ip_address  TEXT,
+                created_at  TEXT
+            )""")
+        _mc.commit()
         _mc_cur = _mc.cursor()
         _mc_cur.execute(
             "CREATE TABLE IF NOT EXISTS share_transfers ("
@@ -7592,19 +7627,50 @@ def esign_send():
 @login_required
 def esign_requests():
     try:
-        recs = rows("SELECT * FROM esign_requests WHERE tenant_id=%s ORDER BY created_at DESC LIMIT 50", (g.tenant_id,))
-        return jsonify({'requests': recs or []})
-    except Exception:
+        conn = get_db(); c = conn.cursor()
+        c.execute(
+            "SELECT r.*, co.name as company_name FROM esign_requests r "
+            "LEFT JOIN companies co ON r.company_id=co.id "
+            "WHERE r.tenant_id=%s ORDER BY r.created_at DESC LIMIT 100",
+            (g.tenant_id,))
+        recs = rows(c.fetchall()) or []
+        # Attach per-signatory status from esign_signatures
+        for rec in recs:
+            try:
+                c.execute("SELECT * FROM esign_signatures WHERE request_id=%s ORDER BY created_at", (rec['id'],))
+                sigs = rows(c.fetchall()) or []
+                rec['signature_details'] = sigs
+                if sigs:
+                    all_signed = all(s.get('status') == 'signed' for s in sigs)
+                    any_signed = any(s.get('status') == 'signed' for s in sigs)
+                    if all_signed:
+                        c.execute("UPDATE esign_requests SET status='completed' WHERE id=%s AND status!='completed'", (rec['id'],))
+                    elif any_signed:
+                        c.execute("UPDATE esign_requests SET status='partial' WHERE id=%s AND status='pending'", (rec['id'],))
+            except Exception: pass
+        conn.commit(); conn.close()
+        return jsonify({'requests': recs})
+    except Exception as e:
+        app.logger.error(f"esign_requests error: {e}")
         return jsonify({'requests': []})
 
 
 @app.route('/api/esign/status/<req_id>', methods=['GET'])
 @login_required
 def esign_status(req_id):
-    rec = row("SELECT * FROM esign_requests WHERE id=%s AND tenant_id=%s", (req_id, g.tenant_id))
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT * FROM esign_requests WHERE id=%s AND tenant_id=%s", (req_id, g.tenant_id))
+    rec = row(c.fetchone())
     if not rec:
-        return jsonify({'error': 'Not found'}), 404
-    return jsonify({**rec, 'reference': req_id, 'signatories': []})
+        conn.close(); return jsonify({'error': 'Not found'}), 404
+    c.execute("SELECT * FROM esign_signatures WHERE request_id=%s ORDER BY created_at", (req_id,))
+    sigs = rows(c.fetchall()) or []
+    conn.close()
+    # Mask sign tokens for security
+    for s in sigs:
+        s.pop('sign_token', None)
+    return jsonify({**rec, 'reference': req_id, 'signature_details': sigs,
+                    'total': len(sigs), 'signed': sum(1 for s in sigs if s.get('status')=='signed')})
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -9911,5 +9977,190 @@ def portal_document_download(token, attach_id):
         download_name=att.get('original_name', att['filename']),
         mimetype=att.get('mime_type', 'application/octet-stream')
     )
+
+
+
+# ── WhatsApp message sender (Meta Cloud API) ──────────────────────────────
+def _send_wa_message(phone: str, message: str) -> bool:
+    """Send a WhatsApp message via Meta Cloud API. Returns True on success."""
+    import requests as _req
+    _WA_TOKEN    = os.environ.get('WA_TOKEN', '')
+    _WA_PHONE_ID = os.environ.get('WA_PHONE_ID', '')
+    if not _WA_TOKEN or not _WA_PHONE_ID:
+        app.logger.debug(f"[WA disabled] Would send to {phone}: {message[:50]}")
+        return False
+    # Normalize phone: ensure starts with country code
+    clean_phone = ''.join(c for c in phone if c.isdigit())
+    if len(clean_phone) == 10: clean_phone = '91' + clean_phone  # India default
+    try:
+        resp = _req.post(
+            f"https://graph.facebook.com/v19.0/{_WA_PHONE_ID}/messages",
+            headers={"Authorization": f"Bearer {_WA_TOKEN}", "Content-Type": "application/json"},
+            json={
+                "messaging_product": "whatsapp",
+                "to": clean_phone,
+                "type": "text",
+                "text": {"body": message}
+            }, timeout=15)
+        return resp.status_code == 200
+    except Exception as e:
+        app.logger.error(f"[WA ERROR] to={phone}: {e}")
+        return False
+
+# ── E-Signature signing page (public, no auth required) ────────────────────
+@app.route("/sign/<sign_token>", methods=["GET", "POST"])
+def sign_document(sign_token):
+    """Public signing page — allow a signatory to view & sign a document."""
+    import datetime as _dt3
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT s.*, r.doc_title, r.doc_id, r.deadline, r.message, r.provider "
+              "FROM esign_signatures s "
+              "JOIN esign_requests r ON s.request_id=r.id "
+              "WHERE s.sign_token=%s", (sign_token,))
+    sig_rec = row(c.fetchone())
+    if not sig_rec:
+        conn.close()
+        return "<h2 style=\'font-family:Arial;color:#dc2626\'>Invalid or expired signing link.</h2>", 404
+
+    # Already signed?
+    if sig_rec.get('status') == 'signed':
+        conn.close()
+        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <title>Already Signed</title>
+        <style>body{{font-family:Arial,sans-serif;background:#f0fdf4;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}}
+        .box{{background:#fff;border-radius:16px;padding:40px;max-width:480px;text-align:center;border:1px solid #86efac}}</style></head>
+        <body><div class="box">
+        <div style="font-size:52px;margin-bottom:12px">✅</div>
+        <h2 style="color:#15803d">Document Already Signed</h2>
+        <p style="color:#64748b">You signed <strong>{sig_rec.get('doc_title','')}</strong> on {(sig_rec.get('signed_at') or '')[:10]}.</p>
+        </div></body></html>"""
+
+    if request.method == 'POST':
+        # Record the signature
+        ip = request.remote_addr or 'unknown'
+        signed_at = _dt3.datetime.utcnow().isoformat()
+        c.execute("UPDATE esign_signatures SET status='signed', signed_at=%s, ip_address=%s WHERE sign_token=%s",
+                  (signed_at, ip, sign_token))
+        # Check if all signatories signed → mark request completed
+        c.execute("SELECT COUNT(*) FROM esign_signatures WHERE request_id=%s AND status!='signed'",
+                  (sig_rec['request_id'],))
+        remaining = c.fetchone()
+        remaining_count = int((remaining[0] if not isinstance(remaining,dict) else list(remaining.values())[0]) if remaining else 0)
+        if remaining_count == 0:
+            c.execute("UPDATE esign_requests SET status='completed', completed_at=%s WHERE id=%s",
+                      (signed_at, sig_rec['request_id']))
+        conn.commit(); conn.close()
+        return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <title>Signed Successfully</title>
+        <style>body{{font-family:Arial,sans-serif;background:linear-gradient(135deg,#f0fdf4,#dcfce7);display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}}
+        .box{{background:#fff;border-radius:16px;padding:40px;max-width:480px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.1);}}</style></head>
+        <body><div class="box">
+        <div style="font-size:64px;margin-bottom:16px;animation:pulse 1s">✅</div>
+        <h2 style="color:#15803d;margin:0 0 8px">Document Signed Successfully!</h2>
+        <p style="color:#64748b">You have signed <strong>{sig_rec.get('doc_title','')}</strong>.</p>
+        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin:20px 0;font-size:12px;color:#15803d">
+          ✅ Signed by: {sig_rec.get('signatory_name','')}<br>
+          📅 Date &amp; Time: {signed_at[:19].replace('T',' ')} UTC<br>
+          🌐 IP: {ip}
+        </div>
+        <p style="color:#94a3b8;font-size:11px">This signature is legally binding. Powered by TaxlyCMS.</p>
+        </div></body></html>"""
+
+    # GET — show signing page
+    conn.close()
+    deadline_html = f'<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;color:#dc2626;font-size:13px;margin-bottom:16px">⏰ Deadline: {sig_rec["deadline"]}</div>' if sig_rec.get('deadline') else ''
+    msg_html = f'<blockquote style="border-left:4px solid #1a56db;padding:8px 14px;color:#475569;font-style:italic;margin:16px 0">{sig_rec["message"]}</blockquote>' if sig_rec.get('message') else ''
+
+    return f"""<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Sign: {sig_rec.get('doc_title','Document')}</title>
+    <style>
+      * {{box-sizing:border-box; margin:0; padding:0}}
+      body {{font-family:'Segoe UI',Arial,sans-serif;background:linear-gradient(135deg,#1e3a8a 0%,#1a56db 50%,#0891b2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}}
+      .card {{background:#fff;border-radius:20px;overflow:hidden;max-width:520px;width:100%;box-shadow:0 32px 80px rgba(0,0,0,.2)}}
+      .header {{background:linear-gradient(135deg,#1a56db,#0d2d6b);padding:28px 32px;text-align:center;color:#fff}}
+      .header h1 {{font-size:18px;font-weight:700;margin-top:12px}}
+      .header p {{font-size:13px;opacity:.8;margin-top:4px}}
+      .body {{padding:28px 32px}}
+      .doc-box {{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:20px}}
+      .doc-box .title {{font-weight:700;font-size:16px;color:#0f172a}}
+      .doc-box .meta {{color:#64748b;font-size:13px;margin-top:4px}}
+      .agree-box {{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin-bottom:20px}}
+      .agree-box label {{display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-size:13px;color:#15803d;line-height:1.5}}
+      .sign-btn {{width:100%;padding:16px;background:linear-gradient(135deg,#1a56db,#0d2d6b);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;transition:.2s}}
+      .sign-btn:hover {{opacity:.9;transform:translateY(-1px)}}
+      .sign-btn:disabled {{opacity:.5;cursor:not-allowed;transform:none}}
+      .footer {{background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8}}
+    </style></head>
+    <body>
+    <div class="card">
+      <div class="header">
+        <div style="font-size:40px">✍️</div>
+        <h1>Document Signature Request</h1>
+        <p>TaxlyCMS E-Signature Platform</p>
+      </div>
+      <div class="body">
+        <div class="doc-box">
+          <div class="title">📄 {sig_rec.get('doc_title','Document')}</div>
+          <div class="meta">Signing as: <strong>{sig_rec.get('signatory_name','')}</strong> · {sig_rec.get('role','Signatory')}</div>
+        </div>
+        {deadline_html}
+        {msg_html}
+        <form method="POST">
+          <div class="agree-box">
+            <label>
+              <input type="checkbox" id="agree-chk" onchange="document.getElementById('sign-submit').disabled=!this.checked" style="margin-top:2px;flex-shrink:0">
+              I agree that by clicking "Sign Document" below, I am providing my legally binding electronic signature. I have reviewed the document details above.
+            </label>
+          </div>
+          <button type="submit" id="sign-submit" class="sign-btn" disabled>
+            ✍️ Sign Document Now
+          </button>
+        </form>
+      </div>
+      <div class="footer">
+        🔒 Secure · Legally Binding · Powered by TaxlyCMS<br>
+        This signature request was generated by an authorised company secretary.
+      </div>
+    </div>
+    </body></html>"""
+
+# ── Resend e-sign notification ──────────────────────────────────────────────
+@app.route("/api/esign/resend/<req_id>", methods=["POST"])
+@login_required
+def esign_resend(req_id):
+    import datetime as _dt4
+    conn = get_db(); c = conn.cursor()
+    c.execute("SELECT r.*, s.* FROM esign_requests r "
+              "JOIN esign_signatures s ON s.request_id=r.id "
+              "WHERE r.id=%s AND r.tenant_id=%s AND s.status='pending'",
+              (req_id, g.tenant_id))
+    pending_sigs = rows(c.fetchall()) or []
+    conn.close()
+    sent = 0
+    for s in pending_sigs:
+        sign_url = request.host_url.rstrip('/') + '/sign/' + s['sign_token']
+        if s.get('signatory_email'):
+            _send_email(
+                to=s['signatory_email'],
+                subject=f"⏰ Reminder: Signature Required — {s.get('doc_title','')}",
+                body_html=f'<p>Dear {s.get("signatory_name","")},</p><p>This is a reminder to sign <strong>{s.get("doc_title","")}</strong>.</p><p><a href="{sign_url}" style="background:#1a56db;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:700">Sign Now →</a></p>',
+                body_text=f"Sign here: {sign_url}"
+            ); sent += 1
+        if s.get('signatory_phone'):
+            _send_wa_message(s['signatory_phone'],
+                f"⏰ Reminder: Please sign '{s.get('doc_title','')}' at: {sign_url}")
+            sent += 1
+    return jsonify({'success': True, 'reminders_sent': sent})
+
+# ── Cancel/revoke e-sign request ───────────────────────────────────────────
+@app.route("/api/esign/cancel/<req_id>", methods=["POST"])
+@login_required
+def esign_cancel(req_id):
+    conn = get_db(); c = conn.cursor()
+    c.execute("UPDATE esign_requests SET status='cancelled' WHERE id=%s AND tenant_id=%s",
+              (req_id, g.tenant_id))
+    conn.commit(); conn.close()
+    return jsonify({'success': True})
 
 
