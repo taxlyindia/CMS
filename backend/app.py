@@ -6854,10 +6854,17 @@ def portal_view(token):
         "ORDER BY due_date ASC LIMIT 15",
         (co_id,)) if can_show('alerts') else []
 
+    # Fetch task attachments for this company (tasks → entity_type='task')
     documents_list = qrows(
-        "SELECT id, doc_name, doc_type, module, created_at "
-        "FROM documents WHERE company_id=%s ORDER BY created_at DESC LIMIT 20",
-        (co_id,)) if can_show('documents') else []
+        "SELECT a.id, a.original_name AS doc_name, a.mime_type AS doc_type, "
+        "       t.title AS module, a.file_size, a.uploaded_by, a.created_at, "
+        "       u.name AS uploader_name "
+        "FROM attachments a "
+        "INNER JOIN tasks t ON a.entity_id=t.id AND a.entity_type='task' "
+        "LEFT JOIN users u ON a.uploaded_by=u.id "
+        "WHERE t.company_id=%s AND a.tenant_id=%s "
+        "ORDER BY a.created_at DESC LIMIT 50",
+        (co_id, rec.get('tenant_id',''))) if can_show('documents') else []
 
     shareholders_list = qrows(
         "SELECT name, share_class, shares_held, face_value, folio_no "
@@ -6895,7 +6902,10 @@ def portal_view(token):
     upcoming_meetings  = qcount("SELECT COUNT(*) FROM meetings WHERE company_id=%s AND status IN ('scheduled','pending')",(co_id,))
     open_tasks         = qcount("SELECT COUNT(*) FROM tasks WHERE company_id=%s AND status NOT IN ('completed','cancelled')",(co_id,))
     total_shareholders = qcount("SELECT COUNT(*) FROM shareholders WHERE company_id=%s AND is_active=1",(co_id,))
-    total_documents    = qcount("SELECT COUNT(*) FROM documents WHERE company_id=%s",(co_id,))
+    total_documents    = qcount(
+        "SELECT COUNT(*) FROM attachments a "
+        "INNER JOIN tasks t ON a.entity_id=t.id AND a.entity_type='task' "
+        "WHERE t.company_id=%s",(co_id,))
 
     # ── Render helpers ────────────────────────────────────────────────────
     def esc(v): return str(v or '').replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
@@ -7009,19 +7019,42 @@ def portal_view(token):
     </tr></thead><tbody>{alert_rows}</tbody></table></div>''' if alerts_list else '<div class="pt-empty">✅ No active alerts</div>'
 
     # 5. Documents
+    def fmt_size(b):
+        if not b: return ''
+        b = int(b)
+        if b < 1024: return f'{b} B'
+        elif b < 1048576: return f'{b//1024} KB'
+        else: return f'{b/1048576:.1f} MB'
+
     doc_rows = ''.join(f'''<tr>
-      <td><strong>{esc(d.get("doc_name",""))}</strong>
-        <a href="/portal/{token}/document/{d.get("id","")}"
-           style="margin-left:10px;font-size:10.5px;color:#1b4ed8;font-weight:600;text-decoration:none;padding:2px 8px;background:rgba(27,78,216,.08);border-radius:4px;border:1px solid rgba(27,78,216,.2)"
-           download>⬇ Download</a>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:18px">{
+            "📄" if "pdf" in (d.get("doc_type") or "")
+            else "📝" if any(x in (d.get("doc_type") or "") for x in ["word","doc"])
+            else "📊" if any(x in (d.get("doc_type") or "") for x in ["excel","sheet","csv"])
+            else "🖼" if any(x in (d.get("doc_type") or "") for x in ["image","jpg","png"])
+            else "📎"
+          }</span>
+          <div>
+            <div style="font-weight:600;font-size:13px">{esc(d.get("doc_name",""))}</div>
+            <div style="font-size:10.5px;color:#7a8aaa;margin-top:1px">
+              {fmt_size(d.get("file_size",""))} &nbsp;·&nbsp;
+              Uploaded by {esc(d.get("uploader_name","")) or "—"} &nbsp;·&nbsp;
+              {fmt_date(d.get("created_at",""))}
+            </div>
+          </div>
+          <a href="/portal/{token}/document/{d.get("id","")}"
+             style="margin-left:auto;font-size:11px;color:#1b4ed8;font-weight:600;text-decoration:none;padding:4px 12px;background:rgba(27,78,216,.08);border-radius:6px;border:1px solid rgba(27,78,216,.2);white-space:nowrap"
+             download>⬇ Download</a>
+        </div>
       </td>
-      <td>{esc(d.get("doc_type","")) or "—"}</td>
-      <td>{esc(d.get("module","")) or "—"}</td>
-      <td>{fmt_date(d.get("created_at",""))}</td>
+      <td style="font-size:12px;color:#64748b">{esc(d.get("module","")) or "—"}</td>
+      <td style="font-size:12px;color:#64748b">{fmt_date(d.get("created_at",""))}</td>
     </tr>''' for d in documents_list)
     documents_html = f'''<div class="pt-table-wrap"><table><thead><tr>
-      <th>Document Name</th><th>Type</th><th>Module</th><th>Created</th>
-    </tr></thead><tbody>{doc_rows}</tbody></table></div>''' if documents_list else '<div class="pt-empty">No documents available</div>'
+      <th>File</th><th>Related Task</th><th>Date</th>
+    </tr></thead><tbody>{doc_rows}</tbody></table></div>''' if documents_list else '<div class="pt-empty">📎 No task attachments shared yet</div>'
 
     # 6. Shareholders
     sh_rows = ''.join(f'''<tr>
@@ -9822,17 +9855,16 @@ def word_template_placeholders(tid):
 
 
 
-@app.route("/portal/<token>/document/<doc_id>")
-def portal_document_download(token, doc_id):
-    """Allow portal clients with documents permission to download a document."""
+@app.route("/portal/<token>/document/<attach_id>")
+def portal_document_download(token, attach_id):
+    """Allow portal clients with documents permission to download a task attachment."""
     import datetime as _dt
     conn = get_db(); c = conn.cursor()
     # Validate portal link
     c.execute("SELECT * FROM portal_links WHERE token=%s AND active=1", (token,))
     rec = row(c.fetchone())
     if not rec:
-        conn.close()
-        return "Invalid or revoked link", 404
+        conn.close(); return "Invalid or revoked link", 404
     # Check expiry
     if rec.get('expires_at'):
         try:
@@ -9843,24 +9875,23 @@ def portal_document_download(token, doc_id):
     access = rec.get('access_level','')
     if access not in ('documents_only', 'full_readonly', 'custom'):
         conn.close(); return "Access denied", 403
-    # Fetch document
+    # Fetch attachment — must belong to a task of this company
     c.execute(
-        "SELECT * FROM documents WHERE id=%s AND company_id=%s",
-        (doc_id, rec['company_id']))
-    doc = row(c.fetchone()); conn.close()
-    if not doc:
-        return "Document not found", 404
-    # Return document content as downloadable HTML/PDF
-    content = doc.get('content') or ''
-    doc_name = doc.get('doc_name') or 'Document'
-    # Return as downloadable HTML file
-    html_content = f"""<!DOCTYPE html><html><head>
-    <meta charset="UTF-8"><title>{doc_name}</title>
-    <style>body{{font-family:Arial,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;line-height:1.7;color:#1e293b}}
-    h1{{color:#0f2d5c;border-bottom:2px solid #1a56db;padding-bottom:10px}}</style>
-    </head><body><h1>{doc_name}</h1><div>{content}</div></body></html>"""
-    from flask import Response
-    return Response(html_content, mimetype='text/html',
-                    headers={'Content-Disposition': f'attachment; filename="{doc_name}.html"'})
+        "SELECT a.* FROM attachments a "
+        "INNER JOIN tasks t ON a.entity_id=t.id AND a.entity_type='task' "
+        "WHERE a.id=%s AND t.company_id=%s AND a.tenant_id=%s",
+        (attach_id, rec['company_id'], rec.get('tenant_id','')))
+    att = row(c.fetchone()); conn.close()
+    if not att:
+        return "Attachment not found or access denied", 404
+    fpath = ATTACH_DIR / att['filename']
+    if not fpath.exists():
+        return "File not found on server", 404
+    return send_file(
+        str(fpath),
+        as_attachment=True,
+        download_name=att.get('original_name', att['filename']),
+        mimetype=att.get('mime_type', 'application/octet-stream')
+    )
 
 
