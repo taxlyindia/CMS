@@ -3976,6 +3976,13 @@ def sync_board_meeting_alerts_route():
 def list_tasks():
     uid  = g.user_id
     role = g.role
+    # Pre-flight: ensure task_manager and task_leader columns exist
+    try:
+        _mc = get_db()
+        for _col in ["task_leader","task_manager","tenant_id","priority","module","entity_id"]:
+            _add_col_safe(_mc, "tasks", _col, "TEXT")
+        _mc.commit(); _mc.close()
+    except Exception: pass
     cid    = request.args.get("company_id","")
     status = request.args.get("status","")
     # hierarchy_view: only honoured for superadmin (Task Leader)
@@ -5895,6 +5902,17 @@ def _startup():
         _add_col_safe(_mc, "directors",    "date_of_resignation",  "TEXT")
         _add_col_safe(_mc, "directors",    "resignation_reason",   "TEXT")
         _add_col_safe(_mc, "users",        "phone",                "TEXT")
+        # Task columns
+        for _tc in ["task_leader","task_manager","tenant_id","module","entity_id","completed_at"]:
+            _add_col_safe(_mc, "tasks", _tc, "TEXT")
+        # Task columns (may be missing in older deployments)
+        _add_col_safe(_mc, "tasks",        "task_leader",          "TEXT")
+        _add_col_safe(_mc, "tasks",        "task_manager",         "TEXT")
+        _add_col_safe(_mc, "tasks",        "tenant_id",            "TEXT")
+        _add_col_safe(_mc, "tasks",        "priority",             "TEXT")
+        _add_col_safe(_mc, "tasks",        "module",               "TEXT")
+        _add_col_safe(_mc, "tasks",        "entity_id",            "TEXT")
+        _add_col_safe(_mc, "tasks",        "completed_at",         "TEXT")
         _mc_cur = _mc.cursor()
         _mc_cur.execute(
             "CREATE TABLE IF NOT EXISTS share_transfers ("
