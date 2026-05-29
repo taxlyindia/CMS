@@ -13309,20 +13309,23 @@ function aiDraftToTemplate() {
 // ║  Send documents for e-sign and track status per document                 ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-function openESignModal(docId, docTitle) {
-  const coOpts = COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+function openESignModal(docId, docTitle, companyId) {
   openModal('✍️ Send for E-Signature', `
-    <div style="background:var(--glow2);border:1px solid rgba(27,78,216,.15);border-radius:var(--r);padding:12px 14px;margin-bottom:16px">
-      <div style="font-size:12px;font-weight:700;color:var(--accent)">📄 Document</div>
-      <div style="font-size:13px;color:var(--text);margin-top:2px">${docTitle||'Selected Document'}</div>
+    <div style="background:linear-gradient(135deg,rgba(26,86,219,.06),rgba(13,45,107,.03));border:1px solid rgba(26,86,219,.15);border-radius:var(--r);padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center">
+      <div style="font-size:28px">📄</div>
+      <div>
+        <div style="font-weight:700;font-size:14px;color:var(--text)">${docTitle||'Selected Document'}</div>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:2px">Document will be sent to signatories for e-signature</div>
+      </div>
     </div>
+
     <div class="fg2">
       <div class="fg">
-        <label class="fl">E-Sign Provider</label>
+        <label class="fl">Provider</label>
         <select class="fc" id="esign-provider" onchange="toggleESignProvider()">
-          <option value="leegality">Leegality (India)</option>
-          <option value="docusign">DocuSign (Global)</option>
-          <option value="internal">Internal Sign (Basic)</option>
+          <option value="internal">✍️ Internal (Email link)</option>
+          <option value="leegality">🇮🇳 Leegality (India)</option>
+          <option value="docusign">🌐 DocuSign (Global)</option>
         </select>
       </div>
       <div class="fg">
@@ -13330,127 +13333,184 @@ function openESignModal(docId, docTitle) {
         <input class="fc" type="date" id="esign-deadline" value="${new Date(Date.now()+7*86400000).toISOString().split('T')[0]}">
       </div>
     </div>
-    <div class="fsec">👤 Signatories</div>
+
+    <div id="esign-provider-note" style="display:none" class="fg">
+      <label class="fl">API Key</label>
+      <input class="fc" id="esign-api-key" placeholder="Enter Leegality / DocuSign API key">
+    </div>
+
+    <!-- Delivery methods -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📬 Delivery Methods</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600">
+          <input type="checkbox" id="esign-send-email" checked style="width:16px;height:16px">
+          📧 Send Email
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600">
+          <input type="checkbox" id="esign-send-wa" style="width:16px;height:16px" onchange="document.getElementById('esign-wa-note').style.display=this.checked?'':'none'">
+          💬 Send WhatsApp
+        </label>
+      </div>
+      <div id="esign-wa-note" style="display:none;margin-top:8px;font-size:11px;color:var(--text3);background:rgba(37,211,102,.06);padding:6px 10px;border-radius:5px;border:1px solid rgba(37,211,102,.2)">
+        ✅ WhatsApp requires WA_TOKEN + WA_PHONE_ID environment variables (Meta Cloud API)
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">👤 Signatories</div>
     <div id="esign-signatories">
-      <div class="esign-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-end">
-        <div class="fg" style="flex:1;margin:0"><label class="fl">Name</label><input class="fc" placeholder="Signatory name"></div>
-        <div class="fg" style="flex:1;margin:0"><label class="fl">Email</label><input class="fc" type="email" placeholder="email@company.com"></div>
-        <div class="fg" style="width:130px;margin:0"><label class="fl">Role</label>
-          <select class="fc"><option>Director</option><option>Authorized Signatory</option><option>Witness</option><option>CFO</option><option>CS</option></select>
-        </div>
-        <button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()" style="flex-shrink:0;margin-bottom:2px">✕</button>
+      <div class="esign-row" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:flex-end">
+        <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">Name <span class="req">*</span></label><input class="fc" placeholder="Full name"></div>
+        <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">Email <span class="req">*</span></label><input class="fc" type="email" placeholder="email@example.com"></div>
+        <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">WhatsApp No.</label><input class="fc" type="tel" placeholder="98XXXXXXXX"></div>
+        <button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()" style="margin-bottom:2px;flex-shrink:0">✕</button>
       </div>
     </div>
-    <button class="btn btn-xs btn-outline" onclick="addESignRow()" style="margin-bottom:14px">+ Add Signatory</button>
-    <div id="esign-provider-note" class="fg">
-      <label class="fl">Leegality API Key</label>
-      <input class="fc" id="esign-api-key" placeholder="Enter your Leegality API key (saved in settings)">
-      <div style="font-size:10.5px;color:var(--text3);margin-top:4px">
-        Configure permanently in Settings → Integrations · 
-        <a href="https://leegality.com" target="_blank" style="color:var(--accent)">Get API key →</a>
-      </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn btn-xs btn-outline" onclick="addESignRow()">+ Add Signatory</button>
+      <button class="btn btn-xs btn-ghost" onclick="prefillDirectors()">👤 From Directors</button>
     </div>
+
     <div class="fg">
       <label class="fl">Message to Signatories (optional)</label>
-      <textarea class="fc" id="esign-message" placeholder="Please review and sign the attached document at your earliest convenience." style="min-height:60px"></textarea>
+      <textarea class="fc" id="esign-message" placeholder="Please review and sign this document at your earliest convenience." style="min-height:60px"></textarea>
     </div>
     <div id="esign-status-area" style="display:none"></div>
   `, [
-    { text:'📧 Send for Signing', cls:'btn-primary', fn:`submitESign('${docId}')` },
-    { text:'📋 Copy Sign Link', cls:'btn-outline', fn:'copyESignLink()' },
-  ]);
+    { text: '📧 Send for Signing', cls: 'btn-primary', fn: "submitESign('" + docId + "','" + (companyId||'') + "')" },
+    { text: 'Cancel', cls: 'btn-outline', fn: 'closeModal()' },
+  ], 'lg');
+  // Restore API key
   setTimeout(()=>{ const k=localStorage.getItem('esign_api_key'); if(k){ const el=document.getElementById('esign-api-key'); if(el) el.value=k; } },100);
 }
 
 function addESignRow() {
-  const container = document.getElementById('esign-signatories');
-  if (!container) return;
   const row = document.createElement('div');
   row.className = 'esign-row';
-  row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:flex-end';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:flex-end';
   row.innerHTML = `
-    <div class="fg" style="flex:1;margin:0"><label class="fl">Name</label><input class="fc" placeholder="Signatory name"></div>
-    <div class="fg" style="flex:1;margin:0"><label class="fl">Email</label><input class="fc" type="email" placeholder="email@company.com"></div>
-    <div class="fg" style="width:130px;margin:0"><label class="fl">Role</label>
-      <select class="fc"><option>Director</option><option>Authorized Signatory</option><option>Witness</option><option>CFO</option><option>CS</option></select>
-    </div>
-    <button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()" style="flex-shrink:0;margin-bottom:2px">✕</button>`;
-  container.appendChild(row);
+    <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">Name <span class="req">*</span></label><input class="fc" placeholder="Full name"></div>
+    <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">Email <span class="req">*</span></label><input class="fc" type="email" placeholder="email@example.com"></div>
+    <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">WhatsApp No.</label><input class="fc" type="tel" placeholder="98XXXXXXXX"></div>
+    <button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()" style="margin-bottom:2px">✕</button>`;
+  document.getElementById('esign-signatories').appendChild(row);
+}
+
+async function prefillDirectors() {
+  const cid = PB.company_id;
+  if (!cid) { toast('Select a company first','err'); return; }
+  const dirs = await api('/api/companies/'+cid+'/directors');
+  if (!dirs || !dirs.length) { toast('No directors found','err'); return; }
+  document.getElementById('esign-signatories').innerHTML = '';
+  dirs.slice(0,4).forEach(d => {
+    addESignRow();
+    const rows = document.querySelectorAll('#esign-signatories .esign-row');
+    const last = rows[rows.length-1];
+    const inputs = last.querySelectorAll('input');
+    if(inputs[0]) inputs[0].value = d.name||'';
+    if(inputs[1]) inputs[1].value = d.email||'';
+    if(inputs[2]) inputs[2].value = d.mobile||'';
+  });
 }
 
 function toggleESignProvider() {
-  const prov = document.getElementById('esign-provider')?.value;
+  const p = document.getElementById('esign-provider')?.value;
   const note = document.getElementById('esign-provider-note');
-  if (!note) return;
-  note.style.display = prov === 'internal' ? 'none' : '';
-  const label = note.querySelector('.fl');
-  const input = document.getElementById('esign-api-key');
-  if (label && input) {
-    if (prov === 'docusign') {
-      label.textContent = 'DocuSign Integration Key';
-      input.placeholder = 'Enter DocuSign Integration Key';
-    } else {
-      label.textContent = 'Leegality API Key';
-      input.placeholder = 'Enter your Leegality API key';
-    }
-  }
+  if(note) note.style.display = (p && p !== 'internal') ? '' : 'none';
 }
 
-async function submitESign(docId) {
-  const provider = document.getElementById('esign-provider')?.value || 'leegality';
-  const deadline = document.getElementById('esign-deadline')?.value;
-  const apiKey   = document.getElementById('esign-api-key')?.value;
-  const message  = document.getElementById('esign-message')?.value || '';
 
-  const rows = document.querySelectorAll('#esign-signatories .esign-row');
-  const signatories = Array.from(rows).map(row=>{
-    const inputs = row.querySelectorAll('input,select');
-    return { name: inputs[0]?.value, email: inputs[1]?.value, role: inputs[2]?.value };
-  }).filter(s=>s.name && s.email);
+async function submitESign(docId, companyId) {
+  const provider  = document.getElementById('esign-provider')?.value || 'internal';
+  const deadline  = document.getElementById('esign-deadline')?.value;
+  const message   = document.getElementById('esign-message')?.value || '';
+  const apiKey    = document.getElementById('esign-api-key')?.value;
+  const sendEmail = document.getElementById('esign-send-email')?.checked !== false;
+  const sendWa    = document.getElementById('esign-send-wa')?.checked || false;
 
-  if (!signatories.length) { toast('Add at least one signatory','err'); return; }
+  const esignRows = document.querySelectorAll('#esign-signatories .esign-row');
+  const signatories = Array.from(esignRows).map(row => {
+    const inputs = row.querySelectorAll('input');
+    return { name: inputs[0]?.value?.trim(), email: inputs[1]?.value?.trim(), phone: inputs[2]?.value?.trim(), role: 'Signatory' };
+  }).filter(s => s.name && (s.email || s.phone));
+
+  if (!signatories.length) { toast('Add at least one signatory with name & email/phone','err'); return; }
   if (provider !== 'internal' && !apiKey) { toast('Enter API key for '+provider,'err'); return; }
-
   if (apiKey) localStorage.setItem('esign_api_key', apiKey);
 
   const statusArea = document.getElementById('esign-status-area');
-  statusArea.style.display='block';
-  statusArea.innerHTML = '<div class="loading"><div class="spin"></div> Sending for signature…</div>';
+  statusArea.style.display = 'block';
+  statusArea.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg2);border-radius:var(--r)"><div class="spinner"></div><span style="font-size:13px">Sending signature request…</span></div>`;
 
-  const payload = { doc_id:docId, provider, signatories, deadline, message, api_key:apiKey };
+  const payload = { doc_id:docId, doc_title: document.querySelector('#esign-status-area')?.closest('.modal')?.querySelector('.modal-title')?.textContent?.replace('✍️ Send for E-Signature','')?.trim() || docId,
+    provider, signatories, deadline, message, api_key:apiKey, company_id: companyId || PB.company_id || '',
+    send_email: sendEmail, send_wa: sendWa };
+
   const r = await api('/api/esign/send', { method:'POST', body: payload });
 
-  if (r?.success || r?.envelope_id || r?.request_id) {
-    const refId = r.envelope_id || r.request_id || 'ESIGN-'+Date.now();
+  if (r?.success) {
+    const emailResults = r.email_results || [];
+    const waResults    = r.wa_results    || [];
+    const emailSent    = emailResults.filter(x=>x.sent).length;
+    const waSent       = waResults.filter(x=>x.sent).length;
+
     statusArea.innerHTML = `
-      <div style="background:var(--gbg);border:1px solid var(--gborder);border-radius:var(--r);padding:12px 14px">
-        <div style="font-size:12px;font-weight:700;color:var(--green)">✅ Sent successfully!</div>
-        <div style="font-size:11.5px;color:var(--text2);margin-top:4px">Reference: <code style="font-family:var(--font-mono)">${refId}</code></div>
-        <div style="font-size:11.5px;color:var(--text2)">Provider: ${provider} · Deadline: ${deadline||'—'}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">Email sent to ${signatories.length} signator${signatories.length>1?'ies':'y'}</div>
-      </div>`;
-    toast('Document sent for e-signature ✓','ok');
-    window._lastESignRef = refId;
-  } else {
-    const errMsg = r?.error || r?.message || 'Unexpected error from e-sign API';
-    statusArea.innerHTML = `
-      <div style="background:var(--rbg);border:1px solid var(--rborder);border-radius:var(--r);padding:12px 14px">
-        <div style="font-size:12px;font-weight:700;color:var(--red)">❌ ${errMsg}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">Check API key and document format · 
-          <a href="https://${provider==='docusign'?'developers.docusign.com':'leegality.com/api'}" target="_blank" style="color:var(--accent)">API Docs →</a>
+      <div style="background:rgba(5,150,105,.06);border:1px solid #6ee7b7;border-radius:var(--r);padding:14px 16px">
+        <div style="font-weight:700;font-size:13px;color:#059669;margin-bottom:8px">✅ Signature request created!</div>
+        <div style="font-size:12px;color:#065f46">
+          📋 Request ID: <code style="background:rgba(6,95,70,.1);padding:1px 6px;border-radius:3px">${r.request_id}</code>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">
+          ${sendEmail ? `<div style="font-size:12px;color:${emailSent>0?'#059669':'#dc2626'}">
+            ${emailSent>0?'📧':'⚠️'} Email: ${emailSent}/${emailResults.length} sent
+            ${!r.email_enabled?'<span style="font-size:10px;color:#dc2626">(SMTP not configured)</span>':''}
+          </div>` : ''}
+          ${sendWa ? `<div style="font-size:12px;color:${waSent>0?'#059669':'#dc2626'}">
+            ${waSent>0?'💬':'⚠️'} WhatsApp: ${waSent}/${waResults.length} sent
+          </div>` : ''}
+        </div>
+        ${!r.email_enabled ? `<div style="margin-top:10px;font-size:11px;color:#92400e;background:#fef3c7;padding:6px 10px;border-radius:5px">
+          ⚙️ Configure SMTP in server environment variables to enable email sending
+        </div>` : ''}
+        <div style="margin-top:10px;font-size:11.5px;color:#065f46">
+          🔗 Signing links have been created. Signatories can sign at their unique URLs.
         </div>
       </div>`;
+    toast('Signature request sent ✓','ok');
+    setTimeout(()=>{ closeModal(); loadESignPage(); }, 2000);
+  } else {
+    statusArea.innerHTML = `<div style="background:rgba(220,38,38,.06);border:1px solid #fca5a5;border-radius:var(--r);padding:12px 14px">
+      <div style="font-weight:700;color:#dc2626">❌ ${r?.error||'Failed to create signature request'}</div>
+    </div>`;
   }
+}
+
+
+async function resendESign(reqId) {
+  const r = await api('/api/esign/resend/'+reqId, { method:'POST' });
+  if (r?.success) toast('Reminders sent: '+r.reminders_sent+' notification(s) ✓','ok');
+  else toast(r?.error||'Resend failed','err');
+}
+
+async function cancelESign(reqId) {
+  if (!confirm('Cancel this signature request?')) return;
+  const r = await api('/api/esign/cancel/'+reqId, { method:'POST' });
+  if (r?.success) { toast('Request cancelled ✓','ok'); loadESignPage(); }
 }
 
 async function checkESignStatus(docId) {
   const r = await api(`/api/esign/status/${docId}`);
   if (!r) return;
-  const signers = (r.signatories||[]).map(s=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1"><div style="font-size:12.5px;font-weight:600">${s.name}</div><div style="font-size:11px;color:var(--text3)">${s.email}</div></div>
-      <span class="badge ${s.signed?'b-green':s.viewed?'b-yellow':'b-gray'}">${s.signed?'✅ Signed':s.viewed?'👀 Viewed':'⏳ Pending'}</span>
-      ${s.signed_at?`<div style="font-size:10.5px;color:var(--text3)">${new Date(s.signed_at).toLocaleDateString('en-IN')}</div>`:''}
+  const signerData = r.signature_details || r.signatories || [];
+  const signers = signerData.map(s=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1">
+        <div style="font-size:12.5px;font-weight:600">${s.signatory_name||s.name||'?'}</div>
+        <div style="font-size:11px;color:var(--text3)">${s.signatory_email||s.email||''}</div>
+        ${s.signatory_phone?`<div style="font-size:10.5px;color:var(--text3)">☎ ${s.signatory_phone}</div>`:''}
+      </div>
+      <span class="badge ${s.status==='signed'?'b-green':'b-orange'}">${s.status==='signed'?'✅ Signed':'⏳ Pending'}</span>
+      ${s.signed_at?`<div style="font-size:10.5px;color:var(--text3)">${s.signed_at.split('T')[0]}</div>`:''}
     </div>`).join('');
   openModal('✍️ E-Signature Status', `
     <div style="background:var(--bg3);border-radius:var(--r);padding:12px;margin-bottom:14px">
@@ -13983,15 +14043,41 @@ async function loadESignPage() {
     });
     const filter = document.getElementById('esign-status-filter')?.value;
     const filtered = filter ? reqs.filter(x=>x.status===filter) : reqs;
-    if (list) list.innerHTML = filtered.length ? `<table><thead><tr><th>Document</th><th>Provider</th><th>Signatories</th><th>Status</th><th>Deadline</th><th></th></tr></thead><tbody>${
-      filtered.map(r=>`<tr>
-        <td style="font-weight:600">${r.doc_title||r.doc_id||'—'}</td>
-        <td><span class="badge b-blue">${r.provider||'—'}</span></td>
-        <td style="font-size:11.5px">${(r.signatories||[]).map(s=>s.name).join(', ')||'—'}</td>
-        <td><span class="badge ${r.status==='completed'?'b-green':r.status==='expired'?'b-red':'b-orange'}">${r.status||'—'}</span></td>
-        <td style="font-size:11.5px">${r.deadline||'—'}</td>
-        <td><button class="btn btn-xs btn-outline" onclick="checkESignStatus('${r.id}')">View</button></td>
-      </tr>`).join('')
+    if (list) list.innerHTML = filtered.length ? `<table style="width:100%"><thead><tr>
+        <th>Document</th><th>Company</th><th>Provider</th><th>Signatories</th><th>Status</th><th>Sent via</th><th>Deadline</th><th>Actions</th>
+      </tr></thead><tbody>${
+      filtered.map(r => {
+        const sigs = r.signature_details || [];
+        const sigList = typeof r.signatories === 'string' ? JSON.parse(r.signatories||'[]') : (r.signatories||[]);
+        const signedCount = sigs.filter(s=>s.status==='signed').length;
+        const totalCount  = sigs.length || sigList.length;
+        return `<tr>
+          <td style="font-weight:600;font-size:13px">${r.doc_title||r.doc_id||'—'}</td>
+          <td style="font-size:11.5px;color:var(--text3)">${r.company_name||'—'}</td>
+          <td><span class="badge b-blue" style="font-size:10px">${r.provider||'internal'}</span></td>
+          <td style="font-size:12px">
+            ${sigs.map(s=>`<div style="display:flex;align-items:center;gap:6px;padding:2px 0">
+              <span style="font-size:9px">${s.status==='signed'?'✅':'⏳'}</span>
+              <span>${s.signatory_name||'?'}</span>
+              <span style="font-size:10px;color:var(--text3)">${s.signatory_email||''}</span>
+            </div>`).join('') || sigList.slice(0,2).map(s=>`<div style="font-size:11.5px">${s.name||''}</div>`).join('') || '—'}
+          </td>
+          <td>
+            <span class="badge ${r.status==='completed'?'b-green':r.status==='cancelled'?'':'b-orange'}" style="${r.status==='cancelled'?'background:#f1f5f9;color:#64748b':''}">
+              ${r.status==='completed'?'✅ Completed':r.status==='partial'?`⏳ ${signedCount}/${totalCount} Signed`:r.status==='cancelled'?'🚫 Cancelled':'⏳ Pending'}
+            </span>
+          </td>
+          <td style="font-size:11px">
+            ${r.email_sent?'📧':''}${r.wa_sent?' 💬':''}${!r.email_sent&&!r.wa_sent?'—':''}
+          </td>
+          <td style="font-size:11.5px;color:${r.deadline&&new Date(r.deadline)<new Date()?'#dc2626':'var(--text3)'}">${r.deadline||'—'}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-xs btn-outline" onclick="checkESignStatus('${r.id}')">📋 View</button>
+            ${r.status==='pending'||r.status==='partial'?`<button class="btn btn-xs btn-ghost" onclick="resendESign('${r.id}')" title="Send reminder">🔔</button>`:''}
+            ${r.status!=='cancelled'&&r.status!=='completed'?`<button class="btn btn-xs" style="color:#dc2626;border-color:#fca5a5" onclick="cancelESign('${r.id}')">✕</button>`:''}
+          </td>
+        </tr>`;
+      }).join('')
     }</tbody></table>`
     : '<div class="empty-state"><div class="empty-icon">✍️</div><div class="empty-title">No signature requests yet</div><div class="empty-sub">Send documents for e-signature from the Documents page</div></div>';
   } else {
