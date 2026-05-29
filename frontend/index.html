@@ -3546,8 +3546,15 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 
       </div>
     
+
+
+  
+    <!-- ── AI DOCUMENT DRAFTING ── -->
+    
+<!-- ── AI DOCUMENT DRAFTING ── -->
+
       <!-- ══ Integration Settings ═══════════════════════════════════════ -->
-      <div class="card" style="margin-top:14px;grid-column:1/-1">
+      <div class="card" id="integration-settings-card" style="display:none" style="margin-top:14px;grid-column:1/-1">
         <div class="card-header">
           <div class="card-title">⚙️ Integration Settings — Email & WhatsApp</div>
           <span id="int-status-badge" style="font-size:11px;padding:3px 10px;border-radius:20px;background:var(--bg3);color:var(--text3)">Loading…</span>
@@ -3605,12 +3612,9 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
             </div>
           </div>
         </div>
-      </div>
+      </div
 
-  
-    <!-- ── AI DOCUMENT DRAFTING ── -->
-    
-<!-- ── AI DOCUMENT DRAFTING ── -->
+
 <div class="page" id="page-ai-drafting">
   <div class="adv-layout">
 
@@ -4715,6 +4719,11 @@ function navigateTo(page) {
   PAGE = page;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === `page-${page}`));
+  const _intCard = document.getElementById('integration-settings-card');
+  if (_intCard) _intCard.style.display = (page === 'settings') ? '' : 'none';
+  // Show integration settings card only on settings page
+  const intCard = document.getElementById('integration-settings-card');
+  if (intCard) intCard.style.display = page === 'settings' ? '' : 'none';
   const m = PAGE_META[page] || {};
   document.getElementById('pg-title').textContent = m.title || page;
   document.getElementById('pg-sub').textContent = m.sub || '';
@@ -15487,4 +15496,4 @@ document.addEventListener('DOMContentLoaded', function() {
 </body>
 </html
 
->
+
