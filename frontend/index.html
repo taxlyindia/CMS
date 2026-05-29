@@ -7223,6 +7223,7 @@ async function loadUsers() {
       <td>
         <div style="font-weight:600;font-size:13px">${u.name} ${isSelf ? '<span style="font-size:10px;color:var(--accent)">(you)</span>' : ''}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:1px">${u.email}</div>
+        ${u.phone ? `<div style="font-size:10.5px;color:var(--primary);margin-top:1px;font-weight:600">☎ ${u.phone}</div>` : ''}
       </td>
       <td>${ROLE_BADGES[u.role] || u.role}</td>
       <td>${u.is_active
@@ -7236,7 +7237,7 @@ async function loadUsers() {
       <td style="font-size:12px;color:var(--text3)">${u.last_login ? fd(u.last_login) : 'Never'}</td>
       <td>
         <div class="td-actions">
-          ${isSA ? `<button class="btn btn-xs btn-outline" onclick="openEditUserModal('${u.id}','${esc(u.name)}','${u.email}','${u.role}')">✏️ Edit</button>` : ''}
+          ${isSA ? `<button class="btn btn-xs btn-outline" onclick="openEditUserModal('${u.id}','${esc(u.name)}','${u.email}','${u.role}','${u.phone||''}')">✏️ Edit</button>` : ''}
           ${isSA ? `<button class="btn btn-xs" style="${u.is_active ? 'background:var(--obg);color:var(--orange)' : 'background:var(--gbg);color:var(--green)'}" onclick="toggleUser('${u.id}',${u.is_active})">${u.is_active ? '🔒 Disable' : '✅ Enable'}</button>` : ''}
           ${isSA ? `<button class="btn btn-xs btn-ghost" onclick="openResetPwModal('${u.id}','${esc(u.name)}')">🔑 Reset PW</button>` : ''}
           ${canManagePerm ? `<button class="btn btn-xs btn-info" style="font-weight:700" onclick="openPermModal('${u.id}','${esc(u.name)}','${u.role}')">🔐 Permissions</button>` : ''}
@@ -7610,7 +7611,7 @@ async function saveNewUser() {
 }
 
 // ── Edit User ─────────────────────────────────────────────────────────────────
-function openEditUserModal(id, name, email, role) {
+function openEditUserModal(id, name, email, role, phone) {
   openModal(`✏️ Edit User`, `
     <div class="fg2">
       <div class="fg"><label class="fl">Full Name <span class="req">*</span></label>
@@ -7618,12 +7619,20 @@ function openEditUserModal(id, name, email, role) {
       <div class="fg"><label class="fl">Email Address <span class="req">*</span></label>
         <input class="fc" id="eu-email" type="email" value="${esc(email)}" autocomplete="off"></div>
     </div>
-    <div class="fg"><label class="fl">Role</label>
-      <select class="fc" id="eu-role">
-        <option value="staff"      ${role==='staff'      ?'selected':''}>📋 Staff</option>
-        <option value="manager"    ${role==='manager'    ?'selected':''}>🔧 Manager</option>
-        <option value="superadmin" ${role==='superadmin' ?'selected':''}>👑 Super Admin</option>
-      </select>
+    <div class="fg2">
+      <div class="fg"><label class="fl">Mobile / Phone</label>
+        <input class="fc" id="eu-phone" type="tel" value="${esc(phone||'')}"
+          placeholder="e.g. 98XXXXXXXX"
+          style="border-left:3px solid var(--primary)">
+        <div style="font-size:10.5px;color:var(--text3);margin-top:3px">📱 Shown to clients on their portal as contact number</div>
+      </div>
+      <div class="fg"><label class="fl">Role</label>
+        <select class="fc" id="eu-role">
+          <option value="staff"      ${role==='staff'      ?'selected':''}>📋 Staff</option>
+          <option value="manager"    ${role==='manager'    ?'selected':''}>🔧 Manager</option>
+          <option value="superadmin" ${role==='superadmin' ?'selected':''}>👑 Super Admin</option>
+        </select>
+      </div>
     </div>
     <div style="background:var(--bg3);border-radius:7px;padding:10px 12px;font-size:11.5px;color:var(--text3);margin:12px 0 4px">
       🔒 Leave password fields blank to keep the existing password.
@@ -7652,11 +7661,14 @@ async function saveEditUser(id) {
     if (pw.length < 6) { toast('Password must be at least 6 characters', 'err'); return; }
   }
 
+  const phone = document.getElementById('eu-phone')?.value.trim() || '';
   const body = { name, email, role };
+  if (phone) body.phone = phone;
   if (pw) body.password = pw;
 
   const r = await api(`/api/users/${id}`, { method: 'PUT', body });
-  if (r) { toast('User updated ✓', 'ok'); closeModal(); loadUsers(); }
+  if (r && !r.error) { toast('User updated ✓', 'ok'); closeModal(); loadUsers(); }
+  else if (r?.error) toast(r.error, 'err');
 }
 
 // ── Enable / Disable ──────────────────────────────────────────────────────────
