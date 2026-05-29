@@ -3071,6 +3071,8 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
             <button class="btn btn-outline" onclick="previewDoc()">👁️ Preview</button>
             <button class="btn btn-primary" onclick="downloadDocPDF()">⬇️ PDF</button>
             <button class="btn btn-success" onclick="downloadDocWord()">⬇️ Word (.docx)</button>
+            <button class="btn" style="background:linear-gradient(135deg,#1a56db,#0d2d6b);color:#fff;font-weight:700;border:none;padding:7px 14px;border-radius:6px;font-size:12.5px;cursor:pointer;gap:4px" onclick="openDocESignModal()" title="Send for e-signature">✍️ E-Sign</button>
+            <button class="btn" style="background:linear-gradient(135deg,#1a56db,#0d2d6b);color:#fff;font-weight:700;border:none;padding:7px 14px;border-radius:6px;font-size:12.5px;cursor:pointer" onclick="openDocESignModal()" title="Send this document for e-signature">✍️ E-Sign</button>
             <button class="btn btn-ghost btn-sm" onclick="saveDocDraft()">💾 Save Draft</button>
           </div>
 
@@ -3089,6 +3091,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
               <button class="btn btn-xs btn-ghost" onclick="copyDocContent()">📋 Copy</button>
               <button class="btn btn-xs btn-primary" onclick="downloadDocPDF()">⬇️ PDF</button>
               <button class="btn btn-xs btn-success" onclick="downloadDocWord()">⬇️ Word</button>
+              <button class="btn btn-xs" style="background:linear-gradient(135deg,#1a56db,#0d2d6b);color:#fff;font-weight:600;border:none" onclick="openDocESignModal()" title="Send for e-signature">✍️ E-Sign</button>
             </div>
           </div>
           <div style="padding:12px">
@@ -3542,7 +3545,69 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
         </div>
 
       </div>
-    </div>
+    
+      <!-- ══ Integration Settings ═══════════════════════════════════════ -->
+      <div class="card" style="margin-top:14px;grid-column:1/-1">
+        <div class="card-header">
+          <div class="card-title">⚙️ Integration Settings — Email & WhatsApp</div>
+          <span id="int-status-badge" style="font-size:11px;padding:3px 10px;border-radius:20px;background:var(--bg3);color:var(--text3)">Loading…</span>
+        </div>
+        <div class="card-body">
+          <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px">
+            <button id="int-tab-email" onclick="switchIntTab('email')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid var(--primary);color:var(--primary);margin-bottom:-2px;cursor:pointer">📧 Email (SMTP)</button>
+            <button id="int-tab-wa"    onclick="switchIntTab('wa')"    style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid transparent;color:var(--text3);margin-bottom:-2px;cursor:pointer">💬 WhatsApp</button>
+          </div>
+          <!-- Email Panel -->
+          <div id="int-panel-email">
+            <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">
+              💡 Configure SMTP to enable automatic email sending for e-signatures, alerts and reminders. Works with Gmail, Outlook, Zoho, custom servers.
+            </div>
+            <div class="fg2">
+              <div class="fg"><label class="fl">SMTP Server</label><input class="fc" id="int-mail-server" placeholder="smtp.gmail.com"></div>
+              <div class="fg"><label class="fl">Port</label><input class="fc" id="int-mail-port" placeholder="587" type="number" style="max-width:100px"></div>
+            </div>
+            <div class="fg2">
+              <div class="fg"><label class="fl">Username / Email <span class="req">*</span></label><input class="fc" id="int-mail-username" type="email" placeholder="your@gmail.com"></div>
+              <div class="fg"><label class="fl">Password / App Password <span class="req">*</span></label><input class="fc" id="int-mail-password" type="password" placeholder="Gmail: use App Password">
+                <div style="font-size:10.5px;color:var(--text3);margin-top:3px">Gmail: <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--primary)">Generate App Password →</a></div>
+              </div>
+            </div>
+            <div class="fg2">
+              <div class="fg"><label class="fl">From Display Email</label><input class="fc" id="int-mail-from" placeholder="noreply@yourcompany.in"></div>
+              <div class="fg"><label class="fl">TLS Encryption</label>
+                <select class="fc" id="int-mail-tls"><option value="1">✅ Enabled (recommended)</option><option value="0">Disabled</option></select>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
+              <button class="btn btn-primary" onclick="saveIntegrationSettings('email')">💾 Save Email Settings</button>
+              <input class="fc" id="int-test-email" type="email" placeholder="Test to: email@example.com" style="max-width:220px">
+              <button class="btn btn-outline" onclick="testEmailSettings()">📤 Test</button>
+              <div id="int-email-result" style="font-size:12px"></div>
+            </div>
+          </div>
+          <!-- WhatsApp Panel -->
+          <div id="int-panel-wa" style="display:none">
+            <div style="background:rgba(37,211,102,.06);border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">
+              💡 Meta Cloud API — free tier. <a href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started" target="_blank" style="color:var(--primary)">Setup Guide →</a>
+            </div>
+            <div class="fg"><label class="fl">Meta Access Token <span class="req">*</span></label>
+              <input class="fc" id="int-wa-token" type="password" placeholder="EAAxxxxxxx… (from Meta Developer Portal)">
+              <div style="font-size:10.5px;color:var(--text3);margin-top:3px"><a href="https://developers.facebook.com" target="_blank" style="color:var(--primary)">developers.facebook.com</a> → App → WhatsApp → API Setup</div>
+            </div>
+            <div class="fg"><label class="fl">Phone Number ID <span class="req">*</span></label>
+              <input class="fc" id="int-wa-phone-id" placeholder="1234567890 (Phone Number ID from Meta Dev Portal)">
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
+              <button class="btn btn-primary" style="background:#25D366;border-color:#25D366" onclick="saveIntegrationSettings('wa')">💾 Save WhatsApp</button>
+              <input class="fc" id="int-test-wa" type="tel" placeholder="Test: 98XXXXXXXX" style="max-width:180px">
+              <button class="btn btn-outline" style="border-color:#25D366;color:#25D366" onclick="testWaSettings()">📤 Test</button>
+              <div id="int-wa-result" style="font-size:12px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+</div>
 
   
     <!-- ── AI DOCUMENT DRAFTING ── -->
@@ -14028,6 +14093,214 @@ function quickAIDraft(type) {
   document.getElementById('ai-main-instructions')?.focus();
 }
 
+
+// ── Document Preview → E-Sign Modal ────────────────────────────────────────
+async function openDocESignModal() {
+  // Get current document context from DOC_STATE
+  const docId    = DOC_STATE?.templateId  || '';
+  const docTitle = (() => {
+    const tpl = ALL_TEMPLATES?.find(t => t.id === docId);
+    return tpl?.name || document.querySelector('#doc-preview-title')?.textContent || 'Document';
+  })();
+
+  // Build company options
+  const coOpts = (COMPANIES||[]).map(c =>
+    `<option value="${c.id}" ${c.id===PB.company_id?'selected':''}>${c.name}</option>`
+  ).join('');
+
+  openModal('✍️ Send Document for E-Signature', `
+    <!-- Document info banner -->
+    <div style="background:linear-gradient(135deg,rgba(26,86,219,.07),rgba(13,45,107,.04));border:1px solid rgba(26,86,219,.18);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center">
+      <span style="font-size:26px">📄</span>
+      <div>
+        <div style="font-weight:700;font-size:14px;color:var(--text)" id="doc-esign-title">${docTitle}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">The generated PDF will be attached and sent to each signatory</div>
+      </div>
+    </div>
+
+    <!-- Company + Provider row -->
+    <div class="fg2">
+      <div class="fg">
+        <label class="fl">Company <span class="req">*</span></label>
+        <select class="fc" id="des-company" onchange="loadDocESignDirectors()">
+          <option value="">— Select company —</option>
+          ${coOpts}
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">Signing Deadline</label>
+        <input class="fc" type="date" id="des-deadline"
+          value="${new Date(Date.now()+7*86400000).toISOString().split('T')[0]}">
+      </div>
+    </div>
+
+    <!-- Delivery methods -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;margin-bottom:14px">
+      <div style="font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📬 Send via</div>
+      <div style="display:flex;gap:20px">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:600">
+          <input type="checkbox" id="des-email" checked style="width:15px;height:15px"> 📧 Email
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:600">
+          <input type="checkbox" id="des-wa" style="width:15px;height:15px"> 💬 WhatsApp
+        </label>
+      </div>
+    </div>
+
+    <!-- Signatories section -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">👤 Signatories</div>
+      <button class="btn btn-xs btn-outline" onclick="loadDocESignDirectors()" id="des-load-dirs-btn">
+        🔄 Load Directors
+      </button>
+    </div>
+    <div id="des-signatories">
+      <div class="esign-row" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:flex-end">
+        <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">Name <span class="req">*</span></label>
+          <input class="fc" placeholder="Signatory name"></div>
+        <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">Email <span class="req">*</span></label>
+          <input class="fc" type="email" placeholder="email@company.com"></div>
+        <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">WhatsApp No.</label>
+          <input class="fc" type="tel" placeholder="98XXXXXXXX"></div>
+        <button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()" style="margin-bottom:2px">✕</button>
+      </div>
+    </div>
+    <button class="btn btn-xs btn-outline" onclick="addDocESignRow()" style="margin-bottom:14px">+ Add Signatory</button>
+
+    <div class="fg">
+      <label class="fl">Message (optional)</label>
+      <textarea class="fc" id="des-message" placeholder="Please review and sign this document." style="min-height:55px"></textarea>
+    </div>
+
+    <!-- Integration status -->
+    <div id="des-config-status" style="font-size:11px;color:var(--text3);margin-top:6px;padding:6px 10px;background:var(--bg3);border-radius:5px">
+      Checking configuration…
+    </div>
+    <div id="des-result" style="display:none;margin-top:10px"></div>
+  `, [
+    { text: '✍️ Send for E-Signature', cls: 'btn-primary',
+      fn: "sendDocForESign('" + docId + "')" },
+    { text: 'Cancel', cls: 'btn-outline', fn: 'closeModal()' },
+  ], 'lg');
+
+  // Auto-load directors if company already selected
+  if (PB.company_id) {
+    document.getElementById('des-company').value = PB.company_id;
+    loadDocESignDirectors();
+  }
+
+  // Check config status
+  const cfg = await api('/api/config/status');
+  if (cfg) {
+    const cfgEl = document.getElementById('des-config-status');
+    if (cfgEl) cfgEl.innerHTML =
+      `${cfg.MAIL_ENABLED ? '✅ Email configured' : '⚠️ Email not configured (set MAIL_USERNAME + MAIL_PASSWORD)'}
+       &nbsp;·&nbsp;
+       ${cfg.WA_ENABLED ? '✅ WhatsApp configured' : '⚙️ WhatsApp: set WA_TOKEN + WA_PHONE_ID for WA sending'}`;
+  }
+}
+
+async function loadDocESignDirectors() {
+  const cid = document.getElementById('des-company')?.value;
+  if (!cid) return;
+  const dirs = await api('/api/companies/'+cid+'/directors');
+  if (!dirs || !dirs.length) {
+    toast('No active directors found for this company','err'); return;
+  }
+  const container = document.getElementById('des-signatories');
+  if (!container) return;
+  container.innerHTML = '';
+  dirs.filter(d => d.is_active).slice(0, 6).forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'esign-row';
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:flex-end';
+    row.innerHTML = `
+      <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">Name</label>
+        <input class="fc" value="${esc(d.name||'')}" placeholder="Full name"></div>
+      <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">Email</label>
+        <input class="fc" type="email" value="${esc(d.email||'')}" placeholder="email@company.com"></div>
+      <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">WhatsApp</label>
+        <input class="fc" type="tel" value="${esc(d.mobile||'')}" placeholder="98XXXXXXXX"></div>
+      <button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()" style="margin-bottom:2px">✕</button>`;
+    container.appendChild(row);
+  });
+  toast(dirs.filter(d=>d.is_active).length + ' director(s) loaded ✓', 'ok');
+}
+
+function addDocESignRow() {
+  const row = document.createElement('div');
+  row.className = 'esign-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:flex-end';
+  row.innerHTML = `
+    <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">Name <span class="req">*</span></label>
+      <input class="fc" placeholder="Full name"></div>
+    <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">Email <span class="req">*</span></label>
+      <input class="fc" type="email" placeholder="email@company.com"></div>
+    <div class="fg" style="margin:0"><label class="fl" style="font-size:10px">WhatsApp No.</label>
+      <input class="fc" type="tel" placeholder="98XXXXXXXX"></div>
+    <button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()" style="margin-bottom:2px">✕</button>`;
+  document.getElementById('des-signatories').appendChild(row);
+}
+
+async function sendDocForESign(docId) {
+  const cid      = document.getElementById('des-company')?.value;
+  const deadline = document.getElementById('des-deadline')?.value;
+  const message  = document.getElementById('des-message')?.value || '';
+  const sendEmail = document.getElementById('des-email')?.checked !== false;
+  const sendWa    = document.getElementById('des-wa')?.checked || false;
+
+  if (!cid) { toast('Select a company first','err'); return; }
+
+  const esignRows = document.querySelectorAll('#des-signatories .esign-row');
+  const signatories = Array.from(esignRows).map(row => {
+    const inputs = row.querySelectorAll('input');
+    return { name: inputs[0]?.value?.trim(), email: inputs[1]?.value?.trim(),
+             phone: inputs[2]?.value?.trim(), role: 'Signatory' };
+  }).filter(s => s.name && (s.email || s.phone));
+
+  if (!signatories.length) { toast('Add at least one signatory','err'); return; }
+
+  const docTitle = document.getElementById('doc-esign-title')?.textContent || docId;
+
+  // Generate PDF first, then create esign request with it
+  const resultEl = document.getElementById('des-result');
+  if (resultEl) {
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg2);border-radius:8px"><div class="spinner"></div><span style="font-size:13px">Generating PDF and sending to signatories…</span></div>';
+  }
+
+  const payload = {
+    doc_id: docId, doc_title: docTitle,
+    company_id: cid, provider: 'internal',
+    signatories, deadline, message,
+    send_email: sendEmail, send_wa: sendWa,
+  };
+
+  const r = await api('/api/esign/send', { method: 'POST', body: payload });
+
+  if (r?.success) {
+    const emailSent = (r.email_results||[]).filter(x=>x.sent).length;
+    const waSent    = (r.wa_results||[]).filter(x=>x.sent).length;
+    if (resultEl) resultEl.innerHTML = `
+      <div style="background:rgba(5,150,105,.07);border:1px solid #6ee7b7;border-radius:8px;padding:14px 16px">
+        <div style="font-weight:700;color:#059669;margin-bottom:6px">✅ Sent successfully!</div>
+        <div style="font-size:12px;color:#065f46">
+          Request ID: <code style="background:rgba(6,95,70,.1);padding:1px 5px;border-radius:3px">${r.request_id}</code><br>
+          ${sendEmail?'📧 Email: '+emailSent+'/'+signatories.length+' sent<br>':''}
+          ${sendWa?'💬 WhatsApp: '+waSent+'/'+signatories.length+' sent':''}
+        </div>
+        ${!r.email_enabled?'<div style="margin-top:8px;font-size:11px;color:#92400e;background:#fef3c7;padding:5px 8px;border-radius:4px">⚙️ Configure SMTP in .env or server environment to enable email delivery</div>':''}
+      </div>`;
+    toast('Document sent for e-signature ✓', 'ok');
+    setTimeout(() => { closeModal(); if(typeof loadESignPage==='function') loadESignPage(); }, 2500);
+  } else {
+    if (resultEl) resultEl.innerHTML = `
+      <div style="background:rgba(220,38,38,.06);border:1px solid #fca5a5;border-radius:8px;padding:12px">
+        <div style="color:#dc2626;font-weight:600">❌ ${r?.error||'Failed'}</div>
+      </div>`;
+  }
+}
+
 async function loadESignPage() {
   const r = await api('/api/esign/requests', {silent:true});  // silent=true — no error toast
   const stats = document.getElementById('esign-stats');
@@ -15123,4 +15396,94 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 </body>
-</html>
+</html
+// ── Integration Settings ──────────────────────────────────────────────────
+function switchIntTab(tab) {
+  ['email','wa'].forEach(t => {
+    const panel = document.getElementById('int-panel-'+t);
+    const btn   = document.getElementById('int-tab-'+t);
+    if (panel) panel.style.display = t===tab ? '' : 'none';
+    if (btn) {
+      btn.style.borderBottomColor = t===tab ? 'var(--primary)' : 'transparent';
+      btn.style.color = t===tab ? 'var(--primary)' : 'var(--text3)';
+    }
+  });
+}
+
+async function loadIntegrationSettings() {
+  const data = await api('/api/settings/integrations');
+  if (!data) return;
+  const set = (id, val) => { const el=document.getElementById(id); if(el && val !== undefined && val !== null) el.value=val; };
+  set('int-mail-server',   data.mail_server);
+  set('int-mail-port',     data.mail_port || '587');
+  set('int-mail-username', data.mail_username);
+  set('int-mail-from',     data.mail_from);
+  const tlsSel = document.getElementById('int-mail-tls');
+  if (tlsSel) tlsSel.value = data.mail_use_tls || '1';
+  set('int-wa-phone-id', data.wa_phone_id);
+  if (data.mail_password && data.mail_password.includes('*')) {
+    const el = document.getElementById('int-mail-password');
+    if (el) el.placeholder = String.fromCharCode(9679).repeat(8) + ' (saved — enter new to change)';
+  }
+  if (data.wa_token && data.wa_token.includes('*')) {
+    const el = document.getElementById('int-wa-token');
+    if (el) el.placeholder = String.fromCharCode(9679).repeat(8) + ' (saved — enter new to change)';
+  }
+  const badge = document.getElementById('int-status-badge');
+  if (badge) {
+    const txt = [data.mail_enabled?'📧 Email ✓':'📧 Not configured', data.wa_enabled?'💬 WA ✓':''].filter(Boolean).join('  ·  ');
+    badge.textContent = txt || '⚙️ Not configured';
+    badge.style.background = (data.mail_enabled||data.wa_enabled) ? 'rgba(5,150,105,.1)' : 'var(--bg3)';
+    badge.style.color = (data.mail_enabled||data.wa_enabled) ? '#059669' : 'var(--text3)';
+  }
+}
+
+async function saveIntegrationSettings(section) {
+  let body = {};
+  if (section === 'email') {
+    body = {
+      mail_server:   document.getElementById('int-mail-server')?.value.trim() || 'smtp.gmail.com',
+      mail_port:     document.getElementById('int-mail-port')?.value.trim()   || '587',
+      mail_use_tls:  document.getElementById('int-mail-tls')?.value           || '1',
+      mail_username: document.getElementById('int-mail-username')?.value.trim(),
+      mail_password: document.getElementById('int-mail-password')?.value,
+      mail_from:     document.getElementById('int-mail-from')?.value.trim(),
+    };
+    if (!body.mail_username) { toast('Email username is required','err'); return; }
+  } else {
+    body = {
+      wa_token:    document.getElementById('int-wa-token')?.value,
+      wa_phone_id: document.getElementById('int-wa-phone-id')?.value.trim(),
+    };
+    if (!body.wa_phone_id) { toast('Phone Number ID is required','err'); return; }
+  }
+  const r = await api('/api/settings/integrations', { method:'POST', body });
+  if (r?.success) {
+    toast(section==='email' ? '📧 Email settings saved ✓' : '💬 WhatsApp settings saved ✓', 'ok');
+    loadIntegrationSettings();
+  } else toast(r?.error || 'Save failed', 'err');
+}
+
+async function testEmailSettings() {
+  const to = document.getElementById('int-test-email')?.value.trim();
+  if (!to) { toast('Enter a recipient email to test','err'); return; }
+  const resultEl = document.getElementById('int-email-result');
+  if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">Sending test email…</span>';
+  const r = await api('/api/settings/integrations/test-email', { method:'POST', body:{ to } });
+  if (resultEl) resultEl.innerHTML = r?.success
+    ? '<span style="color:#059669;font-weight:600">✅ Test email sent successfully!</span>'
+    : '<span style="color:#dc2626;font-weight:600">❌ ' + (r?.message||'Failed — check credentials') + '</span>';
+}
+
+async function testWaSettings() {
+  const phone = document.getElementById('int-test-wa')?.value.trim();
+  if (!phone) { toast('Enter a phone number to test','err'); return; }
+  const resultEl = document.getElementById('int-wa-result');
+  if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">Sending test message…</span>';
+  const r = await api('/api/settings/integrations/test-wa', { method:'POST', body:{ phone } });
+  if (resultEl) resultEl.innerHTML = r?.success
+    ? '<span style="color:#059669;font-weight:600">✅ WhatsApp message sent!</span>'
+    : '<span style="color:#dc2626;font-weight:600">❌ ' + (r?.message||'Failed — check token') + '</span>';
+}
+
+>
