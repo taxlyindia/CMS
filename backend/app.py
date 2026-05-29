@@ -616,8 +616,12 @@ def check_email():
 def list_users():
     search = request.args.get("q","").strip()
     role_f = request.args.get("role","")
+    # Pre-flight: ensure phone column exists
+    try:
+        _mc = get_db(); _add_col_safe(_mc,"users","phone","TEXT"); _mc.commit(); _mc.close()
+    except Exception: pass
     conn = get_db(); c = conn.cursor()
-    q = "SELECT id,name,email,role,is_active,created_at,last_login FROM users WHERE 1=1"
+    q = "SELECT id,name,email,role,is_active,phone,created_at,last_login FROM users WHERE 1=1"
     params = []
     if g.tenant_id:
         q += " AND (tenant_id=%s OR is_platform_admin=1)"; params.append(g.tenant_id)
@@ -647,16 +651,17 @@ def create_user():
         return jsonify({"error": "Invalid role. Must be staff, manager, or superadmin"}), 400
     uid = str(uuid.uuid4()); conn = get_db(); c = conn.cursor()
     try:
+        phone_val = d.get("phone","").strip() if d.get("phone") else None
         c.execute(
-            "INSERT INTO users (id,name,email,password,role,is_active,tenant_id) VALUES (%s,%s,%s,%s,%s,1,%s)",
-            (uid, d["name"].strip(), d["email"].strip().lower(), hash_pw(d["password"]), role, g.tenant_id)
+            "INSERT INTO users (id,name,email,password,role,is_active,phone,tenant_id) VALUES (%s,%s,%s,%s,%s,1,%s,%s)",
+            (uid, d["name"].strip(), d["email"].strip().lower(), hash_pw(d["password"]), role, phone_val, g.tenant_id)
         )
         conn.commit()
     except Exception as e:
         conn.close()
         if "UNIQUE" in str(e): return jsonify({"error": "Email already exists"}), 400
         return jsonify({"error": str(e)}), 400
-    c.execute("SELECT id,name,email,role,is_active,created_at FROM users WHERE id=%s", (uid,))
+    c.execute("SELECT id,name,email,role,is_active,phone,created_at FROM users WHERE id=%s", (uid,))
     result = row(c.fetchone()); conn.close()
     return jsonify(result), 201
 
