@@ -6963,7 +6963,16 @@ async function loadTasks() {
   if (_tsk_srch) params.set('q', _tsk_srch);
   url += (params.toString() ? '?' + params.toString() : '');
 
-  let tasks = await api(url); if (!tasks) return;
+  const tsk_tbl = document.getElementById('tsk-tbl');
+  if (tsk_tbl) tsk_tbl.innerHTML = '<div style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto 10px"></div>Loading tasks…</div>';
+  let tasks = await api(url);
+  if (!tasks) {
+    if (tsk_tbl) tsk_tbl.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load tasks</div><div class="empty-sub">Check server — run <code>pip install python-docx</code> if missing</div></div>';
+    return;
+  }
+  // Handle paginated response {data:[], total:N} or plain array
+  if (tasks && !Array.isArray(tasks) && Array.isArray(tasks.data)) tasks = tasks.data;
+  if (!Array.isArray(tasks)) tasks = [];
   // Render kanban if in kanban view
   if (_TASK_VIEW === 'kanban') { renderKanban(tasks); return; }
 
