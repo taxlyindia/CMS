@@ -6753,6 +6753,32 @@ def portal_view(token):
         try: exp_display = 'Expires ' + _dt.datetime.fromisoformat(exp_date).strftime('%d %b %Y')
         except Exception: pass
 
+    # ── CS Contact — person who created this portal link ─────────────────
+    cs_contact = {'name': '', 'email': '', 'phone': ''}
+    try:
+        _udb = get_db(); _uc = _udb.cursor()
+        _uc.execute("SELECT name, email FROM users WHERE id=%s", (rec.get('created_by',''),))
+        _u = row(_uc.fetchone()); _udb.close()
+        if _u:
+            cs_contact = {'name': _u.get('name','') or '', 'email': _u.get('email','') or '', 'phone': ''}
+    except Exception: pass
+
+    # ── CS Contact — user who generated this portal link ─────────────────
+    cs_contact = {'name': '', 'email': '', 'phone': ''}
+    try:
+        _udb = get_db(); _uc = _udb.cursor()
+        _uc.execute(
+            "SELECT name, email FROM users WHERE id=%s",
+            (rec.get('created_by',''),))
+        _u = row(_uc.fetchone()); _udb.close()
+        if _u:
+            cs_contact = {
+                'name':  _u.get('name','') or '',
+                'email': _u.get('email','') or '',
+                'phone': '',
+            }
+    except Exception: pass
+
     access_labels = {
         'documents_only': 'Documents Only',
         'compliance_view': 'Compliance & Calendar',
@@ -6841,16 +6867,26 @@ def portal_view(token):
 
     # Upcoming tasks (only non-sensitive, status-based)
     tasks_list = qrows(
-        "SELECT title, due_date, priority, status, module "
-        "FROM tasks WHERE company_id=%s AND status NOT IN ('completed','cancelled') "
-        "ORDER BY due_date ASC LIMIT 10",
+        "SELECT t.title, t.due_date, t.priority, t.status, t.module, "
+        "       u.name as assignee_name, u.email as assignee_email "
+        "FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id "
+        "WHERE t.company_id=%s AND t.status NOT IN ('completed','cancelled') "
+        "ORDER BY t.due_date ASC LIMIT 10",
         (co_id,)) if can_show('compliance') else []
 
-    # ── Stats ─────────────────────────────────────────────────────────────
-    total_directors = len(directors_list)
-    active_alerts   = len([a for a in alerts_list if a.get('status') != 'resolved'])
-    upcoming_meetings = len([m for m in meetings_list if m.get('status') in ('scheduled','pending')])
-    open_tasks      = len(tasks_list)
+    # ── Stats — direct COUNT queries regardless of access level ─────────
+    def qcount(sql, params=()):
+        try:
+            _cc = get_db().cursor(); _cc.execute(sql, params)
+            r = _cc.fetchone()
+            return int((r[0] if not isinstance(r,dict) else list(r.values())[0]) if r else 0)
+        except Exception: return 0
+    total_directors    = qcount("SELECT COUNT(*) FROM directors WHERE company_id=%s AND is_active=1",(co_id,))
+    active_alerts      = qcount("SELECT COUNT(*) FROM alerts WHERE company_id=%s AND status NOT IN ('resolved','dismissed')",(co_id,))
+    upcoming_meetings  = qcount("SELECT COUNT(*) FROM meetings WHERE company_id=%s AND status IN ('scheduled','pending')",(co_id,))
+    open_tasks         = qcount("SELECT COUNT(*) FROM tasks WHERE company_id=%s AND status NOT IN ('completed','cancelled')",(co_id,))
+    total_shareholders = qcount("SELECT COUNT(*) FROM shareholders WHERE company_id=%s AND is_active=1",(co_id,))
+    total_documents    = qcount("SELECT COUNT(*) FROM documents WHERE company_id=%s",(co_id,))
 
     # ── Render helpers ────────────────────────────────────────────────────
     def esc(v): return str(v or '').replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
@@ -6999,25 +7035,55 @@ def portal_view(token):
       <td>{fmt_date(t.get("due_date",""))}</td>
       <td>{severity_badge(t.get("priority",""))}</td>
       <td>{status_badge(t.get("status",""))}</td>
+      <td>
+        {f'<div style="font-size:12px;font-weight:600">{esc(t.get("assignee_name",""))}</div><div style="font-size:10.5px;color:#7a8aaa">{esc(t.get("assignee_email",""))}</div>' if t.get("assignee_name") else '<span style="color:#7a8aaa">—</span>'}
+      </td>
     </tr>''' for t in tasks_list)
     tasks_html = f'''<div class="pt-table-wrap"><table><thead><tr>
-      <th>Task</th><th>Module</th><th>Due Date</th><th>Priority</th><th>Status</th>
+      <th>Task</th><th>Module</th><th>Due Date</th><th>Priority</th><th>Status</th><th>Assigned To</th>
     </tr></thead><tbody>{task_rows}</tbody></table></div>''' if tasks_list else '<div class="pt-empty">✅ No pending compliance tasks</div>'
 
     # ── Stats bar ─────────────────────────────────────────────────────────
-    stats_html = f'''
-    <div class="pt-stats">
-      <div class="pt-stat"><div class="pt-stat-num">{total_directors}</div><div class="pt-stat-label">Directors</div></div>
-      <div class="pt-stat pt-stat-alert" style="{'display:block' if active_alerts > 0 else 'display:block'}">
-        <div class="pt-stat-num" style="color:{'#dc2626' if active_alerts > 0 else '#059669'}">{active_alerts}</div>
-        <div class="pt-stat-label">Active Alerts</div>
-      </div>
-      <div class="pt-stat"><div class="pt-stat-num">{upcoming_meetings}</div><div class="pt-stat-label">Upcoming Meetings</div></div>
-      <div class="pt-stat"><div class="pt-stat-num">{open_tasks}</div><div class="pt-stat-label">Open Tasks</div></div>
-    </div>'''
+    stats_html = (
+      '<div class="pt-stats">\n'
+      '<div class="pt-stat"><div class="pt-stat-num">' + str(total_directors) + '</div><div class="pt-stat-label">Directors</div></div>\n'
+      '<div class="pt-stat"><div class="pt-stat-num" style="color:' + ('#dc2626' if active_alerts > 0 else '#059669') + '">' + str(active_alerts) + '</div><div class="pt-stat-label">Active Alerts</div></div>\n'
+      '<div class="pt-stat"><div class="pt-stat-num">' + str(upcoming_meetings) + '</div><div class="pt-stat-label">Upcoming Meetings</div></div>\n'
+      '<div class="pt-stat"><div class="pt-stat-num">' + str(open_tasks) + '</div><div class="pt-stat-label">Open Tasks</div></div>\n'
+      '<div class="pt-stat"><div class="pt-stat-num">' + str(total_shareholders) + '</div><div class="pt-stat-label">Shareholders</div></div>\n'
+      '<div class="pt-stat"><div class="pt-stat-num">' + str(total_documents) + '</div><div class="pt-stat-label">Documents</div></div>\n'
+      '</div>'
+    )
+
 
     # ── Assemble the page ─────────────────────────────────────────────────
     year = _dt.datetime.utcnow().year
+
+    
+    # ── CS Contact card HTML ─────────────────────────────────────────────
+    if cs_contact.get('name'):
+        _cs_n  = esc(cs_contact['name'])
+        _cs_e  = esc(cs_contact['email'])
+        _cs_em = (f'<a href="mailto:{_cs_e}" style="font-size:12px;color:#1b4ed8;'
+                  f'font-weight:600;text-decoration:none">✉ {_cs_e}</a>') if _cs_e else ''
+        cs_card_html = (
+            '<div style="background:linear-gradient(135deg,rgba(27,78,216,.06),'
+            'rgba(99,102,241,.04));border:1px solid rgba(27,78,216,.15);'
+            'border-radius:12px;padding:16px 20px;display:flex;align-items:center;'
+            'gap:16px;margin-bottom:18px">'
+            '<div style="width:44px;height:44px;background:linear-gradient(135deg,'
+            '#1b4ed8,#6366f1);border-radius:50%;display:flex;align-items:center;'
+            'justify-content:center;font-size:20px;flex-shrink:0">👤</div>'
+            '<div style="flex:1">'
+            '<div style="font-size:10px;font-weight:700;color:#7a8aaa;'
+            'text-transform:uppercase;letter-spacing:.7px">'
+            'Your Company Secretary / Account Manager</div>'
+            f'<div style="font-weight:700;font-size:14px;color:#0d1426;margin-top:3px">{_cs_n}</div>'
+            f'<div style="margin-top:6px">{_cs_em}</div>'
+            '</div></div>'
+        )
+    else:
+        cs_card_html = ''
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -7146,7 +7212,9 @@ def portal_view(token):
       </div>
     </div>
 
-    {section("Company Overview", "🏢", company_html)}
+    {cs_card_html}
+
+    {section('Company Overview', '🏢', company_html)}
     {section("Board of Directors", "👤", directors_html, can_show('directors'))}
     {section("Active Compliance Alerts", "🔔", alerts_html, can_show('alerts'))}
     {section("Pending Tasks", "✅", tasks_html, can_show('compliance'))}
