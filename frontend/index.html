@@ -3555,7 +3555,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
         <div class="card-body">
           <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px">
             <button id="int-tab-email" onclick="switchIntTab('email')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid var(--primary);color:var(--primary);margin-bottom:-2px;cursor:pointer">📧 Email (SMTP)</button>
-            <button id="int-tab-wa"    onclick="switchIntTab('wa')"    style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid transparent;color:var(--text3);margin-bottom:-2px;cursor:pointer">💬 WhatsApp</button>
+            <button id="int-tab-wa"    onclick="switchIntTab('wa')"    style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid transparent;color:var(--text3);margin-bottom:-2px;cursor:pointer;transition:all .15s">💬 WhatsApp</button>
           </div>
           <!-- Email Panel -->
           <div id="int-panel-email">
@@ -3606,8 +3606,6 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
           </div>
         </div>
       </div>
-
-</div>
 
   
     <!-- ── AI DOCUMENT DRAFTING ── -->
@@ -8299,6 +8297,8 @@ function initSettingsPage() {
     };
     descEl.textContent = descs[ME.role] || '';
   }
+  // Load integration settings
+  setTimeout(() => loadIntegrationSettings(), 200);
 }
 
 
