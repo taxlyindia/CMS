@@ -15018,3 +15018,57 @@ async function loadESignPage() {
 }
 
 
+
+
+
+
+// ═══════════════════════════════════════════════════════════════════
+// FORGOT / RESET PASSWORD
+// ═══════════════════════════════════════════════════════════════════
+let _resetToken = null;
+
+function showForgotPassword() {
+  const ls = document.getElementById('login-screen');
+  const fs = document.getElementById('forgot-screen');
+  if (ls) ls.style.display = 'none';
+  if (fs) fs.style.display = 'flex';
+  const fpForm = document.getElementById('fp-form');
+  const fpSuc  = document.getElementById('fp-success');
+  if (fpForm) fpForm.style.display = '';
+  if (fpSuc)  fpSuc.style.display  = 'none';
+  document.getElementById('fp-email')?.focus();
+}
+
+function hideForgotPassword() {
+  const ls = document.getElementById('login-screen');
+  const fs = document.getElementById('forgot-screen');
+  if (ls) ls.style.display = 'flex';
+  if (fs) fs.style.display = 'none';
+}
+
+async function submitForgotPassword() {
+  const email = document.getElementById('fp-email')?.value.trim();
+  if (!email) { toast('Enter your email address', 'err'); return; }
+  const btn = document.getElementById('fp-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  const r = await fetch('/api/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
+  });
+  const d = await r.json().catch(() => ({}));
+  if (btn) { btn.disabled = false; btn.textContent = 'Send Reset Link'; }
+  if (r.ok || d.success) {
+    const fpForm = document.getElementById('fp-form');
+    const fpSuc  = document.getElementById('fp-success');
+    if (fpForm) fpForm.style.display = 'none';
+    if (fpSuc)  fpSuc.style.display  = '';
+  } else {
+    toast(d.error || 'Failed to send reset email', 'err');
+  }
+}
+
+</script>
+
+</body>
+</html>
