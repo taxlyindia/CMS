@@ -2769,7 +2769,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 
     </div>
 <!-- ── COMPANIES ── -->
-    <div class="page" id="page-companies">
+    <div class="page" id="page-companies" style="display:none">
       <div class="filter-bar" style="margin-bottom:14px">
         <div class="sbar" style="width:300px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="co-q" placeholder="Search company name, CIN, PAN…" oninput="debounce(loadCompanies,300)()"></div>
       </div>
@@ -2777,7 +2777,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- ── DIRECTORS ── -->
-    <div class="page" id="page-directors">
+    <div class="page" id="page-directors" style="display:none">
       <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <input class="fc" style="width:220px;min-width:160px" id="dir-search" placeholder="Search by name, DIN or company..." oninput="loadDirectors()">
         <select class="fc" style="width:220px" id="dir-co-f" onchange="loadDirectors()"><option value="">All Companies</option></select>
@@ -2791,7 +2791,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- DIR-KYC MODULE -->
-    <div class="page" id="page-dir-kyc">
+    <div class="page" id="page-dir-kyc" style="display:none">
       <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px;align-items:center">
         <input class="fc" style="width:260px;min-width:160px" id="kyc-search" placeholder="Search by name, DIN or email..." oninput="loadDirKYC()">
         <select class="fc" style="width:180px" id="kyc-status-f" onchange="loadDirKYC()">
@@ -2809,7 +2809,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- ── AUDITORS ── -->
-    <div class="page" id="page-auditors">
+    <div class="page" id="page-auditors" style="display:none">
       <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
         <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="aud-search" placeholder="Search auditor name, firm, PAN…" oninput="debounce(loadAuditors,300)()"></div>
         <select class="fc" style="width:220px" id="aud-co-f" onchange="loadAuditors()"><option value="">All Companies</option></select>
@@ -2825,7 +2825,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- ── SHAREHOLDERS ── -->
-    <div class="page" id="page-shareholders">
+    <div class="page" id="page-shareholders" style="display:none">
       <div class="filter-bar" style="margin-bottom:14px">
         <select class="fc" style="width:240px" id="sh-co-f" onchange="loadShareholders()"><option value="">— Select Company —</option></select>
       </div>
@@ -2833,7 +2833,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- ── MEETINGS ── -->
-    <div class="page" id="page-meetings">
+    <div class="page" id="page-meetings" style="display:none">
       <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="mtg-search" placeholder="Search company, meeting no, venue…" oninput="debounce(loadMeetings,300)()"></div>
         <select class="fc" style="width:200px" id="mtg-co-f" onchange="loadMeetings()"><option value="">All Companies</option></select>
@@ -2855,7 +2855,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- ── ALERTS ── -->
-    <div class="page" id="page-alerts">
+    <div class="page" id="page-alerts" style="display:none">
       <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="alt-search" placeholder="Search alert title, company, message…" oninput="debounce(loadAlerts,300)()"></div>
         <select class="fc" style="width:150px" id="alt-sev-f" onchange="loadAlerts()">
@@ -2887,7 +2887,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- ── TASKS ── -->
-    <div class="page" id="page-tasks">
+    <div class="page" id="page-tasks" style="display:none">
       <!-- View toggle: Table / Kanban -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <button id="task-view-table" class="btn btn-sm" onclick="setTaskView('table')" style="background:var(--accent);color:#fff">☰ Table</button>
@@ -2944,7 +2944,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- ── DSC RECORDS ── -->
-    <div class="page" id="page-dsc">
+    <div class="page" id="page-dsc" style="display:none">
       <div class="filter-bar" style="margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div class="sbar" style="width:280px;min-width:180px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="dsc-search" placeholder="Search holder name, company…" oninput="debounce(loadDSC,300)()"></div>
         <select class="fc" style="width:200px" id="dsc-co-f" onchange="loadDSC()"><option value="">All Companies</option></select>
@@ -2959,7 +2959,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- ── REGISTERS ── -->
-    <div class="page" id="page-registers">
+    <div class="page" id="page-registers" style="display:none">
       <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
         <div class="sbar" style="width:260px;min-width:160px"><span style="color:var(--text3);font-size:13px">🔍</span><input id="reg-search" placeholder="Search entry data, folio ref…" oninput="debounce(loadRegister,300)()"></div>
         <select class="fc" style="width:230px" id="reg-co" onchange="loadRegister()"><option value="">— Select Company —</option></select>
@@ -3000,7 +3000,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 
     <!-- ── DOCUMENTS ── -->
     <!-- ── DOCUMENTS ── -->
-    <div class="page" id="page-documents">
+    <div class="page" id="page-documents" style="display:none">
       <div style="display:grid;grid-template-columns:420px 1fr;gap:16px;align-items:start">
 
         <!-- LEFT PANEL -->
@@ -3110,7 +3110,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
       </div>
     </div>
     <!-- ── DOC TEMPLATES ── -->
-    <div class="page" id="page-templates">
+    <div class="page" id="page-templates" style="display:none">
 
       <!-- ── Tab bar ─────────────────────────────────────────────────────── -->
       <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px">
@@ -3262,7 +3262,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 
     </div>
     <!-- ── USERS ── -->
-    <div class="page" id="page-users">
+    <div class="page" id="page-users" style="display:none">
       <!-- Role Guide -->
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
         <div style="background:#fff;border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:10px;padding:16px 18px">
@@ -3334,7 +3334,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 
     <!-- ── SETTINGS ── -->
     <!-- ══ MCA FORM TRACKER ══════════════════════════════════════════ -->
-    <div class="page" id="page-mca-filings">
+    <div class="page" id="page-mca-filings" style="display:none">
       <div class="period-bar">
         <select id="mca-cid" class="fc" style="width:220px" onchange="loadMcaFilings()"></select>
         <select id="mca-status-filter" class="fc" style="width:150px" onchange="loadMcaFilings()">
@@ -3379,7 +3379,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- ══ RECURRING TASK TEMPLATES ═══════════════════════════════════════ -->
-    <div class="page" id="page-recurring-templates">
+    <div class="page" id="page-recurring-templates" style="display:none">
       <div class="period-bar">
         <div style="font-weight:600;font-size:14px">Recurring Task Templates</div>
         <button class="btn btn-primary btn-sm" onclick="openRecurringModal()">+ New Template</button>
@@ -3419,7 +3419,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <!-- ══ AUDIT TRAIL ════════════════════════════════════════════════════ -->
-    <div class="page" id="page-audit-log">
+    <div class="page" id="page-audit-log" style="display:none">
       <div class="period-bar" style="flex-wrap:wrap;gap:8px">
         <select id="al-module-filter" class="fc" style="width:140px">
           <option value="">All Modules</option>
@@ -3438,7 +3438,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
       </div>
     </div>
 
-    <div class="page" id="page-settings">
+    <div class="page" id="page-settings" style="display:none">
       <div class="g2" style="max-width:900px;align-items:start">
 
         <!-- Change Password -->
@@ -4725,7 +4725,7 @@ function navigateTo(page) {
   document.querySelectorAll('.page').forEach(p => {
     const isActive = p.id === 'page-' + page;
     p.classList.toggle('active', isActive);
-    p.style.display = isActive ? '' : 'none';
+    p.style.display = isActive ? 'block' : 'none';
   });
   const _intCard = document.getElementById('integration-settings-card');
   if (_intCard) _intCard.style.display = (page === 'settings') ? '' : 'none';
