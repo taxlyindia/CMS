@@ -1852,7 +1852,11 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
   .adv-sidebar { position: static; }
   .adv-form-row { flex-direction: column; }
 }
-</style>
+
+  /* Prevent sticky sidebar from leaking through display:none pages */
+  .page:not(.active) { overflow: hidden !important; }
+  .page:not(.active) * { position: static !important; }
+  </style>
 </head>
 <body>
 
@@ -3615,7 +3619,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
       </div
 
 
-<div class="page" id="page-ai-drafting">
+<div class="page" id="page-ai-drafting" style="display:none">
   <div class="adv-layout">
 
     <!-- Left sidebar -->
@@ -3767,7 +3771,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 </div>
 
 <!-- ── E-SIGNATURES ── -->
-<div class="page" id="page-esign">
+<div class="page" id="page-esign" style="display:none">
   <div class="adv-layout">
 
     <!-- Left sidebar -->
@@ -3860,7 +3864,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 </div>
 
 <!-- ── CLIENT PORTAL ── -->
-<div class="page" id="page-client-portal">
+<div class="page" id="page-client-portal" style="display:none">
   <div class="adv-layout">
 
     <!-- Left sidebar -->
@@ -3943,7 +3947,7 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 </div>
 
 <!-- ── WHATSAPP BUSINESS ── -->
-<div class="page" id="page-whatsapp">
+<div class="page" id="page-whatsapp" style="display:none">
   <div class="adv-layout">
 
     <!-- Left sidebar -->
@@ -4718,7 +4722,11 @@ document.querySelectorAll('.nav-item').forEach(n => n.addEventListener('click', 
 function navigateTo(page) {
   PAGE = page;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
-  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === `page-${page}`));
+  document.querySelectorAll('.page').forEach(p => {
+    const isActive = p.id === 'page-' + page;
+    p.classList.toggle('active', isActive);
+    p.style.display = isActive ? '' : 'none';
+  });
   const _intCard = document.getElementById('integration-settings-card');
   if (_intCard) _intCard.style.display = (page === 'settings') ? '' : 'none';
   // Show integration settings card only on settings page
