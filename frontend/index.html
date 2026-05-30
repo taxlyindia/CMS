@@ -1853,9 +1853,8 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
   .adv-form-row { flex-direction: column; }
 }
 
-  /* Prevent sticky sidebar from leaking through display:none pages */
+  /* Hide inactive pages */
   .page:not(.active) { overflow: hidden !important; }
-  .page:not(.active) * { position: static !important; }
   
 
 
@@ -1864,56 +1863,57 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 
 
 <style id="adv-tools-css">
-/* ═══ Advanced Tools Layout ════════════════════════════════════ */
+/* ═══ Advanced Tools — Layout (works inside .content overflow-y:auto) ════ */
 .adv-page-wrap {
-  display:flex;min-height:calc(100vh - 68px);
+  display: flex;
+  align-items: stretch;
+  /* No min-height:calc — let content flow naturally */
 }
+
+/* Left panel — NO sticky (doesn't work inside overflow:auto) */
 .adv-left-panel {
-  width:248px;flex-shrink:0;
-  background:var(--bg2);
-  border-right:1px solid var(--border);
-  display:flex;flex-direction:column;
-  position:sticky;top:0;height:calc(100vh - 68px);overflow-y:auto;
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: 16px;
+  min-height: 100%;
 }
+
+/* Right panel — let parent .content scroll */
 .adv-right-panel {
-  flex:1;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:16px;
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
 }
 
-/* ── Sidebar Brand Header ── */
+/* Brand header */
 .adv-brand-hdr {
-  display:flex;align-items:center;gap:12px;
-  padding:18px 16px;color:#fff;
-  border-bottom:1px solid rgba(255,255,255,.15);
-  margin-bottom:4px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 16px 14px; color: #fff;
+  border-bottom: 1px solid rgba(255,255,255,.15);
+  margin-bottom: 4px; flex-shrink: 0;
 }
-.adv-brand-icon {
-  width:38px;height:38px;border-radius:10px;
-  display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;
-  background:rgba(255,255,255,.2);
-}
-.adv-brand-name { font-weight:800;font-size:14.5px;letter-spacing:-.2px; }
-.adv-brand-sub  { font-size:10.5px;opacity:.75;margin-top:1px; }
+.adv-brand-icon { width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;background:rgba(255,255,255,.2);flex-shrink:0; }
+.adv-brand-name { font-weight:800;font-size:14px;letter-spacing:-.2px; }
+.adv-brand-sub  { font-size:10px;opacity:.75;margin-top:1px; }
 
-/* ── Sidebar Stats ── */
-.adv-stats-row {
-  display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;
-}
-.adv-stat-box {
-  background:var(--bg3);border:1px solid var(--border);border-radius:10px;
-  padding:10px 12px;text-align:center;
-}
-.adv-stat-val {
-  font-size:22px;font-weight:800;color:var(--sv,var(--primary));
-  line-height:1;display:block;
-}
-.adv-stat-lbl { font-size:9.5px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:3px; }
+/* Sidebar stat grid */
+.adv-stats-row { display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:10px 12px;flex-shrink:0; }
+.adv-stat-box  { background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 10px;text-align:center; }
+.adv-stat-val  { font-size:20px;font-weight:800;color:var(--sv,var(--primary));line-height:1;display:block; }
+.adv-stat-lbl  { font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:3px; }
 
-/* ── Sidebar Nav ── */
-.adv-sb-section {
-  font-size:9.5px;font-weight:700;color:var(--text3);
-  text-transform:uppercase;letter-spacing:.8px;
-  padding:10px 16px 4px;
-}
+/* Sidebar section label */
+.adv-sb-section { font-size:9.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:10px 16px 4px;flex-shrink:0; }
+
+/* Nav buttons */
 .adv-nav-btn {
   display:flex;align-items:center;gap:9px;
   width:calc(100% - 16px);margin:1px 8px;
@@ -1923,223 +1923,109 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
 }
 .adv-nav-btn .adv-nav-icon { width:20px;text-align:center;font-size:14px;flex-shrink:0; }
 .adv-nav-btn:hover { background:var(--bg3);color:var(--text); }
-.adv-nav-btn.active {
-  background:rgba(26,86,219,.1);color:var(--primary);font-weight:700;
-}
+.adv-nav-btn.active { background:rgba(26,86,219,.1);color:var(--primary);font-weight:700; }
 
-/* ── Sidebar Provider cards ── */
+/* Provider cards */
 .adv-prov-card {
   display:flex;align-items:center;gap:10px;
-  margin:3px 10px;padding:9px 10px;border-radius:9px;
+  margin:2px 10px;padding:9px 10px;border-radius:9px;
   border:1px solid var(--border);background:var(--bg2);
   text-decoration:none;cursor:pointer;transition:all .15s;
 }
-.adv-prov-card:hover { border-color:var(--primary);background:var(--glow2,rgba(26,86,219,.04)); }
+.adv-prov-card:hover { border-color:var(--primary); }
 .adv-prov-card.highlighted { border-color:var(--primary);background:rgba(26,86,219,.04); }
-.adv-prov-logo {
-  width:32px;height:32px;border-radius:8px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:800;color:#fff;flex-shrink:0;
-}
+.adv-prov-logo { width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0; }
 .adv-prov-name { font-size:12.5px;font-weight:700;color:var(--text); }
 .adv-prov-sub  { font-size:10.5px;color:var(--text3); }
 
-/* ── Access levels ── */
-.adv-access-item {
-  display:flex;align-items:center;gap:9px;
-  margin:3px 10px;padding:8px 10px;border-radius:8px;
-  background:var(--bg3);border:1px solid var(--border);
-}
-.adv-access-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+/* Access levels */
+.adv-access-item { display:flex;align-items:center;gap:9px;margin:2px 10px;padding:8px 10px;border-radius:8px;background:var(--bg3);border:1px solid var(--border); }
+.adv-access-dot  { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
 .adv-access-name { font-size:12px;font-weight:700;color:var(--text); }
 .adv-access-sub  { font-size:10px;color:var(--text3); }
 
-/* ── How-it-works card ── */
-.adv-howto {
-  margin:10px;background:var(--bg3);border:1px solid var(--border);
-  border-radius:12px;padding:12px;
-}
-.adv-howto-title { font-size:11.5px;font-weight:700;color:var(--text);margin-bottom:9px; }
-.adv-howto-step { display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:var(--text2);margin-bottom:6px;line-height:1.4; }
-.adv-howto-step:last-child { margin-bottom:0; }
-.adv-howto-num {
-  width:18px;height:18px;border-radius:50%;background:var(--primary);
-  color:#fff;font-size:9.5px;font-weight:800;
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;
-}
+/* How-to card */
+.adv-howto { margin:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px; }
+.adv-howto-title { font-size:11px;font-weight:700;color:var(--text);margin-bottom:9px; }
+.adv-howto-step  { display:flex;align-items:flex-start;gap:7px;font-size:11px;color:var(--text2);margin-bottom:5px;line-height:1.4; }
+.adv-howto-num   { width:17px;height:17px;border-radius:50%;background:var(--primary);color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px; }
 
-/* ── Main area components ── */
-.adv-hero-card {
-  border:1px solid var(--border);border-radius:16px;
-  padding:22px 24px;position:relative;overflow:hidden;
-}
-.adv-hero-card::after {
-  content:'';position:absolute;right:-50px;top:-50px;
-  width:220px;height:220px;border-radius:50%;
-  pointer-events:none;opacity:.5;
-}
-.adv-hero-badge {
-  display:inline-flex;align-items:center;gap:6px;
-  padding:4px 12px;border-radius:20px;
-  font-size:11px;font-weight:700;color:#fff;margin-bottom:10px;
-}
-.adv-hero-title { font-size:21px;font-weight:800;color:var(--text);letter-spacing:-.3px;margin-bottom:5px; }
-.adv-hero-sub   { font-size:12.5px;color:var(--text2);line-height:1.6;max-width:580px; }
+/* Sidebar CTA */
+.adv-sb-cta { padding:10px 10px 4px;margin-top:auto;flex-shrink:0; }
+
+/* Hero card */
+.adv-hero-card { border:1px solid var(--border);border-radius:14px;padding:20px 22px;position:relative;overflow:hidden;flex-shrink:0; }
+.adv-hero-badge { display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;margin-bottom:10px; }
+.adv-hero-title { font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.3px;margin-bottom:5px; }
+.adv-hero-sub   { font-size:12.5px;color:var(--text2);line-height:1.6;max-width:560px; }
 
 /* Toolbar */
-.adv-toolbar {
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
-  background:var(--bg2);border:1px solid var(--border);border-radius:12px;
-  padding:10px 14px;flex-wrap:wrap;
-}
-.adv-pills { display:flex;gap:4px;flex-wrap:wrap; }
-.adv-pill {
-  padding:5px 13px;border-radius:20px;font-size:12px;font-weight:600;
-  border:1.5px solid var(--border);background:none;cursor:pointer;
-  color:var(--text2);transition:all .15s;
-}
+.adv-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:9px 13px;flex-wrap:wrap;flex-shrink:0; }
+.adv-pills   { display:flex;gap:4px;flex-wrap:wrap; }
+.adv-pill    { padding:5px 12px;border-radius:18px;font-size:12px;font-weight:600;border:1.5px solid var(--border);background:none;cursor:pointer;color:var(--text2);transition:all .15s; }
 .adv-pill:hover { border-color:var(--primary);color:var(--primary); }
 .adv-pill.active { background:var(--primary);color:#fff;border-color:var(--primary); }
 
 /* Table container */
-.adv-tbl-card {
-  background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;
-}
+.adv-tbl-card { background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;flex-shrink:0; }
 .adv-tbl-card table { width:100%;border-collapse:collapse;font-size:13px; }
 .adv-tbl-card thead { background:var(--bg3); }
-.adv-tbl-card th {
-  padding:10px 14px;text-align:left;font-size:10.5px;font-weight:700;
-  color:var(--text3);text-transform:uppercase;letter-spacing:.5px;
-  border-bottom:1px solid var(--border);
-}
-.adv-tbl-card td { padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle; }
+.adv-tbl-card th { padding:10px 13px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border); }
+.adv-tbl-card td { padding:11px 13px;border-bottom:1px solid var(--border);vertical-align:middle; }
 .adv-tbl-card tr:last-child td { border-bottom:none; }
 .adv-tbl-card tr:hover td { background:rgba(26,86,219,.02); }
 
 /* Empty state */
-.adv-empty {
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:60px 20px;text-align:center;
-}
-.adv-empty-icon { font-size:52px;margin-bottom:14px;opacity:.6; }
-.adv-empty-title { font-size:16px;font-weight:700;color:var(--text);margin-bottom:5px; }
-.adv-empty-sub   { font-size:12.5px;color:var(--text3);max-width:340px;line-height:1.6; }
+.adv-empty { display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;text-align:center; }
+.adv-empty-icon  { font-size:48px;margin-bottom:12px;opacity:.6; }
+.adv-empty-title { font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px; }
+.adv-empty-sub   { font-size:12.5px;color:var(--text3);max-width:320px;line-height:1.6; }
 
 /* Form card */
-.adv-form-card {
-  background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;
-}
-.adv-section-title {
-  font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;
-  letter-spacing:.7px;margin-bottom:14px;padding-bottom:8px;
-  border-bottom:1px solid var(--border);
-}
-.adv-frow { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px; }
+.adv-form-card   { background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;flex-shrink:0; }
+.adv-section-title { font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border); }
+.adv-frow  { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px; }
 .adv-frow3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px; }
 .adv-frow1 { margin-bottom:12px; }
-.adv-flabel {
-  font-size:10.5px;font-weight:700;color:var(--text3);
-  text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px;
-}
-.adv-finput,.adv-fselect,.adv-ftextarea {
-  width:100%;padding:9px 13px;background:var(--bg3);
-  border:1.5px solid var(--border);border-radius:9px;
-  font-size:13px;color:var(--text);font-family:inherit;
-  outline:none;transition:border-color .15s;
-}
-.adv-finput:focus,.adv-fselect:focus,.adv-ftextarea:focus {
-  border-color:var(--primary);background:var(--bg2);
-}
+.adv-flabel { font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px; }
+.adv-finput,.adv-fselect,.adv-ftextarea { width:100%;padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);font-family:inherit;outline:none;transition:border-color .15s; }
+.adv-finput:focus,.adv-fselect:focus,.adv-ftextarea:focus { border-color:var(--primary);background:var(--bg2); }
 .adv-ftextarea { resize:vertical;min-height:70px; }
 
-/* Buttons */
-.adv-btn-primary {
-  display:inline-flex;align-items:center;gap:7px;
-  padding:10px 20px;border-radius:9px;font-size:13.5px;font-weight:700;
-  background:linear-gradient(135deg,var(--primary),#6366f1);
-  color:#fff;border:none;cursor:pointer;
-  box-shadow:0 2px 10px rgba(26,86,219,.25);transition:all .15s;
-}
-.adv-btn-primary:hover { opacity:.9;transform:translateY(-1px); }
-.adv-btn-outline {
-  display:inline-flex;align-items:center;gap:6px;
-  padding:8px 16px;border-radius:9px;font-size:13px;font-weight:600;
-  background:none;border:1.5px solid var(--border);
-  color:var(--text2);cursor:pointer;transition:all .15s;
-}
-.adv-btn-outline:hover { border-color:var(--primary);color:var(--primary); }
-.adv-btn-sm {
-  padding:5px 11px;border-radius:7px;font-size:12px;font-weight:600;
-  background:var(--bg3);border:1px solid var(--border);
-  color:var(--text2);cursor:pointer;transition:all .15s;white-space:nowrap;
-}
-.adv-btn-sm:hover { border-color:var(--primary);color:var(--primary); }
-.adv-btn-danger {
-  padding:5px 11px;border-radius:7px;font-size:12px;font-weight:600;
-  background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.3);
-  color:#dc2626;cursor:pointer;transition:all .15s;white-space:nowrap;
-}
-
 /* AI Engine tabs */
-.adv-engine-bar {
-  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
-  background:var(--bg3);border-radius:10px;padding:10px 14px;margin-bottom:14px;
-  border:1px solid var(--border);
-}
-.adv-engine-label { font-size:9.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap; }
-.adv-engine-tabs  { display:flex;gap:4px; }
-.adv-engine-tab {
-  display:flex;align-items:center;gap:5px;
-  padding:6px 13px;border-radius:8px;font-size:12.5px;font-weight:600;
-  border:1.5px solid var(--border);background:var(--bg2);
-  cursor:pointer;color:var(--text2);transition:all .15s;
-}
-.adv-engine-tab:hover { border-color:var(--primary);color:var(--primary); }
-.adv-engine-tab.active {
-  background:linear-gradient(135deg,var(--primary),#6366f1);
-  color:#fff;border-color:transparent;
-  box-shadow:0 2px 8px rgba(26,86,219,.3);
-}
+.adv-engine-bar   { display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg3);border-radius:9px;padding:9px 12px;margin-bottom:12px;border:1px solid var(--border); }
+.adv-engine-label { font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap; }
+.adv-engine-tabs  { display:flex;gap:3px; }
+.adv-engine-tab   { display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;font-size:12.5px;font-weight:600;border:1.5px solid var(--border);background:var(--bg2);cursor:pointer;color:var(--text2);transition:all .15s; }
+.adv-engine-tab:hover  { border-color:var(--primary);color:var(--primary); }
+.adv-engine-tab.active { background:linear-gradient(135deg,var(--primary),#6366f1);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(26,86,219,.3); }
 
-/* Draft output */
-.adv-result-bar {
-  display:flex;align-items:center;justify-content:space-between;
-  background:var(--bg2);border:1px solid var(--border);
-  border-bottom:none;border-radius:12px 12px 0 0;padding:11px 14px;
-}
+/* Draft result */
+.adv-result-bar  { display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border:1px solid var(--border);border-bottom:none;border-radius:12px 12px 0 0;padding:10px 14px; }
 .adv-result-glow { width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 7px #22c55e; }
-.adv-draft-area {
-  width:100%;min-height:260px;resize:vertical;
-  background:var(--bg2);border:1px solid var(--border);
-  border-radius:0 0 12px 12px;
-  padding:14px;font-size:13px;font-family:'Courier New',monospace;
-  color:var(--text);line-height:1.75;outline:none;
-}
+.adv-draft-area  { width:100%;min-height:250px;resize:vertical;background:var(--bg2);border:1px solid var(--border);border-radius:0 0 12px 12px;padding:14px;font-size:13px;font-family:'Courier New',monospace;color:var(--text);line-height:1.75;outline:none; }
+
+/* Buttons */
+.adv-btn-primary { display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;font-size:13.5px;font-weight:700;background:linear-gradient(135deg,var(--primary),#6366f1);color:#fff;border:none;cursor:pointer;box-shadow:0 2px 10px rgba(26,86,219,.25);transition:all .15s; }
+.adv-btn-primary:hover { opacity:.9;transform:translateY(-1px); }
+.adv-btn-outline { display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:8px;font-size:13px;font-weight:600;background:none;border:1.5px solid var(--border);color:var(--text2);cursor:pointer;transition:all .15s; }
+.adv-btn-outline:hover { border-color:var(--primary);color:var(--primary); }
+.adv-btn-sm { padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;transition:all .15s;white-space:nowrap; }
+.adv-btn-sm:hover { border-color:var(--primary);color:var(--primary); }
 
 /* Spinner */
-.adv-spinner {
-  width:18px;height:18px;border:2.5px solid var(--border);
-  border-top-color:var(--primary);border-radius:50%;
-  animation:adv-spin .7s linear infinite;
-}
+.adv-spinner { width:18px;height:18px;border:2.5px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:adv-spin .7s linear infinite; }
 @keyframes adv-spin{to{transform:rotate(360deg)}}
 
 /* Status badges */
-.adv-badge-green { display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(5,150,105,.1);color:#059669; }
-.adv-badge-orange{ display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(217,119,6,.1);color:#d97706; }
-.adv-badge-red   { display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(220,38,38,.1);color:#dc2626; }
-.adv-badge-blue  { display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(26,86,219,.1);color:#1b4ed8; }
-.adv-badge-grey  { display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:var(--bg3);color:var(--text3); }
+.adv-badge-green  { display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(5,150,105,.1);color:#059669; }
+.adv-badge-orange { display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(217,119,6,.1);color:#d97706; }
+.adv-badge-red    { display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(220,38,38,.1);color:#dc2626; }
+.adv-badge-blue   { display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(26,86,219,.1);color:#1b4ed8; }
 
-/* Sidebar CTA */
-.adv-sb-cta {
-  margin:10px;
-}
-.adv-sb-cta button { width:100%; }
-
-/* WA specific */
+/* WA tabs */
 .adv-wa-tab-content { display:none; }
-.adv-wa-tab-content.active { display:block; }
+.adv-wa-tab-content.active { display:flex;flex-direction:column;gap:14px; }
 </style>
 
 </head>
@@ -15065,1207 +14951,70 @@ async function saveWATemplate() {
 }
 
 async function loadESignPage() {
-  const r = await api('/api/esign/requests', {silent:true});  // silent=true — no error toast
-  const stats = document.getElementById('esign-stats');
-  const list  = document.getElementById('esign-requests-list');
-  if (r) {
-    const reqs = r.requests || [];
-    const pending   = reqs.filter(x=>x.status==='pending').length;
-    const completed = reqs.filter(x=>x.status==='completed').length;
-    const expired   = reqs.filter(x=>x.status==='expired').length;
-    ['pending','completed','expired','total'].forEach(k=>{
-      const el=document.getElementById('esign-stat-'+k);
-      if(el) el.textContent = k==='total' ? reqs.length : (k==='pending'?pending:k==='completed'?completed:expired);
-    });
-    const filter = document.getElementById('esign-status-filter')?.value;
-    const filtered = filter ? reqs.filter(x=>x.status===filter) : reqs;
-    if (list) list.innerHTML = filtered.length ? `<table style="width:100%"><thead><tr>
-        <th>Document</th><th>Company</th><th>Provider</th><th>Signatories</th><th>Status</th><th>Sent via</th><th>Deadline</th><th>Actions</th>
-      </tr></thead><tbody>${
-      filtered.map(r => {
-        const sigs = r.signature_details || [];
-        const sigList = typeof r.signatories === 'string' ? JSON.parse(r.signatories||'[]') : (r.signatories||[]);
-        const signedCount = sigs.filter(s=>s.status==='signed').length;
-        const totalCount  = sigs.length || sigList.length;
-        return `<tr>
-          <td style="font-weight:600;font-size:13px">${r.doc_title||r.doc_id||'—'}</td>
-          <td style="font-size:11.5px;color:var(--text3)">${r.company_name||'—'}</td>
-          <td><span class="badge b-blue" style="font-size:10px">${r.provider||'internal'}</span></td>
-          <td style="font-size:12px">
-            ${sigs.map(s=>`<div style="display:flex;align-items:center;gap:6px;padding:2px 0">
-              <span style="font-size:9px">${s.status==='signed'?'✅':'⏳'}</span>
-              <span>${s.signatory_name||'?'}</span>
-              <span style="font-size:10px;color:var(--text3)">${s.signatory_email||''}</span>
-            </div>`).join('') || sigList.slice(0,2).map(s=>`<div style="font-size:11.5px">${s.name||''}</div>`).join('') || '—'}
-          </td>
-          <td>
-            <span class="badge ${r.status==='completed'?'b-green':r.status==='cancelled'?'':'b-orange'}" style="${r.status==='cancelled'?'background:#f1f5f9;color:#64748b':''}">
-              ${r.status==='completed'?'✅ Completed':r.status==='partial'?`⏳ ${signedCount}/${totalCount} Signed`:r.status==='cancelled'?'🚫 Cancelled':'⏳ Pending'}
-            </span>
-          </td>
-          <td style="font-size:11px">
-            ${r.email_sent?'📧':''}${r.wa_sent?' 💬':''}${!r.email_sent&&!r.wa_sent?'—':''}
-          </td>
-          <td style="font-size:11.5px;color:${r.deadline&&new Date(r.deadline)<new Date()?'#dc2626':'var(--text3)'}">${r.deadline||'—'}</td>
-          <td style="white-space:nowrap">
-            <button class="btn btn-xs btn-outline" onclick="checkESignStatus('${r.id}')">📋 View</button>
-            ${r.status==='pending'||r.status==='partial'?`<button class="btn btn-xs btn-ghost" onclick="resendESign('${r.id}')" title="Send reminder">🔔</button>`:''}
-            ${r.status!=='cancelled'&&r.status!=='completed'?`<button class="btn btn-xs" style="color:#dc2626;border-color:#fca5a5" onclick="cancelESign('${r.id}')">✕</button>`:''}
-          </td>
-        </tr>`;
-      }).join('')
-    }</tbody></table>`
-    : '<div class="empty-state"><div class="empty-icon">✍️</div><div class="empty-title">No signature requests yet</div><div class="empty-sub">Send documents for e-signature from the Documents page</div></div>';
-  } else {
-    if (list) list.innerHTML = '<div class="empty-state"><div class="empty-icon">✍️</div><div class="empty-title">No signature requests yet</div></div>';
-  }
-}
+  const r    = await api('/api/esign/requests', {silent:true});
+  const list = document.getElementById('esign-requests-list');
+  if (!r) { if(list) list.innerHTML='<div class="adv-empty"><div class="adv-empty-icon">⚠️</div><div class="adv-empty-title">Failed to load</div></div>'; return; }
+  const reqs = r.requests || [];
+  const filter = window._esignFilter || '';
 
-function loadESignRequests() { loadESignPage(); }
-
-function openESignNewRequest() {
-  const coOpts = COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  openModal('✍️ New E-Signature Request', `
-    <div class="fg"><label class="fl">Document Title</label><input class="fc" id="esign-new-title" placeholder="e.g. Board Resolution — Appointment of CFO"></div>
-    <div class="fg"><label class="fl">Company</label><select class="fc" id="esign-new-co">${coOpts}</select></div>
-    <div class="fg2">
-      <div class="fg"><label class="fl">Provider</label>
-        <select class="fc" id="esign-new-provider"><option value="leegality">Leegality</option><option value="docusign">DocuSign</option><option value="internal">Internal</option></select>
-      </div>
-      <div class="fg"><label class="fl">Deadline</label><input class="fc" type="date" id="esign-new-deadline" value="${new Date(Date.now()+7*86400000).toISOString().split('T')[0]}"></div>
-    </div>
-    <div class="fsec">Signatories</div>
-    <div id="esign-new-signatories">
-      <div class="esign-row" style="display:flex;gap:8px;margin-bottom:8px">
-        <div class="fg" style="flex:1;margin:0"><label class="fl">Name</label><input class="fc" placeholder="Name"></div>
-        <div class="fg" style="flex:1;margin:0"><label class="fl">Email</label><input class="fc" type="email" placeholder="email@co.com"></div>
-        <div class="fg" style="width:120px;margin:0"><label class="fl">Role</label><select class="fc"><option>Director</option><option>Signatory</option><option>CS</option></select></div>
-      </div>
-    </div>
-    <button class="btn btn-xs btn-outline" onclick="addESignNewRow()">+ Add Signatory</button>
-  `,[{text:'📧 Send',cls:'btn-primary',fn:'submitESignNew()'}]);
-}
-
-function addESignNewRow() {
-  const c=document.getElementById('esign-new-signatories');
-  if(!c) return;
-  const row=document.createElement('div');
-  row.className='esign-row';
-  row.style.cssText='display:flex;gap:8px;margin-top:8px';
-  row.innerHTML=`<div class="fg" style="flex:1;margin:0"><input class="fc" placeholder="Name"></div><div class="fg" style="flex:1;margin:0"><input class="fc" type="email" placeholder="Email"></div><div class="fg" style="width:120px;margin:0"><select class="fc"><option>Director</option><option>Signatory</option><option>CS</option></select></div><button class="btn btn-xs btn-danger" onclick="this.closest('.esign-row').remove()">✕</button>`;
-  c.appendChild(row);
-}
-
-async function submitESignNew() {
-  const title    = document.getElementById('esign-new-title')?.value;
-  const coId     = document.getElementById('esign-new-co')?.value;
-  const provider = document.getElementById('esign-new-provider')?.value;
-  const deadline = document.getElementById('esign-new-deadline')?.value;
-  const rows     = document.querySelectorAll('#esign-new-signatories .esign-row');
-  const sigs     = Array.from(rows).map(r=>{ const i=r.querySelectorAll('input,select'); return {name:i[0]?.value,email:i[1]?.value,role:i[2]?.value}; }).filter(s=>s.name&&s.email);
-  if (!title) { toast('Enter document title','err'); return; }
-  if (!sigs.length) { toast('Add at least one signatory','err'); return; }
-  const r = await api('/api/esign/send',{method:'POST',body:{doc_title:title,company_id:coId,provider,signatories:sigs,deadline}});
-  if (r?.success||r?.request_id||r?.envelope_id) { toast('Sent for e-signature ✓','ok'); closeModal(); loadESignPage(); }
-  else toast((r?.error||'Send failed'),'err');
-}
-
-async function loadClientPortalPage() {
-  const coSel = document.getElementById('portal-co-filter');
-  if (coSel) coSel.innerHTML = '<option value="">All Companies</option>' + COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  loadPortalLinks();
-}
-
-async function loadPortalLinks() {
-  const coId = document.getElementById('portal-co-filter')?.value || '';
-  const r    = await api('/api/portal/links'+(coId?'?company_id='+coId:''), {silent:true});
-  const tbl  = document.getElementById('portal-links-table');
-  const links= r?.links || [];
-  const actStat  = document.getElementById('portal-stat-active');
-  const viewStat = document.getElementById('portal-stat-views');
-  if (actStat) actStat.textContent = links.filter(l=>l.active).length;
-  if (viewStat) viewStat.textContent = links.reduce((s,l)=>s+(l.view_count||0),0);
-  if (!tbl) return;
-  tbl.innerHTML = links.length ? `<table><thead><tr><th>Company</th><th>Client</th><th>Access</th><th>Expires</th><th>Views</th><th>Status</th><th></th></tr></thead><tbody>${
-    links.map(l=>`<tr>
-      <td style="font-weight:600">${l.company_name || COMPANIES.find(c=>c.id===l.company_id)?.name||'—'}</td>
-      <td>${l.client_name||'—'}</td>
-      <td><span class="badge b-blue">${(l.access_level||'').replace('_',' ')}</span></td>
-      <td style="font-size:11.5px">${l.expires_at?new Date(l.expires_at).toLocaleDateString('en-IN'):'Never'}</td>
-      <td>${l.view_count||0}</td>
-      <td><span class="badge ${l.active?'b-green':'b-gray'}">${l.active?'Active':'Revoked'}</span></td>
-      <td style="display:flex;gap:4px">
-        <button class="btn btn-xs btn-outline" onclick="navigator.clipboard.writeText('${location.origin}/portal/'+l.token).then(()=>toast('Copied ✓','ok'))" title="Copy link">📋</button>
-        <a class="btn btn-xs btn-ghost" href="${location.origin}/portal/${l.token}" target="_blank" title="Open portal">🌐</a>
-        ${l.active ? `<button class="btn btn-xs btn-warning" style="font-size:10.5px" onclick="revokePortalLink('${l.id}')">⏸ Revoke</button>` : ''}
-        <button class="btn btn-xs btn-danger" style="font-size:10.5px" onclick="deletePortalLink('${l.id}')" title="Permanently delete">🗑 Delete</button>
-      </td>
-    </tr>`).join('')
-  }</tbody></table>`
-  : '<div class="empty-state"><div class="empty-icon">🌐</div><div class="empty-title">No portal links yet</div><div class="empty-sub">Generate a read-only portal link for a client or auditor</div></div>';
-}
-
-function openPortalNewLink() {
-  if (COMPANIES.length === 0) { toast('Load companies first','err'); return; }
-  openClientPortalModal(COMPANIES[0].id);
-}
-
-function loadWhatsAppPage() {
-  // Populate all company selects
-  ['wa-quick-co','wa-bulk-co'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = '<option value="">Select company…</option>' + COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  // Update stats
+  ['pending','completed','expired'].forEach(k=>{
+    const el=document.getElementById('esign-stat-'+k);
+    if(el) el.textContent = reqs.filter(x=>x.status===k).length;
   });
-  const bCo = document.getElementById('wa-bulk-co');
-  if (bCo) bCo.innerHTML = '<option value="">All Companies</option>' + COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  // Set initial message
-  previewWAPageTemplate();
-  // Load WA templates
-  loadWATemplates();
-  // Load WA history
-  loadWAHistory();
-  loadWABulkCompanies();
-  // Load active schedules
-  loadWASchedules();
-  // Load settings panel
-  loadWASettingsPanel();
-}
+  const tot = document.getElementById('esign-stat-total');
+  if(tot) tot.textContent = reqs.length;
 
-function switchWATab(tab) {
-  document.querySelectorAll('.wa-nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
-  ['quick','bulk','templates','schedule','history','settings'].forEach(t=>{
-    const el=document.getElementById('wa-tab-'+t);
-    if(el) el.style.display = t===tab ? '' : 'none';
-  });
-}
-
-function previewWAPageTemplate() {
-  const type = document.getElementById('wa-page-template')?.value;
-  const msg  = document.getElementById('wa-page-msg');
-  if (msg && type !== 'custom') msg.value = _getWATemplate(type);
-}
-
-async function sendWAPage() {
-  const phone = document.getElementById('wa-page-phone')?.value.trim();
-  const msg   = document.getElementById('wa-page-msg')?.value.trim();
-  const status= document.getElementById('wa-page-status');
-  if (!phone) { toast('Enter phone number','err'); return; }
-  if (!msg)   { toast('Enter message','err'); return; }
-  if (status) status.textContent = '⏳ Sending…';
-  const r = await api('/api/notifications/send-whatsapp',{method:'POST',body:{phone,message:msg}});
-  if (status) status.textContent = r?.success ? '✅ Sent!' : ('❌ '+(r?.error||'Failed'));
-  if (r?.success) { toast('WhatsApp sent ✓','ok'); loadWAHistory(); }
-}
-
-async function sendSMSPage() {
-  const phone = document.getElementById('wa-page-phone')?.value.trim();
-  const msg   = document.getElementById('wa-page-msg')?.value.trim();
-  if (!phone||!msg) { toast('Enter phone and message','err'); return; }
-  const r = await api('/api/notifications/send-sms',{method:'POST',body:{phone,message:msg}});
-  if (r?.success) toast('SMS sent ✓','ok'); else toast(r?.error||'SMS failed','err');
-}
-
-async function sendWAPageBulk() {
-  const type  = document.getElementById('wa-bulk-page-type')?.value;
-  const coId  = document.getElementById('wa-bulk-co')?.value;
-  const recip = document.getElementById('wa-bulk-recipients')?.value;
-  const phones= document.getElementById('wa-bulk-phones-input')?.value;
-  const status= document.getElementById('wa-bulk-page-status');
-  if (status) status.textContent = '⏳ Sending…';
-  const r = await api('/api/notifications/bulk-whatsapp',{method:'POST',body:{company_id:coId,alert_type:type,recipients:recip,custom_phones:phones}});
-  if (status) status.textContent = r?.success ? `✅ Sent to ${r.sent_count||'?'} contacts` : ('❌ '+(r?.error||'Failed'));
-  if (r?.success) { toast('Bulk WhatsApp sent ✓','ok'); loadWAHistory(); }
-}
-
-async function loadWATemplates() {
-  const r = await api('/api/notifications/wa-templates', {silent:true});
-  const el = document.getElementById('wa-tpl-items');
-  if (!el) return;
-  const templates = r?.templates || [];
-  if (templates.length) {
-    el.innerHTML = templates.map(t=>`
-      <div style="background:var(--bg3);border-radius:var(--r);padding:12px 14px;display:flex;align-items:flex-start;gap:10px">
-        <div style="flex:1"><div style="font-size:12.5px;font-weight:600">${t.name}</div>
-          <div style="font-size:11.5px;color:var(--text2);margin-top:3px;line-height:1.6">${t.body?.substring(0,100)||''}…</div>
-        </div>
-        <div style="display:flex;gap:4px">
-          <button class="btn btn-xs btn-outline" onclick="useWATemplate('${t.id}')">Use</button>
-          <button class="btn btn-xs btn-danger" onclick="deleteWATemplate('${t.id}')">✕</button>
-        </div>
-      </div>`).join('');
-  } else {
-    el.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-icon">📋</div><div class="empty-title">No custom templates</div><div class="empty-sub">Save frequently used messages as templates</div></div>';
-  }
-}
-
-function openWATemplateEditor() {
-  openModal('📋 New WA Template', `
-    <div class="fg"><label class="fl">Template Name</label><input class="fc" id="wa-tpl-name" placeholder="e.g. DSC Renewal Reminder"></div>
-    <div class="fg"><label class="fl">Message Body</label><textarea class="fc" id="wa-tpl-body" style="min-height:120px" placeholder="Use {{company_name}}, {{director_name}}, {{date}} as placeholders"></textarea></div>
-  `,[{text:'💾 Save Template',cls:'btn-primary',fn:'saveWATemplate()'}]);
-}
-async function saveWATemplate() {
-  const name=document.getElementById('wa-tpl-name')?.value;
-  const body=document.getElementById('wa-tpl-body')?.value;
-  if(!name||!body){toast('Fill name and body','err');return;}
-  const r=await api('/api/notifications/wa-templates',{method:'POST',body:{name,body}});
-  if(r?.id||r?.success){toast('Template saved ✓','ok');closeModal();loadWATemplates();}
-  else toast(r?.error||'Save failed','err');
-}
-async function deleteWATemplate(id) {
-  if(!confirm('Delete this template?'))return;
-  await api('/api/notifications/wa-templates/'+id,{method:'DELETE'});
-  toast('Template deleted','ok'); loadWATemplates();
-}
-function useWATemplate(id) { switchWATab('quick'); }
-
-async function loadWAHistory() {
-  const r = await api('/api/notifications/wa-history', {silent:true});
-  const el = document.getElementById('wa-history-list');
-  if (!el) return;
-  const msgs = r?.messages || [];
-  if (msgs.length) {
-    el.innerHTML = `<table><thead><tr><th>Phone</th><th>Type</th><th>Status</th><th>Sent At</th><th>Message</th></tr></thead><tbody>${
-      msgs.map(m=>`<tr>
-        <td style="font-family:var(--font-mono);font-size:11.5px">${m.phone}</td>
-        <td><span class="badge b-blue">${m.type||'Manual'}</span></td>
-        <td><span class="badge ${m.status==='delivered'?'b-green':m.status==='failed'?'b-red':'b-yellow'}">${m.status||'sent'}</span></td>
-        <td style="font-size:11px">${m.sent_at?new Date(m.sent_at).toLocaleString('en-IN'):'—'}</td>
-        <td style="font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.message||'—'}</td>
-      </tr>`).join('')
-    }</tbody></table>`;
-  } else {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📜</div><div class="empty-title">No messages sent yet</div></div>';
-  }
-}
-
-async function loadWASchedules() {
-  const r = await api('/api/notifications/wa-schedules', {silent:true});
-  const el= document.getElementById('wa-active-schedules');
-  if (!el) return;
-  const scheds = r?.schedules || [];
-  el.innerHTML = scheds.length ? scheds.map(s=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1"><div style="font-size:12.5px;font-weight:600">${s.alert_type?.replace(/_/g,' ')}</div>
-        <div style="font-size:11.5px;color:var(--text3)">${s.send_time||'09:00'} daily · ${s.recipients}</div>
-      </div>
-      <span class="badge ${s.active?'b-green':'b-gray'}">${s.active?'Active':'Paused'}</span>
-      <button class="btn btn-xs btn-danger" onclick="deleteWASchedule('${s.id}')">✕</button>
-    </div>`).join('')
-  : '<div style="font-size:12px;color:var(--text3);padding:8px">No active schedules</div>';
-}
-
-async function saveWAPageSchedule() {
-  const type  = document.getElementById('wa-sched-page-type')?.value;
-  const time  = document.getElementById('wa-sched-page-time')?.value;
-  const recip = document.getElementById('wa-sched-page-recip')?.value;
-  const status= document.getElementById('wa-sched-page-status');
-  if (status) status.textContent = '⏳ Saving…';
-  const r = await api('/api/notifications/schedule-whatsapp',{method:'POST',body:{alert_type:type,send_time:time,recipients:recip}});
-  if (status) status.textContent = r?.success ? '✅ Schedule saved!' : ('❌ '+(r?.error||'Failed'));
-  if (r?.success) { toast('Schedule saved ✓','ok'); loadWASchedules(); }
-}
-
-async function deleteWASchedule(id) {
-  await api('/api/notifications/wa-schedules/'+id,{method:'DELETE'});
-  toast('Schedule deleted','ok'); loadWASchedules();
-}
-
-function loadWASettingsPanel() {
-  const panel = document.getElementById('wa-settings-panel');
-  if (!panel) return;
-  const saved = { key:localStorage.getItem('wa_api_key')||'', biz:localStorage.getItem('wa_biz_phone')||'', provider:localStorage.getItem('wa_provider')||'wati' };
-  panel.innerHTML = `
-    <div class="fg"><label class="fl">Provider</label>
-      <select class="fc" id="wa-pg-provider">
-        <option value="wati" ${saved.provider==='wati'?'selected':''}>WATI</option>
-        <option value="twilio" ${saved.provider==='twilio'?'selected':''}>Twilio</option>
-        <option value="gupshup" ${saved.provider==='gupshup'?'selected':''}>Gupshup</option>
-        <option value="kaleyra" ${saved.provider==='kaleyra'?'selected':''}>Kaleyra</option>
-        <option value="interakt" ${saved.provider==='interakt'?'selected':''}>Interakt</option>
-      </select>
-    </div>
-    <div class="fg"><label class="fl">API Key</label><input class="fc" type="password" id="wa-pg-key" value="${saved.key}" placeholder="Enter API key"></div>
-    <div class="fg"><label class="fl">Business Phone</label><input class="fc" id="wa-pg-phone" value="${saved.biz}" placeholder="+91XXXXXXXXXX"></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primary" onclick="saveWAPGSettings()">💾 Save</button>
-      <button class="btn btn-outline" onclick="testWAPGConnection()">🧪 Test</button>
-      <div id="wa-pg-status" style="font-size:12px;color:var(--text3);align-self:center"></div>
-    </div>`;
-}
-function saveWAPGSettings() {
-  const prov = document.getElementById('wa-pg-provider')?.value||'wati';
-  localStorage.setItem('wa_api_key', document.getElementById('wa-pg-key')?.value||'');
-  localStorage.setItem('wa_biz_phone', document.getElementById('wa-pg-phone')?.value||'');
-  localStorage.setItem('wa_provider', prov);
-  if(prov==='meta') {
-    localStorage.setItem('wa_phone_id', document.getElementById('wa-pg-phone-id')?.value||'');
-    localStorage.setItem('wa_waba_id', document.getElementById('wa-pg-waba-id')?.value||'');
-    localStorage.setItem('wa_webhook_token', document.getElementById('wa-pg-webhook-token')?.value||'');
-  }
-  toast('WA settings saved ✓','ok');
-  const s=document.getElementById('wa-pg-status'); if(s) s.textContent='✅ Settings saved';
-}
-
-function onWAProviderChange(sel) {
-  const isMeta = sel?.value === 'meta';
-  const metaF = document.getElementById('wa-meta-fields');
-  const provGuide = document.getElementById('wa-provider-guide');
-  if (metaF) metaF.style.display = isMeta ? '' : 'none';
-  if (provGuide) provGuide.style.display = isMeta ? 'none' : '';
-  const keyLabel = document.querySelector('[for="wa-pg-key"], label[id="wa-key-label"]');
-  const keyInput = document.getElementById('wa-pg-key');
-  if (keyInput) keyInput.placeholder = isMeta ? 'Meta Permanent Access Token' : 'Enter API key';
-}
-async function testWAPGConnection() {
-  const s=document.getElementById('wa-pg-status'); if(s) s.textContent='⏳ Testing…';
-  const r=await api('/api/notifications/test-whatsapp',{method:'POST',body:{api_key:document.getElementById('wa-pg-key')?.value,provider:document.getElementById('wa-pg-provider')?.value,phone:document.getElementById('wa-pg-phone')?.value}});
-  if(s) s.textContent = r?.success ? '✅ Connected!' : ('❌ '+(r?.error||'Failed'));
-}
-
-
-
-// ── Fallback template-based draft generator ──────────────────────────────
-function _generateFallbackDraft(type, co, instructions, docLabel) {
-  const name = co?.name || '[Company Name]';
-  const cin  = co?.cin  || '[CIN]';
-  const addr = co?.registered_office || '[Registered Office]';
-  const date = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
-  const fin  = `This document is prepared for ${name} (CIN: ${cin}) having its registered office at ${addr}.`;
-
-  const drafts = {
-    board_resolution: `BOARD RESOLUTION\n\nDate: ${date}\nCompany: ${name}\nCIN: ${cin}\n\nPassed at the Meeting of the Board of Directors held on ${date}:\n\n"RESOLVED THAT ${instructions || 'the Board hereby approves the matter as discussed and deliberated upon in the meeting'}."\n\n"RESOLVED FURTHER THAT any one Director or the Company Secretary be and is hereby authorised to do all such acts, deeds and things as may be necessary or incidental to give effect to the above resolution."\n\nFor ${name}\n\nDirector                Director\nName:                   Name:\nDIN:                    DIN:\nDate: ${date}`,
-
-    agm_notice: `NOTICE OF ANNUAL GENERAL MEETING\n\nDate: ${date}\n\nTo,\nAll Members,\n${name}\n\nDear Member,\n\nNOTICE is hereby given that the Annual General Meeting of ${name} will be held on [Date] at [Time] at [Venue/Video Conference] to transact the following business:\n\nORDINARY BUSINESS:\n1. To receive, consider and adopt the Audited Financial Statements for the year ended [Date]\n2. To declare dividend, if any\n3. To appoint Director retiring by rotation\n\nSPECIAL BUSINESS:\n${instructions || '4. [Special Business Item]'}\n\nBy Order of the Board\n\nCompany Secretary / Director\n${name}\nDate: ${date}`,
-
-    appointment_letter: `LETTER OF APPOINTMENT\n\nDate: ${date}\n\n${instructions || '[Director Name]'}\n[Address]\n\nDear Sir/Madam,\n\nSub: Appointment as Director — ${name}\n\nWe are pleased to inform you that the Board of Directors of ${name} (CIN: ${cin}) at its meeting held on ${date} has approved your appointment as Director of the Company, subject to approval of the Members.\n\nYour appointment is governed by the provisions of the Companies Act, 2013 and the Articles of Association of the Company.\n\nYou are requested to sign and return the duplicate copy of this letter as your acceptance.\n\nYours faithfully,\nFor ${name}\n\nAuthorised Signatory\nDate: ${date}`,
-
-    compliance_report: `COMPLIANCE STATUS REPORT\n\nCompany: ${name}\nCIN: ${cin}\nRegistered Office: ${addr}\nReport Date: ${date}\nPeriod: Financial Year ${new Date().getFullYear()}-${new Date().getFullYear()+1}\n\n1. ROC COMPLIANCES\n   - Annual Return (MGT-7): [Status]\n   - Financial Statements (AOC-4): [Status]\n   - DIR-3 KYC: [Status]\n\n2. BOARD MEETINGS\n   - Meetings held: [Count]\n   - Quorum maintained: Yes/No\n   - Minutes prepared: Yes/No\n\n3. STATUTORY REGISTERS\n   - Register of Members: Updated\n   - Register of Directors: Updated\n\n4. PENDING ITEMS\n${instructions || '   - [List any pending compliance items]'}\n\nPrepared by: [Name]\nDesignation: Company Secretary`,
-
-    nda: `NON-DISCLOSURE AGREEMENT\n\nThis Agreement is entered into on ${date} between:\n\n1. ${name}, a company incorporated under the Companies Act, 2013, having CIN: ${cin} and registered office at ${addr} (hereinafter "Disclosing Party");\n\n2. [Other Party Name], [details] (hereinafter "Receiving Party").\n\nWHEREAS, the parties wish to explore a business opportunity regarding ${instructions || '[Purpose]'};\n\nNOW THEREFORE, in consideration of the mutual covenants herein, the parties agree:\n\n1. CONFIDENTIAL INFORMATION: Any information disclosed by either party marked as confidential.\n2. OBLIGATIONS: Receiving Party shall not disclose Confidential Information to third parties.\n3. TERM: This Agreement shall be valid for [2] years from the date hereof.\n4. GOVERNING LAW: This Agreement shall be governed by the laws of India.\n\nIN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.\n\n${name}                    [Other Party]\nSignature:                Signature:\nName:                     Name:\nDesignation:              Designation:\nDate: ${date}             Date: ${date}`,
-
-    default: `${docLabel.toUpperCase()}\n\nDate: ${date}\nCompany: ${name}\nCIN: ${cin}\n\n${fin}\n\n${instructions || '[Document content to be filled based on specific requirements]'}\n\nFor ${name}\n\nAuthorised Signatory\nDate: ${date}`
-  };
-  return drafts[type] || drafts.default;
-}
-
-// ═══ APP BOOTSTRAP ═══════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', function() {
-  initDarkMode();
-  initCSRF();
-  tryAutoLogin();
-});
-
-
-
-// ── Integration Settings ──────────────────────────────────────────────────
-function switchIntTab(tab) {
-  ['email','wa'].forEach(t => {
-    const panel = document.getElementById('int-panel-'+t);
-    const btn   = document.getElementById('int-tab-'+t);
-    if (panel) panel.style.display = t===tab ? '' : 'none';
-    if (btn) {
-      btn.style.borderBottomColor = t===tab ? 'var(--primary)' : 'transparent';
-      btn.style.color = t===tab ? 'var(--primary)' : 'var(--text3)';
-    }
-  });
-}
-
-async function loadIntegrationSettings() {
-  const data = await api('/api/settings/integrations');
-  if (!data) return;
-  const set = (id, val) => { const el=document.getElementById(id); if(el && val !== undefined && val !== null) el.value=val; };
-  set('int-mail-server',   data.mail_server);
-  set('int-mail-port',     data.mail_port || '587');
-  set('int-mail-username', data.mail_username);
-  set('int-mail-from',     data.mail_from);
-  const tlsSel = document.getElementById('int-mail-tls');
-  if (tlsSel) tlsSel.value = data.mail_use_tls || '1';
-  set('int-wa-phone-id', data.wa_phone_id);
-  if (data.mail_password && data.mail_password.includes('*')) {
-    const el = document.getElementById('int-mail-password');
-    if (el) el.placeholder = String.fromCharCode(9679).repeat(8) + ' (saved — enter new to change)';
-  }
-  if (data.wa_token && data.wa_token.includes('*')) {
-    const el = document.getElementById('int-wa-token');
-    if (el) el.placeholder = String.fromCharCode(9679).repeat(8) + ' (saved — enter new to change)';
-  }
-  const badge = document.getElementById('int-status-badge');
-  if (badge) {
-    const txt = [data.mail_enabled?'📧 Email ✓':'📧 Not configured', data.wa_enabled?'💬 WA ✓':''].filter(Boolean).join('  ·  ');
-    badge.textContent = txt || '⚙️ Not configured';
-    badge.style.background = (data.mail_enabled||data.wa_enabled) ? 'rgba(5,150,105,.1)' : 'var(--bg3)';
-    badge.style.color = (data.mail_enabled||data.wa_enabled) ? '#059669' : 'var(--text3)';
-  }
-  // Update new status badges
-  const emailStat = document.getElementById('set-email-status');
-  const waStat    = document.getElementById('set-wa-status');
-  const emailBadge= document.getElementById('set-email-badge');
-  const waBadge   = document.getElementById('set-wa-badge');
-  if (emailStat) { emailStat.textContent = data.mail_enabled ? '✅ Configured' : 'Not configured';
-    emailStat.style.background = data.mail_enabled ? 'rgba(5,150,105,.1)' : 'var(--bg3)';
-    emailStat.style.color = data.mail_enabled ? '#059669' : 'var(--text3)'; }
-  if (waStat) { waStat.textContent = data.wa_enabled ? '✅ Configured' : 'Not configured';
-    waStat.style.background = data.wa_enabled ? 'rgba(37,211,102,.1)' : 'var(--bg3)';
-    waStat.style.color = data.wa_enabled ? '#25D366' : 'var(--text3)'; }
-  if (emailBadge) emailBadge.style.display = data.mail_enabled ? '' : 'none';
-  if (waBadge)    waBadge.style.display    = data.wa_enabled   ? '' : 'none';
-}
-
-async function saveIntegrationSettings(section) {
-  let body = {};
-  if (section === 'email') {
-    body = {
-      mail_server:   document.getElementById('int-mail-server')?.value.trim() || 'smtp.gmail.com',
-      mail_port:     document.getElementById('int-mail-port')?.value.trim()   || '587',
-      mail_use_tls:  document.getElementById('int-mail-tls')?.value           || '1',
-      mail_username: document.getElementById('int-mail-username')?.value.trim(),
-      mail_password: document.getElementById('int-mail-password')?.value,
-      mail_from:     document.getElementById('int-mail-from')?.value.trim(),
-    };
-    if (!body.mail_username) { toast('Email username is required','err'); return; }
-  } else {
-    body = {
-      wa_token:    document.getElementById('int-wa-token')?.value,
-      wa_phone_id: document.getElementById('int-wa-phone-id')?.value.trim(),
-    };
-    if (!body.wa_phone_id) { toast('Phone Number ID is required','err'); return; }
-  }
-  const r = await api('/api/settings/integrations', { method:'POST', body });
-  if (r?.success) {
-    toast(section==='email' ? '📧 Email settings saved ✓' : '💬 WhatsApp settings saved ✓', 'ok');
-    loadIntegrationSettings();
-  } else toast(r?.error || 'Save failed', 'err');
-}
-
-async function testEmailSettings() {
-  const to = document.getElementById('int-test-email')?.value.trim();
-  if (!to) { toast('Enter a recipient email to test','err'); return; }
-  const resultEl = document.getElementById('int-email-result');
-  if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">Sending test email…</span>';
-  const r = await api('/api/settings/integrations/test-email', { method:'POST', body:{ to } });
-  if (resultEl) resultEl.innerHTML = r?.success
-    ? '<span style="color:#059669;font-weight:600">✅ Test email sent successfully!</span>'
-    : '<span style="color:#dc2626;font-weight:600">❌ ' + (r?.message||'Failed — check credentials') + '</span>';
-}
-
-async function testWaSettings() {
-  const phone = document.getElementById('int-test-wa')?.value.trim();
-  if (!phone) { toast('Enter a phone number to test','err'); return; }
-  const resultEl = document.getElementById('int-wa-result');
-  if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">Sending test message…</span>';
-  const r = await api('/api/settings/integrations/test-wa', { method:'POST', body:{ phone } });
-  if (resultEl) resultEl.innerHTML = r?.success
-    ? '<span style="color:#059669;font-weight:600">✅ WhatsApp message sent!</span>'
-    : '<span style="color:#dc2626;font-weight:600">❌ ' + (r?.message||'Failed — check token') + '</span>';
-}
-</script>
-
-<script>
-
-// ═══════════════════════════════════════════════════════════════════════════
-// P0 FIX #8 — FORGOT / RESET PASSWORD FRONTEND
-// ═══════════════════════════════════════════════════════════════════════════
-let _resetToken = null;
-
-function showForgotPassword() {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('fp-form').style.display = '';
-  document.getElementById('fp-success').style.display = 'none';
-  document.getElementById('forgot-screen').style.display = 'flex';
-  setTimeout(() => document.getElementById('fp-email').focus(), 50);
-}
-
-function hideForgotPassword() {
-  document.getElementById('forgot-screen').style.display = 'none';
-  document.getElementById('reset-screen').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
-}
-
-async function submitForgotPassword() {
-  const email = document.getElementById('fp-email').value.trim();
-  if (!email) { document.getElementById('fp-email').focus(); return; }
-  const btn = document.getElementById('fp-btn');
-  btn.disabled = true; btn.textContent = 'Sending…';
-  try {
-    await fetch('/api/auth/forgot-password', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
-    });
-  } catch(e) {}
-  document.getElementById('fp-form').style.display = 'none';
-  document.getElementById('fp-success').style.display = '';
-  btn.disabled = false; btn.textContent = 'Send Reset Link';
-}
-
-async function submitResetPassword() {
-  const pw1 = document.getElementById('rp-pw1').value;
-  const pw2 = document.getElementById('rp-pw2').value;
-  const errEl = document.getElementById('rp-err');
-  errEl.style.display = 'none';
-  if (!pw1 || pw1.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display = ''; return; }
-  if (pw1 !== pw2) { errEl.textContent = 'Passwords do not match.'; errEl.style.display = ''; return; }
-  const btn = document.getElementById('rp-btn');
-  btn.disabled = true; btn.textContent = 'Updating…';
-  try {
-    const r = await fetch('/api/auth/reset-password', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: _resetToken, password: pw1 })
-    });
-    const d = await r.json();
-    if (!r.ok) { errEl.textContent = d.error || 'Reset failed. Try requesting a new link.'; errEl.style.display = ''; btn.disabled = false; btn.textContent = 'Update Password'; return; }
-    document.getElementById('rp-form').style.display = 'none';
-    document.getElementById('rp-success').style.display = '';
-  } catch(e) { errEl.textContent = 'Network error. Please try again.'; errEl.style.display = ''; btn.disabled = false; btn.textContent = 'Update Password'; }
-}
-
-// Check URL hash for reset token on page load
-(function checkResetToken() {
-  const hash = window.location.hash || '';
-  const m = hash.match(/[?&]token=([^&]+)/);
-  if (m) {
-    _resetToken = decodeURIComponent(m[1]);
-    // Validate token then show reset screen
-    fetch('/api/auth/reset-password/validate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: _resetToken })
-    }).then(r => r.json()).then(d => {
-      if (d.valid) {
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('rp-form').style.display = '';
-        document.getElementById('rp-success').style.display = 'none';
-        document.getElementById('reset-screen').style.display = 'flex';
-      } else {
-        // Show error inline in forgot screen
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('fp-form').style.display = '';
-        document.getElementById('fp-success').style.display = 'none';
-        document.getElementById('fp-title').textContent = 'Reset Link Expired';
-        document.getElementById('fp-sub').textContent = (d.reason || 'That link is no longer valid.') + ' Enter your email to get a new one.';
-        document.getElementById('forgot-screen').style.display = 'flex';
-      }
-      // Clean URL
-      history.replaceState(null, '', window.location.pathname);
-    }).catch(() => {});
-  }
-})();
-
-// ═══════════════════════════════════════════════════════════════════════════
-// P0 FIX #5 — 2FA / TOTP FRONTEND (in Settings page)
-// ═══════════════════════════════════════════════════════════════════════════
-async function load2FAStatus() {
-  const card = document.getElementById('s-2fa-card');
-  if (!card) return;
-  const d = await fetch('/api/auth/2fa/status', { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => ({ enabled: false, available: false }));
-  const statusEl = document.getElementById('s-2fa-status');
-  const enableBtn = document.getElementById('s-2fa-enable-btn');
-  const disableBtn = document.getElementById('s-2fa-disable-btn');
-  if (!d.available) {
-    statusEl.innerHTML = '<span style="color:var(--text3);font-size:12px">2FA not available — install pyotp on server</span>';
-    if (enableBtn) enableBtn.style.display = 'none';
-    if (disableBtn) disableBtn.style.display = 'none';
-    return;
-  }
-  if (d.enabled) {
-    statusEl.innerHTML = '<span style="background:#d1fae5;color:#065f46;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600">✅ Enabled</span>';
-    if (enableBtn) enableBtn.style.display = 'none';
-    if (disableBtn) disableBtn.style.display = '';
-  } else {
-    statusEl.innerHTML = '<span style="background:#fee2e2;color:#991b1b;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600">❌ Disabled</span>';
-    if (enableBtn) enableBtn.style.display = '';
-    if (disableBtn) disableBtn.style.display = 'none';
-  }
-}
-
-async function setup2FA() {
-  const r = await fetch('/api/auth/2fa/setup', { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` } });
-  if (!r.ok) { toast('Failed to set up 2FA', 'err'); return; }
-  const d = await r.json();
-  openModal('Set Up Two-Factor Authentication', `
-    <div style="text-align:center;padding:8px 0">
-      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Scan this QR code with <b>Google Authenticator</b>, <b>Authy</b>, or any TOTP app.</p>
-      <img src="${d.qr_code}" alt="QR Code" style="width:200px;height:200px;border:2px solid var(--border);border-radius:8px;margin-bottom:16px">
-      <p style="font-size:11px;color:var(--text3);margin-bottom:16px">Or enter this key manually: <code style="background:var(--bg3);padding:3px 8px;border-radius:4px;font-size:12px">${d.secret}</code></p>
-      <div class="fg">
-        <label class="fl">Enter the 6-digit code from your app to confirm</label>
-        <input class="fc" id="totp-confirm-code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" style="text-align:center;font-size:18px;letter-spacing:6px;font-family:monospace">
-      </div>
-    </div>
-  `, `
-    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-primary" onclick="confirm2FA()">Confirm & Enable 2FA</button>
-  `);
-}
-
-async function confirm2FA() {
-  const code = document.getElementById('totp-confirm-code')?.value.trim();
-  if (!code || code.length !== 6) { toast('Enter the 6-digit code from your app', 'err'); return; }
-  const r = await fetch('/api/auth/2fa/verify', {
-    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code })
-  });
-  const d = await r.json();
-  if (!r.ok) { toast(d.error || 'Invalid code — try again', 'err'); return; }
-  toast('2FA enabled successfully 🔐', 'ok');
-  closeModal();
-  load2FAStatus();
-}
-
-async function disable2FA() {
-  const pw = prompt('Enter your current password to disable 2FA:');
-  if (!pw) return;
-  const r = await fetch('/api/auth/2fa/disable', {
-    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: pw })
-  });
-  const d = await r.json();
-  if (!r.ok) { toast(d.error || 'Failed to disable 2FA', 'err'); return; }
-  toast('2FA disabled', 'ok');
-  load2FAStatus();
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// P0 FIX #1 — COMPLIANCE CALENDAR FRONTEND (Dashboard panel)
-// ═══════════════════════════════════════════════════════════════════════════
-async function loadComplianceCalendar() {
-  const year = document.getElementById('cc-yr-f')?.value || '';
-  const tbl  = document.getElementById('cc-tbl');
-  if (!tbl) return;
-  tbl.innerHTML = '<div style="padding:20px;text-align:center"><div class="spin" style="display:inline-block;width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite"></div></div>';
-
-  const params = new URLSearchParams();
-  if (year) params.set('year', year);
-  const d = await fetch('/api/compliance-calendar?' + params, { headers: { Authorization: 'Bearer ' + TOKEN } }).then(r => r.json()).catch(() => null);
-  if (!d) { tbl.innerHTML = '<div style="padding:16px;color:var(--text3);text-align:center">Could not load calendar</div>'; return; }
-
-  // Populate year selector if not done yet
-  const yrEl = document.getElementById('cc-yr-f');
-  if (yrEl && !yrEl.options.length) {
-    const fy = d.target_year;
-    yrEl.innerHTML = [fy-1, fy, fy+1].map(y =>
-      '<option value="' + y + '"' + (y === fy ? ' selected' : '') + '>' + y + '-' + String(y+1).slice(-2) + ' FY</option>'
-    ).join('');
+  const filtered = filter ? reqs.filter(x=>x.status===filter) : reqs;
+  if (!list) return;
+  if (!filtered.length) {
+    list.innerHTML = `<div class="adv-empty">
+      <div class="adv-empty-icon">✍️</div>
+      <div class="adv-empty-title">${filter?'No '+filter+' requests':'No signature requests yet'}</div>
+      <div class="adv-empty-sub">Send a document for e-signature — signatories receive a secure signing link.</div>
+      <button class="adv-btn-primary" style="margin-top:14px" onclick="openESignNewRequest()">+ Create First Request</button>
+    </div>`; return;
   }
 
-  const sb = s => ({
-    overdue:     '<span style="background:#fef2f2;color:#d93535;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;border:1px solid #fca5a5;white-space:nowrap">⚠ Overdue</span>',
-    due_soon:    '<span style="background:#fff7ed;color:#d97706;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;border:1px solid #fcd34d;white-space:nowrap">🔔 Due Soon</span>',
-    upcoming:    '<span style="background:#eff6ff;color:#1d50e0;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #93c5fd;white-space:nowrap">📅 Upcoming</span>',
-    future:      '<span style="background:#f0fdf4;color:#16a34a;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #86efac;white-space:nowrap">✅ Future</span>',
-    event_based: '<span style="background:#faf5ff;color:#6d41c4;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;border:1px solid #c4b5fd;white-space:nowrap">⚡ Event-Based</span>',
-  }[s] || s);
-
-  const daysCell = x => {
-    if (!x.due_date) return '<span style="color:var(--text3)">—</span>';
-    const n = x.days_left;
-    const color = n < 0 ? '#d93535' : n <= 30 ? '#d97706' : '#16a34a';
-    const label = n < 0 ? Math.abs(n) + 'd overdue' : n + 'd left';
-    return '<span style="font-weight:700;color:' + color + '">' + label + '</span>';
+  const fmtDate = d => { try{ return new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); }catch{return d||'—';} };
+  const statusBadge = s => {
+    const map = {completed:'adv-badge-green',partial:'adv-badge-orange',pending:'adv-badge-orange',cancelled:'adv-badge-red'};
+    const labels = {completed:'✅ Completed',partial:'🔄 Partial',pending:'⏳ Pending',cancelled:'🚫 Cancelled'};
+    return `<span class="${map[s]||'adv-badge-blue'}">${labels[s]||s}</span>`;
   };
 
-  // Summary strip
-  const summaryHtml = '<div style="display:flex;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg3)">' +
-    ['overdue','due_soon','upcoming','future','event_based'].map(st => {
-      const cnt = d.deadlines.filter(x => x.status === st).length;
-      if (!cnt) return '';
-      const colors = { overdue:'#d93535', due_soon:'#d97706', upcoming:'#1d50e0', future:'#16a34a', event_based:'#6d41c4' };
-      const labels = { overdue:'Overdue', due_soon:'Due ≤30d', upcoming:'In 90d', future:'Future', event_based:'Event-Based' };
-      return '<span style="font-size:12px;font-weight:700;color:' + colors[st] + '">' + cnt + ' <span style="font-weight:500;color:var(--text2)">' + labels[st] + '</span></span>';
-    }).filter(Boolean).join('<span style="color:var(--border2);margin:0 4px">|</span>') +
-  '</div>';
-
-  const rowsHtml = d.deadlines.map(x =>
-    '<tr style="' + (x.status==='overdue' ? 'background:#fffafa' : '') + '">' +
-    '<td style="white-space:nowrap"><b style="font-family:monospace;font-size:12px;color:#1d50e0">' + esc(x.form) + '</b></td>' +
-    '<td style="font-size:12px;color:var(--text)">' + esc(x.description) + '</td>' +
-    '<td style="font-size:12px;font-weight:600">' + (x.due_date ? fd(x.due_date) : '<span style="color:var(--text3)">—</span>') + '</td>' +
-    '<td>' + daysCell(x) + '</td>' +
-    '<td>' + sb(x.status) + '</td>' +
-    '<td style="font-size:11px;color:var(--text3);max-width:200px">' + esc(x.note||'') + '</td>' +
-    '</tr>'
-  ).join('');
-
-  tbl.innerHTML = summaryHtml +
-    '<div class="table-wrap" style="margin:0">' +
-    '<table style="font-size:12px"><thead><tr>' +
-    '<th style="width:90px">Form</th>' +
-    '<th>Description</th>' +
-    '<th style="width:110px">Due Date</th>' +
-    '<th style="width:110px">Days Left</th>' +
-    '<th style="width:120px">Status</th>' +
-    '<th>Note</th>' +
-    '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
-}
-// ═══════════════════════════════════════════════════════════════════════════
-// P0 FIX #6 — TASK COMMENTS FRONTEND
-// ═══════════════════════════════════════════════════════════════════════════
-async function openTaskComments(taskId, taskTitle) {
-  const comments = await fetch(`/api/tasks/${taskId}/comments`, { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => []);
-
-  const renderComments = (list) => list.length
-    ? list.map(c => `
-        <div style="display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--border)" data-comment-id="${c.id}">
-          <div style="width:34px;height:34px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">
-            ${esc((c.author_name||'?')[0].toUpperCase())}
+  list.innerHTML = `<table>
+    <thead><tr>
+      <th>Document</th><th>Company</th><th>Signatories</th>
+      <th>Status</th><th>Sent Via</th><th>Deadline</th><th>Actions</th>
+    </tr></thead>
+    <tbody>${filtered.map(req => {
+      const sigs = req.signature_details || [];
+      const sigList = typeof req.signatories==='string'?JSON.parse(req.signatories||'[]'):(req.signatories||[]);
+      const signed = sigs.filter(s=>s.status==='signed').length;
+      const total  = sigs.length || sigList.length;
+      return `<tr>
+        <td style="font-weight:600;font-size:13px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${req.doc_title||req.doc_id||'—'}</td>
+        <td style="font-size:12px;color:var(--text3)">${req.company_name||'—'}</td>
+        <td style="font-size:12px">
+          ${sigs.length
+            ? sigs.map(s=>`<div style="display:flex;align-items:center;gap:5px;padding:1px 0"><span>${s.status==='signed'?'✅':'⏳'}</span><span>${s.signatory_name||'?'}</span></div>`).join('')
+            : sigList.slice(0,2).map(s=>`<div>${s.name||''}</div>`).join('') || '—'}
+          ${total>0?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${signed}/${total} signed</div>`:''}
+        </td>
+        <td>${statusBadge(req.status)}</td>
+        <td style="font-size:11px">${req.email_sent?'📧 ':''} ${req.wa_sent?'💬':''} ${!req.email_sent&&!req.wa_sent?'—':''}</td>
+        <td style="font-size:12px;color:${req.deadline&&new Date(req.deadline)<new Date()?'#dc2626':'var(--text3)'}">${req.deadline?fmtDate(req.deadline):'—'}</td>
+        <td>
+          <div style="display:flex;gap:4px;flex-wrap:nowrap">
+            <button class="adv-btn-sm" onclick="checkESignStatus('${req.id}')">📋 View</button>
+            ${req.status==='pending'||req.status==='partial'?`<button class="adv-btn-sm" onclick="resendESign('${req.id}')" title="Send reminder">🔔</button>`:''}
+            ${req.status!=='cancelled'&&req.status!=='completed'?`<button class="adv-btn-sm" style="color:#dc2626;border-color:#fca5a5" onclick="cancelESign('${req.id}')">✕</button>`:''}
           </div>
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-              <span style="font-size:12px;font-weight:700;color:var(--text)">${esc(c.author_name||'Unknown')}</span>
-              <span style="font-size:11px;color:var(--text3)">${fd(c.created_at)}</span>
-              ${c.user_id === ME?.id || ME?.role === 'superadmin' || ME?.role === 'manager'
-                ? `<button onclick="deleteTaskComment('${taskId}','${c.id}')" style="margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;hover:background:var(--rbg)" title="Delete">✕</button>` : ''}
-            </div>
-            <div style="font-size:13px;color:var(--text2);line-height:1.5;word-break:break-word">${esc(c.content)}</div>
-          </div>
-        </div>`).join('')
-    : '<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No comments yet. Be the first to add one.</div>';
-
-  openModal(
-    `💬 Comments — ${esc(taskTitle)}`,
-    `<div id="comments-list" style="max-height:340px;overflow-y:auto;margin-bottom:16px">${renderComments(comments)}</div>
-     <div style="border-top:1px solid var(--border);padding-top:14px">
-       <textarea id="new-comment-text" class="fc" rows="3" placeholder="Add a comment…" style="resize:vertical"></textarea>
-     </div>`,
-    `<span style="font-size:12px;color:var(--text3)">${comments.length} comment(s)</span>
-     <div style="display:flex;gap:8px">
-       <button class="btn btn-outline" onclick="closeModal()">Close</button>
-       <button class="btn btn-primary" onclick="postTaskComment('${taskId}')">Post Comment</button>
-     </div>`,
-    'lg'
-  );
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
 }
-
-async function postTaskComment(taskId) {
-  const txt = document.getElementById('new-comment-text')?.value.trim();
-  if (!txt) { toast('Please enter a comment', 'err'); return; }
-  const r = await fetch(`/api/tasks/${taskId}/comments`, {
-    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: txt })
-  });
-  if (!r.ok) { toast('Failed to post comment', 'err'); return; }
-  const c = await r.json();
-  // Re-open to refresh
-  const tasks = await fetch('/api/tasks', { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => []);
-  const task = (Array.isArray(tasks) ? tasks : tasks.data || []).find(t => t.id === taskId);
-  closeModal();
-  if (task) openTaskComments(taskId, task.title);
-}
-
-async function deleteTaskComment(taskId, commentId) {
-  if (!confirm('Delete this comment?')) return;
-  const r = await fetch(`/api/tasks/${taskId}/comments/${commentId}`, {
-    method: 'DELETE', headers: { Authorization: `Bearer ${TOKEN}` }
-  });
-  if (!r.ok) { toast('Failed to delete comment', 'err'); return; }
-  const tasks = await fetch('/api/tasks', { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => []);
-  const task = (Array.isArray(tasks) ? tasks : tasks.data || []).find(t => t.id === taskId);
-  closeModal();
-  if (task) openTaskComments(taskId, task.title);
-  toast('Comment deleted');
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// P0 FIX #7 — FILE ATTACHMENTS FRONTEND
-// ═══════════════════════════════════════════════════════════════════════════
-async function openAttachments(entityType, entityId, entityTitle) {
-  const list = await fetch(`/api/attachments/${entityType}/${entityId}`, { headers: { Authorization: `Bearer ${TOKEN}` } }).then(r => r.json()).catch(() => []);
-  const fmtSize = b => b < 1024 ? `${b}B` : b < 1048576 ? `${(b/1024).toFixed(1)}KB` : `${(b/1048576).toFixed(1)}MB`;
-  const fileIcon = name => {
-    const ext = (name||'').split('.').pop().toLowerCase();
-    return { pdf:'📄', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', jpg:'🖼️', jpeg:'🖼️', png:'🖼️', csv:'📋', txt:'📃' }[ext] || '📎';
-  };
-
-  openModal(
-    `📎 Attachments — ${esc(entityTitle)}`,
-    `<div id="attach-list" style="margin-bottom:16px;max-height:300px;overflow-y:auto">
-      ${list.length ? list.map(a => `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
-          <span style="font-size:22px">${fileIcon(a.original_name)}</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.original_name)}</div>
-            <div style="font-size:11px;color:var(--text3)">${fmtSize(a.file_size||0)} · ${fd(a.created_at)} · ${esc(a.uploader_name||'Unknown')}</div>
-          </div>
-          <a href="/api/attachments/${a.id}/download" target="_blank" class="btn btn-xs btn-outline">⬇️ Download</a>
-          ${a.uploaded_by === ME?.id || ME?.role === 'superadmin' || ME?.role === 'manager'
-            ? `<button class="btn btn-xs btn-danger" onclick="deleteAttachment('${entityType}','${entityId}','${a.id}','${esc(entityTitle)}')">✕</button>` : ''}
-        </div>`).join('')
-        : '<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No attachments yet.</div>'
-      }
-    </div>
-    <div style="border-top:1px solid var(--border);padding-top:14px">
-      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:8px">Upload File (PDF, Word, Excel, Image — max 20MB)</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="file" id="attach-file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.csv,.txt"
-               style="flex:1;padding:8px;border:1.5px dashed var(--border2);border-radius:8px;font-size:13px;cursor:pointer"
-               onchange="previewAttachFile(this)">
-        <button class="btn btn-primary" onclick="uploadAttachment('${entityType}','${entityId}','${esc(entityTitle)}')" id="attach-upload-btn">Upload</button>
-      </div>
-      <div id="attach-preview" style="font-size:11.5px;color:var(--text3);margin-top:6px"></div>
-    </div>`,
-    `<span style="font-size:12px;color:var(--text3)">${list.length} attachment(s)</span>
-     <button class="btn btn-outline" onclick="closeModal()">Close</button>`,
-    'lg'
-  );
-}
-
-function previewAttachFile(input) {
-  const el = document.getElementById('attach-preview');
-  if (!el) return;
-  const f = input.files[0];
-  if (!f) { el.textContent = ''; return; }
-  const fmtSize = b => b < 1048576 ? `${(b/1024).toFixed(1)}KB` : `${(b/1048576).toFixed(1)}MB`;
-  el.textContent = `Selected: ${f.name} (${fmtSize(f.size)})`;
-}
-
-async function uploadAttachment(entityType, entityId, entityTitle) {
-  const input = document.getElementById('attach-file-input');
-  if (!input || !input.files[0]) { toast('Please select a file first', 'err'); return; }
-  const btn = document.getElementById('attach-upload-btn');
-  btn.disabled = true; btn.textContent = 'Uploading…';
-  const formData = new FormData();
-  formData.append('file', input.files[0]);
-  try {
-    const r = await fetch(`/api/attachments/${entityType}/${entityId}`, {
-      method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` }, body: formData
-    });
-    const d = await r.json();
-    if (!r.ok) { toast(d.error || 'Upload failed', 'err'); btn.disabled = false; btn.textContent = 'Upload'; return; }
-    toast('File uploaded ✓', 'ok');
-    closeModal();
-    openAttachments(entityType, entityId, entityTitle);
-  } catch(e) { toast('Upload error', 'err'); }
-  btn.disabled = false; btn.textContent = 'Upload';
-}
-
-async function deleteAttachment(entityType, entityId, attachId, entityTitle) {
-  if (!confirm('Delete this attachment?')) return;
-  const r = await fetch(`/api/attachments/${attachId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${TOKEN}` } });
-  if (!r.ok) { toast('Failed to delete attachment', 'err'); return; }
-  toast('Attachment deleted');
-  closeModal();
-  openAttachments(entityType, entityId, entityTitle);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// P0 FIX #2 — EMAIL NOTIFICATIONS FRONTEND (Settings page)
-// ═══════════════════════════════════════════════════════════════════════════
-async function sendAlertDigest() {
-  const btn = document.getElementById('s-digest-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-  const r = await fetch('/api/notifications/send-digest', { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` } });
-  const d = await r.json();
-  if (r.ok) {
-    toast(d.mail_enabled ? `Digest sent to ${d.sent} user(s) ✉️` : 'Email not configured — set MAIL_USERNAME/PASSWORD env vars', d.mail_enabled ? 'ok' : '');
-  } else { toast(d.error || 'Failed to send digest', 'err'); }
-  if (btn) { btn.disabled = false; btn.textContent = '📧 Send Alert Digest Now'; }
-}
-
-async function sendTestEmail() {
-  const btn = document.getElementById('s-test-email-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-  const r = await fetch('/api/notifications/test-email', { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}` } });
-  const d = await r.json();
-  if (r.ok) {
-    toast(d.success ? `Test email sent to ${d.to} ✉️` : 'Email not configured — check server env vars', d.success ? 'ok' : '');
-  } else { toast(d.error || 'Failed', 'err'); }
-  if (btn) { btn.disabled = false; btn.textContent = '🧪 Send Test Email'; }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// WIRE NEW PAGES INTO ROUTER
-// ═══════════════════════════════════════════════════════════════════════════
-// Patch initSettingsPage to load 2FA status after it runs
-
-// ── Advanced Tools UI helpers ─────────────────────────────────────────────
-function atNavActive(btn) {
-  document.querySelectorAll('#page-ai-drafting .at-sb-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-}
-
-function filterESign(status, btn) {
-  document.querySelectorAll('#esign-filter-pills .at-pill').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  const sel = document.getElementById('esign-status-filter');
-  if(sel){ sel.value = status; }
-  loadESignPage();
-}
-
-// Override switchWATab to use adv-nav-item styling
-const _origSwitchWATab = window.switchWATab;
-window.switchWATab = function(tab) {
-  // Update sidebar nav
-  document.querySelectorAll('#page-whatsapp .adv-nav-item').forEach(b=>{
-    b.classList.toggle('active', b.dataset.tab===tab);
-  });
-  // Show/hide tab panels
-  ['quick','bulk','templates','schedule','history','settings'].forEach(t=>{
-    const el=document.getElementById('wa-tab-'+t);
-    if(el) el.style.display = t===tab ? 'flex' : 'none';
-  });
-  // Load data for certain tabs
-  if(tab==='history') loadWAHistory();
-  if(tab==='templates') loadWATemplates();
-  if(tab==='schedule') loadWASchedules();
-  if(tab==='settings') loadWASettingsPanel();
-};
-
-
-
-// ── AI Provider Management ────────────────────────────────────────────────
-let _AI_PROVIDER = localStorage.getItem('ai_provider') || 'claude';
-let _AI_KEY = {};
-
-function setAIProvider(provider, btn) {
-  _AI_PROVIDER = provider;
-  localStorage.setItem('ai_provider', provider);
-  document.querySelectorAll('.adv-ai-provider-tab').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  const keyRow = document.getElementById('ai-provider-key-row');
-  const customRow = document.getElementById('ai-custom-endpoint-row');
-  if(keyRow) {
-    keyRow.style.display = provider === 'claude' ? 'none' : '';
-    if(provider !== 'claude') {
-      const keyInput = document.getElementById('ai-provider-key');
-      if(keyInput) {
-        const saved = localStorage.getItem('ai_key_'+provider) || '';
-        keyInput.value = saved;
-        keyInput.placeholder = {
-          openai: 'OpenAI API Key (sk-...)',
-          gemini: 'Google Gemini API Key',
-          custom: 'API Key for custom endpoint'
-        }[provider] || 'API Key';
-        keyInput.oninput = ()=>{ localStorage.setItem('ai_key_'+provider, keyInput.value); };
-      }
-    }
-  }
-  if(customRow) customRow.style.display = provider === 'custom' ? '' : 'none';
-}
-
-async function _callAIProvider(prompt) {
-  const provider = _AI_PROVIDER || 'claude';
-  const apiKey   = document.getElementById('ai-provider-key')?.value || localStorage.getItem('ai_key_'+provider) || '';
-
-  if (provider === 'claude') {
-    // Route through backend (uses ANTHROPIC_API_KEY env var)
-    return null;  // fall through to backend route
-  }
-
-  if (provider === 'openai') {
-    if (!apiKey) { toast('Enter your OpenAI API key','err'); throw new Error('No API key'); }
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        max_tokens: 2000,
-        messages: [{role:'user',content:prompt}]
-      })
-    });
-    const d = await resp.json();
-    if(d.error) throw new Error(d.error.message);
-    return d.choices?.[0]?.message?.content || '';
-  }
-
-  if (provider === 'gemini') {
-    if (!apiKey) { toast('Enter your Gemini API key','err'); throw new Error('No API key'); }
-    const model = 'gemini-1.5-pro';
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({contents:[{parts:[{text:prompt}]}]})
-      }
-    );
-    const d = await resp.json();
-    if(d.error) throw new Error(d.error.message);
-    return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  }
-
-  if (provider === 'custom') {
-    if (!apiKey) { toast('Enter API key for custom endpoint','err'); throw new Error('No API key'); }
-    const endpoint = document.getElementById('ai-custom-endpoint')?.value || localStorage.getItem('ai_custom_endpoint') || '';
-    const model    = document.getElementById('ai-custom-model')?.value || localStorage.getItem('ai_custom_model') || 'gpt-4o';
-    if (!endpoint) { toast('Enter the API endpoint URL','err'); throw new Error('No endpoint'); }
-    // Store for next time
-    if(document.getElementById('ai-custom-endpoint')?.value)
-      localStorage.setItem('ai_custom_endpoint', endpoint);
-    if(document.getElementById('ai-custom-model')?.value)
-      localStorage.setItem('ai_custom_model', model);
-    const resp = await fetch(endpoint+'/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
-      body: JSON.stringify({model, max_tokens:2000, messages:[{role:'user',content:prompt}]})
-    });
-    const d = await resp.json();
-    if(d.error) throw new Error(typeof d.error==='string'?d.error:d.error.message);
-    return d.choices?.[0]?.message?.content || '';
-  }
-  return null;
-}
-
-// Restore saved provider on load
-(function() {
-  const saved = localStorage.getItem('ai_provider') || 'claude';
-  if(saved !== 'claude') {
-    setTimeout(()=>{
-      const btn = document.querySelector(`.adv-ai-provider-tab[data-provider="${saved}"]`);
-      if(btn) setAIProvider(saved, btn);
-    }, 300);
-  }
-  // Restore custom endpoint/model
-  const ep = localStorage.getItem('ai_custom_endpoint');
-  const cm = localStorage.getItem('ai_custom_model');
-  if(ep && document.getElementById('ai-custom-endpoint')) document.getElementById('ai-custom-endpoint').value=ep;
-  if(cm && document.getElementById('ai-custom-model')) document.getElementById('ai-custom-model').value=cm;
-})();
-
-
-
-
-// ── Share Transfer ────────────────────────────────────────────────────────
-async function openTransferShareModal(shId, cid) {
-  // Fetch current shareholder details
-  const shs = await api(`/api/companies/${cid}/shareholders`);
-  const sh = (shs || []).find(s => s.id === shId);
-  if (!sh) { toast('Shareholder not found', 'err'); return; }
-
-  const othersOpts = (shs || [])
-    .filter(s => s.id !== shId && s.is_active !== 0)
-    .map(s => `<option value="${s.id}" data-folio="${s.folio_no||''}">${s.name} (Folio: ${s.folio_no||'N/A'}, ${(s.shares_held||0).toLocaleString('en-IN')} shares)</option>`)
-    .join('');
-
-  openModal('⇄ Transfer Shares', `
-    <div style="background:var(--glow2);border:1px solid rgba(27,78,216,.15);border-radius:var(--r);padding:12px 14px;margin-bottom:16px">
-      <div style="font-size:12px;font-weight:700;color:var(--accent)">📈 Transferor</div>
-      <div style="font-size:13.5px;font-weight:700;color:var(--text)">${sh.name}</div>
-      <div style="font-size:11.5px;color:var(--text2);margin-top:2px">
-        Folio: <code>${sh.folio_no||'N/A'}</code> &nbsp;·&nbsp;
-        Class: ${sh.share_class} &nbsp;·&nbsp;
-        Available: <strong>${(sh.shares_held||0).toLocaleString('en-IN')} shares</strong>
-        ${sh.distinctive_no_from ? ` &nbsp;·&nbsp; Distinctive: ${sh.distinctive_no_from}–${sh.distinctive_no_to}` : ''}
-      </div>
-    </div>
-    <div class="fg">
-      <label class="fl">Transfer To</label>
-      <select class="fc" id="tr-type" onchange="toggleTransferType()">
-        <option value="existing">Existing Shareholder</option>
-        <option value="new">New Shareholder (create folio)</option>
-      </select>
-    </div>
-    <!-- Existing shareholder selection -->
-    <div id="tr-existing-section" class="fg">
-      <label class="fl">Select Existing Shareholder</label>
-      <select class="fc" id="tr-existing-sh">
-        <option value="">— Select —</option>
-        ${othersOpts}
-      </select>
-    </div>
-    <!-- New shareholder fields -->
-    <div id="tr-new-section" style="display:none">
-      <div class="fg2">
-        <div class="fg"><label class="fl">Full Name <span class="req">*</span></label><input class="fc" id="tr-new-name" placeholder="New shareholder name"></div>
-        <div class="fg"><label class="fl">PAN</label><input class="fc" id="tr-new-pan" placeholder="ABCDE1234F" style="text-transform:uppercase"></div>
-        <div class="fg"><label class="fl">Mobile</label><input class="fc" id="tr-new-mob" type="tel" placeholder="9876543210"></div>
-        <div class="fg"><label class="fl">Email</label><input class="fc" id="tr-new-email" type="email" placeholder="name@email.com"></div>
-        <div class="fg"><label class="fl">Address</label><input class="fc" id="tr-new-addr" placeholder="Address"></div>
-        <div class="fg"><label class="fl">New Folio No. (auto-generated if blank)</label><input class="fc" id="tr-new-folio" placeholder="Leave blank to auto-generate"></div>
-      </div>
-    </div>
-    <div class="fg2">
-      <div class="fg">
-        <label class="fl">Shares to Transfer <span class="req">*</span></label>
-        <input class="fc" id="tr-shares" type="number" min="1" max="${sh.shares_held||0}" placeholder="No. of shares">
-        <div style="font-size:10.5px;color:var(--text3);margin-top:3px">Max: ${(sh.shares_held||0).toLocaleString('en-IN')}</div>
-      </div>
-      <div class="fg">
-        <label class="fl">Transfer Date</label>
-        <input class="fc" id="tr-date" type="date" placeholder="Select transfer date" required>
-      </div>
-    </div>
-    <div class="fg2">
-      <div class="fg">
-        <label class="fl">Distinctive No. From</label>
-        <input class="fc" id="tr-dist-from" type="number" placeholder="${sh.distinctive_no_from||''}" value="${sh.distinctive_no_from||''}">
-      </div>
-      <div class="fg">
-        <label class="fl">Distinctive No. To</label>
-        <input class="fc" id="tr-dist-to" type="number" placeholder="${sh.distinctive_no_to||''}" value="${sh.distinctive_no_to||''}">
-      </div>
-    </div>
-    <div class="fg">
-      <label class="fl">Transfer Consideration / Remarks</label>
-      <input class="fc" id="tr-remarks" placeholder="e.g. Sale at ₹100/share, gift, succession etc.">
-    </div>
-  `, [
-    { text: '✓ Confirm Transfer', cls: 'btn-primary', fn: `doTransferShare('${shId}','${cid}')` },
-    { text: 'Cancel', cls: 'btn-outline', fn: 'closeModal()' }
-  ], 'lg');
-}
-
-function toggleTransferType() {
-  const type = document.getElementById('tr-type')?.value;
-  document.getElementById('tr-existing-section').style.display = type==='existing' ? '' : 'none';
-  document.getElementById('tr-new-section').style.display      = type==='new'      ? '' : 'none';
-}
-
-async function doTransferShare(shId, cid) {
-  const type       = document.getElementById('tr-type')?.value;
-  const shares     = parseInt(document.getElementById('tr-shares')?.value || '0');
-  const trDate     = document.getElementById('tr-date')?.value;
-  const distFrom   = document.getElementById('tr-dist-from')?.value;
-  const distTo     = document.getElementById('tr-dist-to')?.value;
-  const remarks    = document.getElementById('tr-remarks')?.value || '';
-
-  if (!shares || shares <= 0) { toast('Enter number of shares to transfer', 'err'); return; }
-  if (!trDate) { toast('Select a transfer date', 'err'); return; }
-
-  let payload = { transferor_id: shId, company_id: cid, shares_to_transfer: shares,
-                  transfer_date: trDate, distinctive_no_from: distFrom, distinctive_no_to: distTo,
-                  remarks, transfer_type: type };
-
-  if (type === 'existing') {
-    const toId = document.getElementById('tr-existing-sh')?.value;
-    if (!toId) { toast('Select a recipient shareholder', 'err'); return; }
-    payload.transferee_id = toId;
-  } else {
-    const name = document.getElementById('tr-new-name')?.value?.trim();
-    if (!name) { toast('Enter name of new shareholder', 'err'); return; }
-    payload.new_shareholder = {
-      name,
-      pan:    (document.getElementById('tr-new-pan')?.value||'').toUpperCase(),
-      mobile: document.getElementById('tr-new-mob')?.value||'',
-      email:  document.getElementById('tr-new-email')?.value||'',
-      address:document.getElementById('tr-new-addr')?.value||'',
-      folio_no: document.getElementById('tr-new-folio')?.value||'',
-    };
-  }
-
-  const r = await api('/api/shareholders/transfer', { method: 'POST', body: payload });
-  if (r?.success) {
-    toast(`Transfer successful! ${type==='new'?'New folio: '+r.new_folio_no:''}`, 'ok');
-    closeModal();
-    loadShareholders();
-  } else {
-    toast(r?.error || 'Transfer failed', 'err');
-  }
-}
-
-
-
-document.addEventListener('DOMContentLoaded', function() {
-  const _origInitSettings = window.initSettingsPage;
-  if (typeof _origInitSettings === 'function') {
-    window.initSettingsPage = async function() {
-      await _origInitSettings();
-      load2FAStatus();
-    };
-  }
-});
-
-</script>
-
-</body>
-</html
 
 
