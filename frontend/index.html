@@ -3439,186 +3439,492 @@ select.fc { -webkit-appearance:none;background-image:url("data:image/svg+xml,%3C
     </div>
 
     <div class="page" id="page-settings" style="display:none">
-      <div class="g2" style="max-width:900px;align-items:start">
+<style>
+.set-nav-btn {
+  display:flex;align-items:center;gap:10px;width:100%;padding:10px 16px;
+  border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;
+  color:var(--text2);border-radius:8px;margin:1px 4px;width:calc(100% - 8px);
+  text-align:left;transition:all .15s;
+}
+.set-nav-btn:hover { background:var(--bg3); color:var(--text); }
+.set-nav-btn.active { background:linear-gradient(135deg,rgba(26,86,219,.12),rgba(99,102,241,.08));
+  color:var(--primary);font-weight:700; }
+.set-nav-btn.active span:first-child { filter:drop-shadow(0 0 4px rgba(26,86,219,.4)); }
+.set-section { display:none; }
+.set-section.active { display:block; }
+.set-card {
+  background:var(--bg2);border:1px solid var(--border);border-radius:14px;
+  overflow:hidden;margin-bottom:16px;
+}
+.set-card-header {
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+  background:linear-gradient(135deg,var(--bg2),var(--bg3));
+}
+.set-card-icon {
+  width:36px;height:36px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;font-size:18px;flex-shrink:0;
+}
+.set-card-body { padding:20px; }
+.set-field { margin-bottom:16px; }
+.set-field:last-child { margin-bottom:0; }
+.set-label {
+  font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;
+  letter-spacing:.6px;display:block;margin-bottom:6px;
+}
+.set-input {
+  width:100%;padding:10px 14px;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:9px;font-size:13.5px;color:var(--text);outline:none;transition:border-color .15s;
+  font-family:inherit;
+}
+.set-input:focus { border-color:var(--primary);background:var(--bg2); }
+.set-grid-2 { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+.set-grid-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px; }
+.set-badge-row {
+  display:flex;align-items:center;gap:8px;padding:10px 14px;
+  background:var(--bg3);border-radius:8px;margin-bottom:8px;font-size:12px;
+}
+.set-divider { height:1px;background:var(--border);margin:20px 0; }
+.set-save-bar {
+  display:flex;justify-content:flex-end;gap:10px;margin-top:20px;
+  padding-top:16px;border-top:1px solid var(--border);
+}
+@media(max-width:700px){
+  .set-grid-2,.set-grid-3{grid-template-columns:1fr}
+  #set-layout{grid-template-columns:1fr!important}
+  #set-sidebar{display:none}
+}
+</style>
 
-        <!-- Change Password -->
-        <div class="card">
-          <div class="card-header"><div class="card-title">🔑 Change Password</div></div>
-          <div class="card-body">
-            <div class="fg"><label class="fl">Current Password</label><input class="fc" id="s-old" type="password" placeholder="••••••••"></div>
-            <div class="fg"><label class="fl">New Password</label><input class="fc" id="s-new" type="password" placeholder="Minimum 8 characters"></div>
-            <div class="fg"><label class="fl">Confirm New Password</label><input class="fc" id="s-cf" type="password" placeholder="Repeat new password"></div>
-            <button class="btn btn-primary" onclick="changePw()">Update Password</button>
+<div style="max-width:1100px;margin:0 auto;padding:0 4px">
+
+  <!-- Page Header -->
+  <div style="margin-bottom:24px;display:flex;align-items:center;gap:14px">
+    <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#1a56db,#6366f1);
+      display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">⚙️</div>
+    <div>
+      <div style="font-size:22px;font-weight:800;color:var(--text)">Settings</div>
+      <div style="font-size:12.5px;color:var(--text3);margin-top:2px">Manage your profile, security, integrations and preferences</div>
+    </div>
+  </div>
+
+  <div id="set-layout" style="display:grid;grid-template-columns:230px 1fr;gap:20px;align-items:start">
+
+    <!-- ═══ LEFT SIDEBAR NAV ═══════════════════════════════════════════ -->
+    <div id="set-sidebar" style="position:sticky;top:12px">
+      <!-- User card -->
+      <div style="background:linear-gradient(135deg,#1a56db,#6366f1);border-radius:14px;padding:18px 16px;margin-bottom:12px;color:#fff">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div id="set-avatar" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.25);
+            display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;flex-shrink:0;
+            border:2px solid rgba(255,255,255,.4)">U</div>
+          <div>
+            <div id="set-user-name" style="font-weight:700;font-size:14px">Loading…</div>
+            <div id="set-user-role" style="font-size:11px;opacity:.8;margin-top:2px">—</div>
+            <div id="set-user-email" style="font-size:10.5px;opacity:.7;margin-top:1px;word-break:break-all">—</div>
+          </div>
         </div>
       </div>
 
-      <!-- Session Management -->
-      <div class="card" style="margin-top:14px">
-        <div class="card-header"><div class="card-title">🖥️ Active Sessions</div>
-          <button class="btn btn-xs btn-outline" onclick="revokeAllSessions()">Revoke All</button>
-        </div>
-        <div id="sessions-list" style="padding:4px 0"><div class="loading"><div class="spin"></div></div></div>
-        <div style="padding:10px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:600">🔒 Secure httpOnly Cookie Mode</div>
-            <div style="font-size:11px;color:var(--text3)">Prevents XSS token theft. Re-login required to activate.</div>
+      <!-- Nav items -->
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:8px">
+        <div style="font-size:9.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:8px 16px 4px">Account</div>
+        <button class="set-nav-btn active" data-section="profile" onclick="switchSettingsSection('profile')">
+          <span>👤</span><span>Profile</span>
+        </button>
+        <button class="set-nav-btn" data-section="security" onclick="switchSettingsSection('security')">
+          <span>🔒</span><span>Security</span>
+        </button>
+        <button class="set-nav-btn" data-section="appearance" onclick="switchSettingsSection('appearance')">
+          <span>🎨</span><span>Appearance</span>
+        </button>
+
+        <div style="font-size:9.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:12px 16px 4px">Integrations</div>
+        <button class="set-nav-btn" data-section="email" onclick="switchSettingsSection('email')">
+          <span>📧</span><span>Email (SMTP)</span>
+          <span id="set-email-badge" style="margin-left:auto;font-size:9px;padding:1px 6px;border-radius:10px;background:rgba(5,150,105,.15);color:#059669;display:none">✓ ON</span>
+        </button>
+        <button class="set-nav-btn" data-section="whatsapp" onclick="switchSettingsSection('whatsapp')">
+          <span>💬</span><span>WhatsApp</span>
+          <span id="set-wa-badge" style="margin-left:auto;font-size:9px;padding:1px 6px;border-radius:10px;background:rgba(37,211,102,.15);color:#25D366;display:none">✓ ON</span>
+        </button>
+        <button class="set-nav-btn" data-section="ai" onclick="switchSettingsSection('ai')">
+          <span>🤖</span><span>AI / Claude</span>
+        </button>
+
+        <div style="font-size:9.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:12px 16px 4px">System</div>
+        <button class="set-nav-btn" data-section="notifications" onclick="switchSettingsSection('notifications')">
+          <span>🔔</span><span>Notifications</span>
+        </button>
+        <button class="set-nav-btn" data-section="about" onclick="switchSettingsSection('about')">
+          <span>ℹ️</span><span>About & System</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ RIGHT CONTENT ═══════════════════════════════════════════════ -->
+    <div>
+
+      <!-- ── PROFILE ────────────────────────────────────────────────── -->
+      <div class="set-section active" id="set-sec-profile">
+        <div style="font-size:19px;font-weight:800;margin-bottom:4px">👤 Profile Settings</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Update your personal information and contact details.</div>
+
+        <div class="set-card">
+          <div class="set-card-header">
+            <div class="set-card-icon" style="background:linear-gradient(135deg,#1a56db18,#6366f118)">👤</div>
+            <div>
+              <div style="font-weight:700;font-size:13.5px">Personal Information</div>
+              <div style="font-size:11px;color:var(--text3)">Your name, email and contact details</div>
+            </div>
           </div>
-          <button class="btn btn-xs btn-outline" id="cookie-mode-btn" onclick="switchToCookieAuth()">Enable</button>
+          <div class="set-card-body">
+            <div class="set-grid-2">
+              <div class="set-field">
+                <label class="set-label">Full Name <span style="color:#dc2626">*</span></label>
+                <input class="set-input" id="set-name" placeholder="Your full name" autocomplete="off">
+              </div>
+              <div class="set-field">
+                <label class="set-label">Mobile / Phone</label>
+                <input class="set-input" id="set-phone" type="tel" placeholder="98XXXXXXXX"
+                  style="border-left:3px solid var(--primary)">
+                <div style="font-size:10px;color:var(--text3);margin-top:4px">📱 Shown to clients on their portal as your contact number</div>
+              </div>
+            </div>
+            <div class="set-field">
+              <label class="set-label">Email Address</label>
+              <input class="set-input" id="set-email" type="email" placeholder="your@email.com" readonly
+                style="background:var(--bg3);color:var(--text3);cursor:not-allowed">
+              <div style="font-size:10px;color:var(--text3);margin-top:4px">Email cannot be changed. Contact your administrator.</div>
+            </div>
+            <div class="set-field">
+              <label class="set-label">Role</label>
+              <div id="set-role-display" style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg3);border-radius:8px;font-size:13px;font-weight:600"></div>
+            </div>
+            <div class="set-save-bar">
+              <button class="btn btn-primary" onclick="saveProfileSettings()">💾 Save Profile</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- WhatsApp / SMS Alerts -->
-      <div class="card" style="margin-top:14px">
-        <div class="card-header"><div class="card-title">📱 WhatsApp / SMS Alerts</div></div>
-        <div style="padding:14px 18px">
-          <div style="display:flex;gap:10px;align-items:flex-end">
-            <div class="fg" style="flex:1;margin:0"><label class="fl">Phone (with country code)</label>
-              <input class="fc" id="wa-phone" placeholder="+919876543210"></div>
-            <button class="btn btn-primary" onclick="sendWhatsApp()">📲 Send WA Alert</button>
-            <button class="btn btn-outline" onclick="sendSmsAlert()">💬 Send SMS</button>
+      <!-- ── SECURITY ───────────────────────────────────────────────── -->
+      <div class="set-section" id="set-sec-security">
+        <div style="font-size:19px;font-weight:800;margin-bottom:4px">🔒 Security</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Manage your password and account security settings.</div>
+
+        <div class="set-card">
+          <div class="set-card-header">
+            <div class="set-card-icon" style="background:linear-gradient(135deg,#dc262618,#f9731618)">🔑</div>
+            <div>
+              <div style="font-weight:700;font-size:13.5px">Change Password</div>
+              <div style="font-size:11px;color:var(--text3)">Use a strong password with letters, numbers and symbols</div>
+            </div>
           </div>
-          <div id="wa-result" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
+          <div class="set-card-body">
+            <div class="set-field">
+              <label class="set-label">Current Password <span style="color:#dc2626">*</span></label>
+              <input class="set-input" id="set-old-pw" type="password" placeholder="Enter current password" autocomplete="current-password">
+            </div>
+            <div class="set-grid-2">
+              <div class="set-field">
+                <label class="set-label">New Password <span style="color:#dc2626">*</span></label>
+                <input class="set-input" id="set-new-pw" type="password" placeholder="Min. 8 characters" autocomplete="new-password"
+                  oninput="checkPwStrength(this.value)">
+              </div>
+              <div class="set-field">
+                <label class="set-label">Confirm New Password <span style="color:#dc2626">*</span></label>
+                <input class="set-input" id="set-con-pw" type="password" placeholder="Repeat new password" autocomplete="new-password">
+              </div>
+            </div>
+            <!-- Password strength -->
+            <div id="set-pw-strength" style="display:none;margin-top:-8px;margin-bottom:12px">
+              <div style="height:4px;border-radius:2px;background:var(--bg3);overflow:hidden;margin-bottom:4px">
+                <div id="set-pw-bar" style="height:100%;border-radius:2px;transition:all .3s;width:0"></div>
+              </div>
+              <div id="set-pw-label" style="font-size:11px;font-weight:600"></div>
+            </div>
+            <div style="background:rgba(26,86,219,.06);border:1px solid rgba(26,86,219,.15);border-radius:8px;padding:10px 14px;font-size:11.5px;color:var(--text2);margin-bottom:4px">
+              🛡️ Use at least 8 characters with a mix of uppercase, lowercase, numbers and symbols.
+            </div>
+            <div class="set-save-bar">
+              <button class="btn btn-outline" onclick="document.getElementById('set-old-pw').value=document.getElementById('set-new-pw').value=document.getElementById('set-con-pw').value=''">Clear</button>
+              <button class="btn btn-primary" onclick="changePasswordSettings()">🔒 Change Password</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Dummy placeholder to close the block -->
-      <div style="display:none">
-          </div>
-        </div>
+      <!-- ── APPEARANCE ────────────────────────────────────────────── -->
+      <div class="set-section" id="set-sec-appearance">
+        <div style="font-size:19px;font-weight:800;margin-bottom:4px">🎨 Appearance</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Customize the look and feel of your workspace.</div>
 
-        <!-- My Profile -->
-        <div class="card">
-          <div class="card-header"><div class="card-title">👤 My Profile</div></div>
-          <div class="card-body">
-            <div class="fg"><label class="fl">Full Name</label><input class="fc" id="s-name" type="text" placeholder="Your name"></div>
-            <div class="fg"><label class="fl">Email Address</label><input class="fc" id="s-email" type="email" placeholder="Your email" readonly style="opacity:.6;cursor:not-allowed"></div>
-            <div class="fg"><label class="fl">Role</label>
-              <div class="fc" style="background:var(--bg3);cursor:default" id="s-role-display">—</div>
-            </div>
-            <div style="font-size:11.5px;color:var(--text3);margin-top:4px" id="s-role-desc"></div>
-          </div>
-        </div>
-
-        <!-- Two-Factor Authentication -->
-        <div class="card" id="s-2fa-card">
-          <div class="card-header"><div class="card-title">🔐 Two-Factor Authentication</div></div>
-          <div class="card-body">
-            <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Add an extra layer of security to your account. You'll need an authenticator app like Google Authenticator or Authy.</p>
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-              <span style="font-size:13px;font-weight:600;color:var(--text2)">Status:</span>
-              <span id="s-2fa-status"><div class="loading" style="width:80px;height:20px"></div></span>
-            </div>
-            <div style="display:flex;gap:8px">
-              <button class="btn btn-primary" id="s-2fa-enable-btn" onclick="setup2FA()" style="display:none">Enable 2FA</button>
-              <button class="btn btn-danger" id="s-2fa-disable-btn" onclick="disable2FA()" style="display:none">Disable 2FA</button>
+        <div class="set-card">
+          <div class="set-card-header">
+            <div class="set-card-icon" style="background:linear-gradient(135deg,#7c3aed18,#a78bfa18)">🌙</div>
+            <div>
+              <div style="font-weight:700;font-size:13.5px">Theme</div>
+              <div style="font-size:11px;color:var(--text3)">Choose between light and dark mode</div>
             </div>
           </div>
-        </div>
-
-        <!-- Email Notifications -->
-        <div class="card">
-          <div class="card-header"><div class="card-title">📧 Email Notifications</div></div>
-          <div class="card-body">
-            <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Send compliance alert digests by email. Configure <code>MAIL_USERNAME</code>, <code>MAIL_PASSWORD</code>, and <code>MAIL_SERVER</code> environment variables to enable.</p>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-primary" id="s-digest-btn" onclick="sendAlertDigest()">📧 Send Alert Digest Now</button>
-              <button class="btn btn-outline" id="s-test-email-btn" onclick="sendTestEmail()">🧪 Send Test Email</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- About Taxly-CMS -->
-        <div class="card" style="grid-column:1/-1">
-          <div class="card-header"><div class="card-title">ℹ️ About Taxly-CMS</div></div>
-          <div class="card-body">
-            <div class="g2" style="gap:14px">
-              <div>
-                <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px">Product</div>
-                <div style="font-size:14px;font-weight:600;color:var(--text)">Taxly-CMS v2.0</div>
-                <div style="font-size:12px;color:var(--text2)">Corporate Compliance Management System</div>
-                <div style="font-size:12px;color:var(--text3);margin-top:4px">Companies Act 2013 — India</div>
+          <div class="set-card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div id="theme-light-btn" onclick="setTheme('light')"
+                style="border:2px solid var(--primary);border-radius:12px;padding:16px;cursor:pointer;text-align:center;background:var(--bg2)">
+                <div style="font-size:28px;margin-bottom:8px">☀️</div>
+                <div style="font-weight:700;font-size:13px">Light Mode</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:3px">Clean, bright interface</div>
               </div>
-              <div>
-                <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px">Developed by</div>
-                <div style="font-size:14px;font-weight:600;color:var(--text)">Taxly India Private Limited</div>
-                <div style="font-size:12px;color:var(--text2)">L-30B, LGF, Malviya Nagar, New Delhi — 110017</div>
-                <div style="font-size:12px;color:var(--accent);margin-top:2px">+91 88829 35471 · info@taxlyindia.com</div>
+              <div id="theme-dark-btn" onclick="setTheme('dark')"
+                style="border:2px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;text-align:center;background:var(--bg2)">
+                <div style="font-size:28px;margin-bottom:8px">🌙</div>
+                <div style="font-weight:700;font-size:13px">Dark Mode</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:3px">Easy on the eyes</div>
               </div>
             </div>
+            <div style="margin-top:16px;padding:12px 14px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text3)">
+              💡 You can also toggle dark mode anytime with the 🌙 button in the top bar.
+            </div>
           </div>
         </div>
-
       </div>
-    
 
+      <!-- ── EMAIL SMTP ──────────────────────────────────────────────── -->
+      <div class="set-section" id="set-sec-email">
+        <div style="font-size:19px;font-weight:800;margin-bottom:4px">📧 Email (SMTP)</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Configure outgoing email for e-signatures, alerts and reminders.</div>
 
-  
-    <!-- ── AI DOCUMENT DRAFTING ── -->
-    
-<!-- ── AI DOCUMENT DRAFTING ── -->
-
-      <!-- ══ Integration Settings ═══════════════════════════════════════ -->
-      <div class="card" id="integration-settings-card" style="display:none" style="margin-top:14px;grid-column:1/-1">
-        <div class="card-header">
-          <div class="card-title">⚙️ Integration Settings — Email & WhatsApp</div>
-          <span id="int-status-badge" style="font-size:11px;padding:3px 10px;border-radius:20px;background:var(--bg3);color:var(--text3)">Loading…</span>
-        </div>
-        <div class="card-body">
-          <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px">
-            <button id="int-tab-email" onclick="switchIntTab('email')" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid var(--primary);color:var(--primary);margin-bottom:-2px;cursor:pointer">📧 Email (SMTP)</button>
-            <button id="int-tab-wa"    onclick="switchIntTab('wa')"    style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;border-bottom:2px solid transparent;color:var(--text3);margin-bottom:-2px;cursor:pointer;transition:all .15s">💬 WhatsApp</button>
+        <div class="set-card">
+          <div class="set-card-header">
+            <div class="set-card-icon" style="background:linear-gradient(135deg,#1a56db18,#06b6d418)">📧</div>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:13.5px">SMTP Configuration</div>
+              <div style="font-size:11px;color:var(--text3)">Works with Gmail, Outlook, Zoho, custom SMTP servers</div>
+            </div>
+            <span id="set-email-status" style="font-size:11px;padding:3px 10px;border-radius:20px;background:var(--bg3);color:var(--text3)">Not configured</span>
           </div>
-          <!-- Email Panel -->
-          <div id="int-panel-email">
-            <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">
-              💡 Configure SMTP to enable automatic email sending for e-signatures, alerts and reminders. Works with Gmail, Outlook, Zoho, custom servers.
+          <div class="set-card-body">
+            <div style="background:rgba(26,86,219,.06);border:1px solid rgba(26,86,219,.15);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text2)">
+              💡 For Gmail: enable 2FA then create an <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--primary);font-weight:600">App Password →</a>
+              and use it instead of your regular password.
             </div>
-            <div class="fg2">
-              <div class="fg"><label class="fl">SMTP Server</label><input class="fc" id="int-mail-server" placeholder="smtp.gmail.com"></div>
-              <div class="fg"><label class="fl">Port</label><input class="fc" id="int-mail-port" placeholder="587" type="number" style="max-width:100px"></div>
-            </div>
-            <div class="fg2">
-              <div class="fg"><label class="fl">Username / Email <span class="req">*</span></label><input class="fc" id="int-mail-username" type="email" placeholder="your@gmail.com"></div>
-              <div class="fg"><label class="fl">Password / App Password <span class="req">*</span></label><input class="fc" id="int-mail-password" type="password" placeholder="Gmail: use App Password">
-                <div style="font-size:10.5px;color:var(--text3);margin-top:3px">Gmail: <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--primary)">Generate App Password →</a></div>
+            <div class="set-grid-2">
+              <div class="set-field">
+                <label class="set-label">SMTP Server</label>
+                <input class="set-input" id="int-mail-server" placeholder="smtp.gmail.com">
+              </div>
+              <div class="set-field">
+                <label class="set-label">Port</label>
+                <input class="set-input" id="int-mail-port" type="number" placeholder="587" style="max-width:120px">
               </div>
             </div>
-            <div class="fg2">
-              <div class="fg"><label class="fl">From Display Email</label><input class="fc" id="int-mail-from" placeholder="noreply@yourcompany.in"></div>
-              <div class="fg"><label class="fl">TLS Encryption</label>
-                <select class="fc" id="int-mail-tls"><option value="1">✅ Enabled (recommended)</option><option value="0">Disabled</option></select>
+            <div class="set-grid-2">
+              <div class="set-field">
+                <label class="set-label">Username / Email <span style="color:#dc2626">*</span></label>
+                <input class="set-input" id="int-mail-username" type="email" placeholder="your@gmail.com">
+              </div>
+              <div class="set-field">
+                <label class="set-label">Password / App Password <span style="color:#dc2626">*</span></label>
+                <input class="set-input" id="int-mail-password" type="password" placeholder="Gmail: use App Password">
               </div>
             </div>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
-              <button class="btn btn-primary" onclick="saveIntegrationSettings('email')">💾 Save Email Settings</button>
-              <input class="fc" id="int-test-email" type="email" placeholder="Test to: email@example.com" style="max-width:220px">
-              <button class="btn btn-outline" onclick="testEmailSettings()">📤 Test</button>
+            <div class="set-grid-2">
+              <div class="set-field">
+                <label class="set-label">From Display Email</label>
+                <input class="set-input" id="int-mail-from" placeholder="noreply@yourcompany.in">
+              </div>
+              <div class="set-field">
+                <label class="set-label">TLS Encryption</label>
+                <select class="set-input" id="int-mail-tls">
+                  <option value="1">✅ Enabled (recommended)</option>
+                  <option value="0">Disabled</option>
+                </select>
+              </div>
+            </div>
+            <div class="set-divider"></div>
+            <div style="font-weight:600;font-size:12px;margin-bottom:10px;color:var(--text2)">📤 Send Test Email</div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+              <input class="set-input" id="int-test-email" type="email" placeholder="Test recipient email"
+                style="max-width:260px">
+              <button class="btn btn-outline" onclick="testEmailSettings()">Send Test</button>
               <div id="int-email-result" style="font-size:12px"></div>
             </div>
-          </div>
-          <!-- WhatsApp Panel -->
-          <div id="int-panel-wa" style="display:none">
-            <div style="background:rgba(37,211,102,.06);border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2)">
-              💡 Meta Cloud API — free tier. <a href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started" target="_blank" style="color:var(--primary)">Setup Guide →</a>
-            </div>
-            <div class="fg"><label class="fl">Meta Access Token <span class="req">*</span></label>
-              <input class="fc" id="int-wa-token" type="password" placeholder="EAAxxxxxxx… (from Meta Developer Portal)">
-              <div style="font-size:10.5px;color:var(--text3);margin-top:3px"><a href="https://developers.facebook.com" target="_blank" style="color:var(--primary)">developers.facebook.com</a> → App → WhatsApp → API Setup</div>
-            </div>
-            <div class="fg"><label class="fl">Phone Number ID <span class="req">*</span></label>
-              <input class="fc" id="int-wa-phone-id" placeholder="1234567890 (Phone Number ID from Meta Dev Portal)">
-            </div>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
-              <button class="btn btn-primary" style="background:#25D366;border-color:#25D366" onclick="saveIntegrationSettings('wa')">💾 Save WhatsApp</button>
-              <input class="fc" id="int-test-wa" type="tel" placeholder="Test: 98XXXXXXXX" style="max-width:180px">
-              <button class="btn btn-outline" style="border-color:#25D366;color:#25D366" onclick="testWaSettings()">📤 Test</button>
-              <div id="int-wa-result" style="font-size:12px"></div>
+            <div class="set-save-bar">
+              <button class="btn btn-primary" onclick="saveIntegrationSettings('email')">💾 Save Email Settings</button>
             </div>
           </div>
         </div>
       </div>
 
+      <!-- ── WHATSAPP ────────────────────────────────────────────────── -->
+      <div class="set-section" id="set-sec-whatsapp">
+        <div style="font-size:19px;font-weight:800;margin-bottom:4px">💬 WhatsApp</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Send e-signature requests and alerts via WhatsApp (Meta Cloud API).</div>
 
+        <div class="set-card">
+          <div class="set-card-header">
+            <div class="set-card-icon" style="background:rgba(37,211,102,.12)">💬</div>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:13.5px">Meta Cloud API</div>
+              <div style="font-size:11px;color:var(--text3)">Free tier — up to 1,000 conversations/month</div>
+            </div>
+            <span id="set-wa-status" style="font-size:11px;padding:3px 10px;border-radius:20px;background:var(--bg3);color:var(--text3)">Not configured</span>
+          </div>
+          <div class="set-card-body">
+            <div style="background:rgba(37,211,102,.06);border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--text2)">
+              <strong>Setup:</strong>
+              <ol style="margin:6px 0 0 16px;line-height:1.9">
+                <li>Go to <a href="https://developers.facebook.com" target="_blank" style="color:var(--primary)">developers.facebook.com</a></li>
+                <li>Create / open your App → Add <strong>WhatsApp</strong> product</li>
+                <li>Under <strong>API Setup</strong>, copy the <em>Access Token</em> and <em>Phone Number ID</em></li>
+                <li>Paste both below and click Save</li>
+              </ol>
+            </div>
+            <div class="set-field">
+              <label class="set-label">Meta Access Token <span style="color:#dc2626">*</span></label>
+              <input class="set-input" id="int-wa-token" type="password" placeholder="EAAxxxxxxx… (from Meta Developer Portal)">
+            </div>
+            <div class="set-field">
+              <label class="set-label">Phone Number ID <span style="color:#dc2626">*</span></label>
+              <input class="set-input" id="int-wa-phone-id" placeholder="1234567890 (Phone Number ID)">
+            </div>
+            <div class="set-divider"></div>
+            <div style="font-weight:600;font-size:12px;margin-bottom:10px;color:var(--text2)">📤 Send Test Message</div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+              <input class="set-input" id="int-test-wa" type="tel" placeholder="Test phone: 98XXXXXXXX"
+                style="max-width:200px">
+              <button class="btn btn-outline" style="border-color:#25D366;color:#25D366" onclick="testWaSettings()">Send Test</button>
+              <div id="int-wa-result" style="font-size:12px"></div>
+            </div>
+            <div class="set-save-bar">
+              <button class="btn btn-primary" style="background:#25D366;border-color:#25D366;color:#fff" onclick="saveIntegrationSettings('wa')">💾 Save WhatsApp Settings</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── AI / CLAUDE ─────────────────────────────────────────────── -->
+      <div class="set-section" id="set-sec-ai">
+        <div style="font-size:19px;font-weight:800;margin-bottom:4px">🤖 AI Configuration</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Configure AI providers for document drafting and automation.</div>
+
+        <div class="set-card">
+          <div class="set-card-header">
+            <div class="set-card-icon" style="background:linear-gradient(135deg,#d9770618,#f9731618)">🤖</div>
+            <div>
+              <div style="font-weight:700;font-size:13.5px">Anthropic Claude</div>
+              <div style="font-size:11px;color:var(--text3)">Powers AI document drafting — set in server environment</div>
+            </div>
+          </div>
+          <div class="set-card-body">
+            <div style="background:var(--bg3);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                <span style="font-size:20px">🤖</span>
+                <div>
+                  <div style="font-weight:700;font-size:13px">Claude by Anthropic</div>
+                  <div style="font-size:11px;color:var(--text3)">Used for AI document drafting, compliance text generation</div>
+                </div>
+                <span id="set-ai-status" style="margin-left:auto;font-size:11px;padding:3px 10px;border-radius:20px;background:var(--bg2);color:var(--text3)">Checking…</span>
+              </div>
+            </div>
+            <div style="background:rgba(26,86,219,.06);border:1px solid rgba(26,86,219,.15);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--text2)">
+              ⚙️ Set the <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">ANTHROPIC_API_KEY</code> environment variable on your server, or in the <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">.env</code> file.
+              Get your key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--primary)">console.anthropic.com →</a>
+            </div>
+            <div style="margin-top:12px;display:flex;justify-content:flex-end">
+              <button class="btn btn-outline" onclick="checkAIStatus()">🔄 Check Status</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── NOTIFICATIONS ───────────────────────────────────────────── -->
+      <div class="set-section" id="set-sec-notifications">
+        <div style="font-size:19px;font-weight:800;margin-bottom:4px">🔔 Notifications</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Control when and how you receive compliance notifications.</div>
+
+        <div class="set-card">
+          <div class="set-card-header">
+            <div class="set-card-icon" style="background:linear-gradient(135deg,#f59e0b18,#ef444418)">🔔</div>
+            <div>
+              <div style="font-weight:700;font-size:13.5px">Alert Preferences</div>
+              <div style="font-size:11px;color:var(--text3)">Choose what compliance events trigger notifications</div>
+            </div>
+          </div>
+          <div class="set-card-body">
+            ${['Due Date Reminders (7 days before)', 'Task assignments', 'Director KYC due alerts',
+               'Meeting schedules', 'DSC expiry warnings', 'Portal link views',
+               'E-signature completed', 'New user added to tenant'].map((label, i) => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border)">
+              <span style="font-size:13px;color:var(--text)">${label}</span>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="notif-${i}" checked style="width:16px;height:16px;accent-color:var(--primary)">
+                <span style="font-size:11.5px;color:var(--text3)">Email</span>
+              </label>
+            </div>`).join('')}
+            <div class="set-save-bar">
+              <button class="btn btn-primary" onclick="toast('Notification preferences saved ✓','ok')">💾 Save Preferences</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ABOUT ───────────────────────────────────────────────────── -->
+      <div class="set-section" id="set-sec-about">
+        <div style="font-size:19px;font-weight:800;margin-bottom:4px">ℹ️ About & System</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">System information, version details and support links.</div>
+
+        <div class="set-card" style="margin-bottom:16px">
+          <div class="set-card-header">
+            <div class="set-card-icon" style="background:linear-gradient(135deg,#1a56db18,#7c3aed18)">🏢</div>
+            <div>
+              <div style="font-weight:700;font-size:13.5px">TaxlyCMS</div>
+              <div style="font-size:11px;color:var(--text3)">Company Compliance & Secretarial CRM</div>
+            </div>
+          </div>
+          <div class="set-card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              ${[['Version', 'v2.0 (2026)'], ['Platform', 'Flask + PostgreSQL'],
+                 ['AI Engine', 'Claude by Anthropic'], ['Support', 'info@taxlyindia.com']].map(([k,v]) => `
+              <div style="padding:10px 14px;background:var(--bg3);border-radius:8px">
+                <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px">${k}</div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);margin-top:3px">${v}</div>
+              </div>`).join('')}
+            </div>
+            <div class="set-divider"></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <a href="mailto:info@taxlyindia.com" class="btn btn-outline" style="text-decoration:none;font-size:12.5px">📧 Contact Support</a>
+              <a href="https://taxlyindia.com" target="_blank" class="btn btn-ghost" style="text-decoration:none;font-size:12.5px">🌐 Website</a>
+              <button class="btn btn-ghost" onclick="checkAIStatus()" style="font-size:12.5px">⚙️ System Status</button>
+            </div>
+            <div id="set-sys-status" style="margin-top:14px;display:none"></div>
+          </div>
+        </div>
+
+        <div class="set-card">
+          <div class="set-card-header">
+            <div class="set-card-icon" style="background:rgba(220,38,38,.1)">⚠️</div>
+            <div>
+              <div style="font-weight:700;font-size:13.5px;color:#dc2626">Danger Zone</div>
+              <div style="font-size:11px;color:var(--text3)">Irreversible actions — proceed with caution</div>
+            </div>
+          </div>
+          <div class="set-card-body">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0">
+              <div>
+                <div style="font-weight:600;font-size:13px">Sign Out</div>
+                <div style="font-size:11.5px;color:var(--text3)">Sign out of your current session</div>
+              </div>
+              <button class="btn btn-outline" onclick="_logout()" style="border-color:#dc2626;color:#dc2626">Sign Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end right content -->
+  </div><!-- end grid -->
+</div><!-- end max-width wrapper -->
 <div class="page" id="page-ai-drafting" style="display:none">
   <div class="adv-layout">
 
@@ -8289,34 +8595,177 @@ async function deletePlan(pid, name) {
   else if (r) toast(r.error||'Cannot delete','err');
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════
+// SETTINGS PAGE — JS
+// ══════════════════════════════════════════════════════════════════════════
+
+function switchSettingsSection(name) {
+  document.querySelectorAll('.set-nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.section === name);
+  });
+  document.querySelectorAll('.set-section').forEach(s => {
+    s.classList.toggle('active', s.id === 'set-sec-' + name);
+  });
+}
+
 function initSettingsPage() {
-  if (!ME) return;
-  // P1: load sessions and populate MCA dropdown
-  setTimeout(() => {
-    loadSessionsUI();
-    const sel = document.getElementById('mca-cid');
-    if (sel && COMPANIES && !sel.options.length) {
-      sel.innerHTML = '<option value="">All Companies</option>' + COMPANIES.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  // Populate profile fields from ME
+  const avatar = document.getElementById('set-avatar');
+  const nameEl = document.getElementById('set-user-name');
+  const roleEl = document.getElementById('set-user-role');
+  const emailEl= document.getElementById('set-user-email');
+  const nameInput = document.getElementById('set-name');
+  const phoneInput= document.getElementById('set-phone');
+  const emailInput= document.getElementById('set-email');
+  const roleDisp  = document.getElementById('set-role-display');
+
+  if (ME) {
+    const initial = (ME.name||ME.email||'U').charAt(0).toUpperCase();
+    if (avatar)    { avatar.textContent = initial; }
+    if (nameEl)    nameEl.textContent  = ME.name  || '—';
+    if (roleEl)    roleEl.textContent  = getRoleLabel(ME.role) || '—';
+    if (emailEl)   emailEl.textContent = ME.email || '—';
+    if (nameInput) nameInput.value  = ME.name  || '';
+    if (phoneInput)phoneInput.value = ME.phone || '';
+    if (emailInput)emailInput.value = ME.email || '';
+    if (roleDisp) {
+      const roleColors = {superadmin:'#1a56db',manager:'#7c3aed',staff:'#059669'};
+      const col = roleColors[ME.role] || '#64748b';
+      roleDisp.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${col};display:inline-block"></span>
+        <span>${getRoleLabel(ME.role)||ME.role}</span>`;
     }
-  }, 100);
-  const nameEl = document.getElementById('s-name');
-  const emailEl = document.getElementById('s-email');
-  const roleEl  = document.getElementById('s-role-display');
-  const descEl  = document.getElementById('s-role-desc');
-  if (nameEl)  nameEl.value = ME.name || '';
-  if (emailEl) emailEl.value = ME.email || '';
-  if (roleEl)  roleEl.textContent = getRoleLabel(ME.role);
+  }
+
+  // Sync theme buttons
+  const isDark = document.body.classList.contains('dark');
+  const lb = document.getElementById('theme-light-btn');
+  const db = document.getElementById('theme-dark-btn');
+  if (lb) lb.style.borderColor = isDark ? 'var(--border)' : 'var(--primary)';
+  if (db) db.style.borderColor = isDark ? 'var(--primary)' : 'var(--border)';
+
+  // Load integration status
+  setTimeout(() => {
+    loadIntegrationSettings();
+    checkAIStatus();
+  }, 200);
+
+  // Apply role restrictions to settings
+  const descEl = document.getElementById('u-role-desc');
   if (descEl) {
     const descs = {
       superadmin: 'Full access — create, edit, delete all data, manage users and system templates.',
-      manager: 'Can add and edit all company data, draft documents and download reports. Cannot delete or manage users.',
-      staff: 'View and draft access — can view all data, create tasks, draft documents and export reports.',
+      manager: 'Can add and edit all company data, draft documents and download reports.',
+      staff: 'View and draft access — can view all data, create tasks, draft documents.',
     };
-    descEl.textContent = descs[ME.role] || '';
+    descEl.textContent = descs[ME?.role] || '';
   }
-  // Load integration settings
-  setTimeout(() => loadIntegrationSettings(), 200);
 }
+
+function setTheme(mode) {
+  if (mode === 'dark') {
+    document.body.classList.add('dark');
+    localStorage.setItem('theme', 'dark');
+  } else {
+    document.body.classList.remove('dark');
+    localStorage.setItem('theme', 'light');
+  }
+  // Update buttons
+  const lb = document.getElementById('theme-light-btn');
+  const db = document.getElementById('theme-dark-btn');
+  if (lb) lb.style.borderColor = mode === 'light' ? 'var(--primary)' : 'var(--border)';
+  if (db) db.style.borderColor = mode === 'dark'  ? 'var(--primary)' : 'var(--border)';
+}
+
+async function saveProfileSettings() {
+  const name  = document.getElementById('set-name')?.value.trim();
+  const phone = document.getElementById('set-phone')?.value.trim() || '';
+  if (!name) { toast('Name is required', 'err'); return; }
+  const r = await api(`/api/users/${ME.id}`, { method:'PUT', body:{ name, phone } });
+  if (r && !r.error) {
+    ME.name = name; ME.phone = phone;
+    toast('Profile updated ✓', 'ok');
+    // Refresh sidebar name
+    const uname = document.getElementById('u-name');
+    if (uname) uname.textContent = name;
+    const avatar = document.getElementById('set-avatar');
+    if (avatar) avatar.textContent = name.charAt(0).toUpperCase();
+    document.getElementById('set-user-name').textContent = name;
+  } else toast(r?.error || 'Save failed', 'err');
+}
+
+function checkPwStrength(pw) {
+  const bar   = document.getElementById('set-pw-bar');
+  const label = document.getElementById('set-pw-label');
+  const wrap  = document.getElementById('set-pw-strength');
+  if (!pw) { if (wrap) wrap.style.display='none'; return; }
+  if (wrap) wrap.style.display='';
+  let score = 0;
+  if (pw.length >= 8)  score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  const levels = [
+    {w:'20%', color:'#dc2626', text:'Very Weak'},
+    {w:'40%', color:'#f97316', text:'Weak'},
+    {w:'60%', color:'#eab308', text:'Fair'},
+    {w:'80%', color:'#84cc16', text:'Strong'},
+    {w:'100%',color:'#22c55e', text:'Very Strong'},
+  ];
+  const lvl = levels[Math.min(score, 4)];
+  if (bar)   { bar.style.width=lvl.w; bar.style.background=lvl.color; }
+  if (label) { label.textContent=lvl.text; label.style.color=lvl.color; }
+}
+
+async function changePasswordSettings() {
+  const oldPw = document.getElementById('set-old-pw')?.value;
+  const newPw = document.getElementById('set-new-pw')?.value;
+  const conPw = document.getElementById('set-con-pw')?.value;
+  if (!oldPw) { toast('Enter current password', 'err'); return; }
+  if (!newPw || newPw.length < 8) { toast('New password must be at least 8 characters', 'err'); return; }
+  if (newPw !== conPw) { toast('Passwords do not match', 'err'); return; }
+  const r = await api(`/api/users/${ME.id}`, { method:'PUT', body:{ old_password:oldPw, password:newPw } });
+  if (r && !r.error) {
+    toast('Password changed ✓', 'ok');
+    document.getElementById('set-old-pw').value='';
+    document.getElementById('set-new-pw').value='';
+    document.getElementById('set-con-pw').value='';
+    document.getElementById('set-pw-strength').style.display='none';
+  } else toast(r?.error || 'Failed — check current password', 'err');
+}
+
+async function checkAIStatus() {
+  const statusEl = document.getElementById('set-ai-status');
+  const sysEl    = document.getElementById('set-sys-status');
+  const r = await api('/api/config/status');
+  if (r) {
+    const aiOk = r.ANTHROPIC_KEY === 'set';
+    if (statusEl) {
+      statusEl.textContent = aiOk ? '✅ Connected' : '⚠️ Not configured';
+      statusEl.style.background = aiOk ? 'rgba(5,150,105,.1)' : 'rgba(245,158,11,.1)';
+      statusEl.style.color = aiOk ? '#059669' : '#d97706';
+    }
+    if (sysEl) {
+      sysEl.style.display = '';
+      sysEl.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">
+        <div style="padding:8px 12px;background:var(--bg3);border-radius:7px">
+          <div style="color:var(--text3);font-size:10px;margin-bottom:2px">EMAIL</div>
+          <div style="font-weight:700;color:${r.MAIL_ENABLED?'#059669':'#dc2626'}">${r.MAIL_ENABLED?'✅ Configured':'✗ Not set'}</div>
+        </div>
+        <div style="padding:8px 12px;background:var(--bg3);border-radius:7px">
+          <div style="color:var(--text3);font-size:10px;margin-bottom:2px">WHATSAPP</div>
+          <div style="font-weight:700;color:${r.WA_ENABLED?'#059669':'#dc2626'}">${r.WA_ENABLED?'✅ Configured':'✗ Not set'}</div>
+        </div>
+        <div style="padding:8px 12px;background:var(--bg3);border-radius:7px">
+          <div style="color:var(--text3);font-size:10px;margin-bottom:2px">AI ENGINE</div>
+          <div style="font-weight:700;color:${aiOk?'#059669':'#d97706'}">${aiOk?'✅ Claude':'⚠️ Not set'}</div>
+        </div>
+      </div>`;
+    }
+  }
+}
+
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -14746,6 +15195,19 @@ async function loadIntegrationSettings() {
     badge.style.background = (data.mail_enabled||data.wa_enabled) ? 'rgba(5,150,105,.1)' : 'var(--bg3)';
     badge.style.color = (data.mail_enabled||data.wa_enabled) ? '#059669' : 'var(--text3)';
   }
+  // Update new status badges
+  const emailStat = document.getElementById('set-email-status');
+  const waStat    = document.getElementById('set-wa-status');
+  const emailBadge= document.getElementById('set-email-badge');
+  const waBadge   = document.getElementById('set-wa-badge');
+  if (emailStat) { emailStat.textContent = data.mail_enabled ? '✅ Configured' : 'Not configured';
+    emailStat.style.background = data.mail_enabled ? 'rgba(5,150,105,.1)' : 'var(--bg3)';
+    emailStat.style.color = data.mail_enabled ? '#059669' : 'var(--text3)'; }
+  if (waStat) { waStat.textContent = data.wa_enabled ? '✅ Configured' : 'Not configured';
+    waStat.style.background = data.wa_enabled ? 'rgba(37,211,102,.1)' : 'var(--bg3)';
+    waStat.style.color = data.wa_enabled ? '#25D366' : 'var(--text3)'; }
+  if (emailBadge) emailBadge.style.display = data.mail_enabled ? '' : 'none';
+  if (waBadge)    waBadge.style.display    = data.wa_enabled   ? '' : 'none';
 }
 
 async function saveIntegrationSettings(section) {
