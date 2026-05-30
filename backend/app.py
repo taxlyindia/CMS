@@ -10366,3 +10366,25 @@ def _reload_mail_config(tenant_id: str = None):
             _MAIL_ENABLED  = bool(_MAIL_USERNAME and _MAIL_PASSWORD)
 
 
+@app.route("/api/notifications/send-wa", methods=["POST"])
+@login_required
+def send_wa_notification():
+    """Send WhatsApp message to specified recipients."""
+    data = request.get_json() or {}
+    recipients = data.get('recipients', [])  # [{id, phone, name}]
+    message    = data.get('message', '').strip()
+    if not message:
+        return jsonify({'error': 'Message is required'}), 400
+    sent = 0; failed = 0
+    for r in recipients:
+        phone = r.get('phone','').strip()
+        if not phone:
+            failed += 1; continue
+        success = _send_wa_message(phone, message)
+        if success: sent += 1
+        else: failed += 1
+    write_audit_log(g.user_id, g.tenant_id, 'wa_send', None,
+                    {'sent': sent, 'failed': failed, 'recipients': len(recipients)})
+    return jsonify({'success': True, 'sent': sent, 'failed': failed, 'total': len(recipients)})
+
+
