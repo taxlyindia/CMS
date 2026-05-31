@@ -814,15 +814,19 @@ code { font-family:var(--font-mono);font-size:11.5px;background:var(--bg3);paddi
 ══════════════════════════════════════════════════════════ */
 #login-screen {
   position:fixed;inset:0;z-index:999;
-  display:none;background:#0e1523;
+  display:none;flex-direction:row;
+  background:#0e1523;
+  overflow:hidden;
 }
+#login-screen.active { display:flex !important; }
 .login-left {
-  width:52%;background:linear-gradient(145deg,#0e1523 0%,#1a2744 45%,#1d50e0 100%);
+  width:52%;flex-shrink:0;
+  background:linear-gradient(145deg,#0e1523 0%,#1a2744 45%,#1d50e0 100%);
   height:100%;display:flex;flex-direction:column;justify-content:space-between;
-  padding:48px 52px;position:relative;overflow:hidden;float:left;
+  padding:48px 52px;position:relative;overflow:hidden;
 }
 .login-right {
-  width:48%;height:100%;overflow-y:auto;float:right;
+  flex:1;height:100%;overflow-y:auto;
   background:linear-gradient(160deg,#fafbff 0%,#f5f7ff 100%);
   display:flex;align-items:center;justify-content:center;padding:48px 52px;
 }
@@ -996,11 +1000,63 @@ code { font-family:var(--font-mono);font-size:11.5px;background:var(--bg3);paddi
   .lp-stat { border-right:none;border-bottom:1px solid rgba(0,0,0,.06);padding:20px; }
   .lp-mock-stats { grid-template-columns:repeat(2,1fr); }
 }
+
+/* ── Login screen inner elements ── */
+.login-brand { margin-bottom:32px; }
+.login-brand-logo img { width:42px;height:42px;border-radius:11px;object-fit:cover; }
+
+.login-divider {
+  display:flex;align-items:center;gap:12px;
+  margin:20px 0;color:#94a3b8;font-size:12px;
+}
+.login-divider::before,.login-divider::after {
+  content:'';flex:1;height:1px;background:#e5e9f5;
+}
+
+.login-back {
+  text-align:center;font-size:13px;color:#64748b;cursor:pointer;
+  padding:8px;border-radius:8px;transition:all .15s;margin-bottom:12px;
+}
+.login-back:hover { background:#f0f2ff;color:#1a47cc; }
+
+.login-trust {
+  display:flex;align-items:center;justify-content:center;gap:16px;
+  margin-top:24px;padding-top:18px;
+  border-top:1px solid rgba(0,0,0,.07);
+  flex-wrap:wrap;
+}
+.login-trust-item {
+  font-size:11.5px;font-weight:600;color:#94a3b8;
+  display:flex;align-items:center;gap:5px;
+}
+
+/* Loading overlay for boot */
+#boot-loader {
+  position:fixed;inset:0;z-index:9998;
+  background:#f4f5fb;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:16px;
+}
+#boot-loader .boot-logo {
+  width:52px;height:52px;border-radius:14px;
+  background:linear-gradient(135deg,#2d5ce8,#1a47cc);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:22px;color:#fff;
+  box-shadow:0 8px 24px rgba(26,71,204,.35);
+}
+#boot-loader .boot-spin {
+  width:20px;height:20px;border-radius:50%;
+  border:2.5px solid rgba(26,71,204,.2);border-top-color:#1a47cc;
+  animation:spin .7s linear infinite;
+}
 </style>
 </head>
 <body>
 
 <div id="toasts"></div>
+<div id="boot-loader">
+  <div class="boot-logo">T</div>
+  <div class="boot-spin"></div>
+</div>
 
 <div id="landing-page">
 
@@ -3758,22 +3814,29 @@ function logout() {
   localStorage.removeItem('_tok');
   const al = document.getElementById('app-layout');
   if (al) al.style.display = 'none';
+  var _alo=document.getElementById('app-layout'); if(_alo) _alo.style.display='none';
   fetch('/api/auth/logout-cookie', { method: 'POST' }).catch(() => {});
   showLanding();
 }
 
 function _showLogin() {
   hideLanding();
-  const ls = document.getElementById('login-screen');
-  const sb = document.getElementById('sidebar');
-  const mn = document.getElementById('main');
-  if (ls) ls.style.display = 'flex';
+  var bl = document.getElementById('boot-loader');
+  if (bl) bl.style.display = 'none';
+  var al = document.getElementById('app-layout');
+  if (al) al.style.display = 'none';
+  var ls = document.getElementById('login-screen');
+  var sb = document.getElementById('sidebar');
+  var mn = document.querySelector('.main');
+  if (ls) { ls.style.display = 'flex'; ls.style.flexDirection = 'row'; }
   if (sb) sb.style.display = 'none';
   if (mn) mn.style.display = 'none';
 }
 
 function _hideLogin() {
   hideLanding();
+  var blH = document.getElementById('boot-loader');
+  if (blH) blH.style.display = 'none';
   const ls = document.getElementById('login-screen');
   if (ls) ls.style.display = 'none';
   // sidebar/main visibility handled by startApp based on role
@@ -3957,6 +4020,8 @@ function applyRoleRestrictions() {
 
 async function startApp() {
   if (!ME) { _showLogin(); return; }
+  var bl = document.getElementById('boot-loader');
+  if (bl) bl.style.display = 'none';
   _hideLogin();
 
   if (ME.is_platform_admin) {
@@ -9023,6 +9088,10 @@ async function executeBulkUpload(module) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function showLanding() {
+  var bl = document.getElementById('boot-loader');
+  if (bl) bl.style.display = 'none';
+  var al = document.getElementById('app-layout');
+  if (al) al.style.display = 'none';
   const lp = document.getElementById('landing-page');
   const ls = document.getElementById('login-screen');
   if (lp) lp.style.display = 'block';
@@ -12599,6 +12668,8 @@ window.addEventListener('DOMContentLoaded', function() {
   // Boot: try restore session, else stay on landing
   tryAutoLogin().catch(function(err) {
     console.error('[Boot] Error:', err);
+    var bl2 = document.getElementById('boot-loader');
+    if (bl2) bl2.style.display = 'none';
     showLanding();
   });
 });
