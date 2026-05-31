@@ -814,19 +814,19 @@ code { font-family:var(--font-mono);font-size:11.5px;background:var(--bg3);paddi
 ══════════════════════════════════════════════════════════ */
 #login-screen {
   position:fixed;inset:0;z-index:999;
-  display:none;flex-direction:row;
+  display:none;
   background:#0e1523;
   overflow:hidden;
 }
-#login-screen.active { display:flex !important; }
+
 .login-left {
-  width:52%;flex-shrink:0;
+  width:52%;flex-shrink:0;min-height:100vh;
   background:linear-gradient(145deg,#0e1523 0%,#1a2744 45%,#1d50e0 100%);
-  height:100%;display:flex;flex-direction:column;justify-content:space-between;
+  display:flex;flex-direction:column;justify-content:space-between;
   padding:48px 52px;position:relative;overflow:hidden;
 }
 .login-right {
-  flex:1;height:100%;overflow-y:auto;
+  flex:1;min-width:0;overflow-y:auto;
   background:linear-gradient(160deg,#fafbff 0%,#f5f7ff 100%);
   display:flex;align-items:center;justify-content:center;padding:48px 52px;
 }
@@ -854,11 +854,18 @@ code { font-family:var(--font-mono);font-size:11.5px;background:var(--bg3);paddi
 .login-submit:active { transform:translateY(0) }
 .login-submit:disabled { opacity:.6;cursor:not-allowed;transform:none }
 
-@media (max-width:900px) {
-  #login-screen { flex-direction:column }
-  .login-left,.login-right { width:100%;float:none }
-  .login-left { height:200px;padding:28px 24px }
-  .login-right { padding:32px 24px }
+@media (max-width:768px) {
+  #login-screen { flex-direction:column !important; }
+  .login-left {
+    width:100% !important; flex-shrink:unset;
+    height:180px !important; padding:24px !important;
+    flex-direction:row !important; align-items:center !important;
+    justify-content:flex-start !important; gap:12px !important;
+  }
+  .login-right {
+    flex:unset !important; width:100% !important; height:auto !important;
+    min-height:calc(100vh - 180px); padding:24px !important;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -3828,9 +3835,11 @@ function _showLogin() {
   var ls = document.getElementById('login-screen');
   var sb = document.getElementById('sidebar');
   var mn = document.querySelector('.main');
-  if (ls) { ls.style.display = 'flex'; ls.style.flexDirection = 'row'; }
+  if (ls) { ls.style.display = 'flex'; ls.style.flexDirection = 'row'; ls.style.overflow = 'hidden'; }
   if (sb) sb.style.display = 'none';
   if (mn) mn.style.display = 'none';
+  // Force reflow to ensure flex layout applies correctly
+  if (ls) ls.getBoundingClientRect();
 }
 
 function _hideLogin() {
